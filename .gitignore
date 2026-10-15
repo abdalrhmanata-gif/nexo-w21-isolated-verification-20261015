@@ -16,3 +16,6 @@ __pycache__/
 
 # Generated debug APK artifact (not tracked; exceeds GitHub's file size limit)
 artifacts/nexo-first-test.apk
+
+# Local report output from the read-only Development catalog audit (never commit results)
+zavqera-readonly-audit-output/
