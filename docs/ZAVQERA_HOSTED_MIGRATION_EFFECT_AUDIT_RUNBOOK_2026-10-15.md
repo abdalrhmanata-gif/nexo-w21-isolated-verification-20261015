@@ -111,3 +111,10 @@ This offline comparator verifies the project/query-pack evidence identity, compa
 The updated 12-query pack passed a full local smoke through disposable PostgreSQL 17 in [W80 run 38786902560](https://github.com/abdalrhmanata-gif/nexo-w21-isolated-verification-20261015/actions/runs/38786902560). Evidence artifact digest: SHA-256 3847bca8e7eb28acd3fa0d54d6166b86b366ab6d1ae862a7b0449bcf17a67fc0. The artifact records migration_effect_readonly_query_pack_sha256=a7aba3461786dbb5854f71dc4f87b7e0498d12509add535ab3df4a7ec231a284 and local smoke exit/status 0.
 
 This is syntax/catalog compatibility evidence on a disposable database only. It does not mean the pack was run against hosted Development; a fresh local user-run 12-query capture remains required.
+
+
+## Completed 12-query hosted capture received — 2026-10-15
+
+The user has now run the updated pack against Development and supplied evidence. ZIP SHA-256: `fff6f88aca42c73dc691ead099e969f3cfc911fea5504ce1291b6e04ae0320f6`; capture UTC `2026-10-15T18:45:25.121761+00:00`; query-pack SHA-256 `a7aba3461786dbb5854f71dc4f87b7e0498d12509add535ab3df4a7ec231a284`.
+
+Queries 11/12 provide 74 hosted ledger tuples and direct W66 relation ACL evidence. The key finding is that `service_role` has all eight queried effective/stored privileges on `public.agent_executions`, including direct INSERT/UPDATE/DELETE/TRUNCATE, contrary to the checked-in W66 `REVOKE ALL`. Full review and counts are in `docs/ZAVQERA_HOSTED_12_QUERY_AUDIT_REVIEW_2026-10-15.md`. The tool status remains `CAPTURED_FOR_MANUAL_REVIEW`, not a release pass. Do not run hosted repair SQL or migrations.

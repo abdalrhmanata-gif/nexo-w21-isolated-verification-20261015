@@ -136,3 +136,12 @@ The six hosted-only names listed above were checked against every current branch
 
 This is not proof the migrations never existed in a private/deleted/local commit or deployment artifact. Keep their effects UNKNOWN until exact historical SQL or equivalent trusted provenance is recovered. Do not recreate these migrations from their names.
 
+
+
+## Fresh 12-query ledger and W66 ACL evidence — 2026-10-15 18:45 UTC
+
+New uploaded evidence ZIP SHA-256: `fff6f88aca42c73dc691ead099e969f3cfc911fea5504ce1291b6e04ae0320f6`; query-pack SHA-256: `a7aba3461786dbb5854f71dc4f87b7e0498d12509add535ab3df4a7ec231a284`. The 12-query capture reports the same 74 hosted ledger rows in the earlier 8-query reconciliation and adds current row details plus W66 table ACL effects.
+
+Reconciliation counts are internally consistent: 89 source migrations; 74 hosted rows; 46 exact tuples; 22 same-name/timestamp conflicts; 43 source tuples absent from the hosted exact tuple set; 28 hosted tuples absent from the source exact tuple set; 21 source names absent by exact name; six hosted names absent by exact name.
+
+Most important new result: `service_role` still has all eight queried effective privileges and explicit stored ACL privileges on `public.agent_executions`, including INSERT, UPDATE, DELETE and TRUNCATE. This directly disagrees with W66’s checked-in `REVOKE ALL PRIVILEGES` effect. Treat as a critical security blocker; do not patch the hosted database or migration ledger without historical/source reconciliation, a reviewed forward-only candidate and separate owner approval.

@@ -589,3 +589,13 @@ A read-only inventory covered all 23 current branch refs in the original abdalrh
 - 20260924171437_w6_authoritative_mission_mutation_and_concurrency
 
 Do not reconstruct their SQL from names or neighboring versions. Historical provenance is still a blocker.
+
+
+## Fresh 12-query Development capture — 2026-10-15 18:45 UTC
+
+- User uploaded ZIP `zavqera-readonly-effect-audit-12q.zip`; SHA-256 `fff6f88aca42c73dc691ead099e969f3cfc911fea5504ce1291b6e04ae0320f6`. Capture timestamp `2026-10-15T18:45:25.121761+00:00`; pinned pack SHA `a7aba3461786dbb5854f71dc4f87b7e0498d12509add535ab3df4a7ec231a284`; all 12 queries complete; token not saved; no application rows queried. Role is `supabase_read_only_user`, transaction read-only, with `rolbypassrls=true`.
+- Ledger/source comparison: 89 source files; 74 hosted rows; 46 exact `version,name` tuples; 22 same-name/different-version candidates; 43 source tuples absent from hosted exact tuples; 28 hosted tuples absent from source exact tuples; 21 source names absent by exact name; six hosted-only names absent from current source.
+- **Critical W66 finding:** effective and stored ACLs on `public.agent_executions` still grant `service_role` all eight queried privileges, including SELECT/INSERT/UPDATE/DELETE/TRUNCATE/REFERENCES/TRIGGER/MAINTAIN. The checked-in W66 migration intends REVOKE ALL; this confirms its hosted effect is not present. Four direct write privileges are effective (INSERT/UPDATE/DELETE/TRUNCATE).
+- Continued schema drift: two mission authority budget tables absent; all 26 selected expected columns absent; ten of 11 selected constraints absent (the remaining state constraint is an outdated definition); all eight selected indexes absent; W75/W76 receipt trigger absent; 23/40 tested function-signature expectations differ; W80/W82/W83/W84 function/ACL mismatches remain.
+- Full review: `docs/ZAVQERA_HOSTED_12_QUERY_AUDIT_REVIEW_2026-10-15.md`. The previous report's statement that the updated pack was awaiting its first hosted capture is superseded by this capture.
+- **Disposition stays NO-GO.** No hosted migration, ledger edit, deployment, secret change, or source product-code mutation occurred. Keep PR #39 OPEN/Draft/unmerged, Issue #23 OPEN and `TRUSTED_DISPATCH_ADAPTERS = Object.freeze({})` empty.

@@ -63,3 +63,14 @@ No hosted database was changed. Release remains NO-GO; keep PR #39 OPEN/Draft/un
 The updated 12-query effect pack and the earlier catalog pack both passed read-only SQL smoke on disposable PostgreSQL 17 in W80 run 38786902560. The current effect-pack hash is a7aba3461786dbb5854f71dc4f87b7e0498d12509add535ab3df4a7ec231a284. The offline ledger/ACL comparator's seven unit tests and the guarded runner's ten unit tests passed, with no hosted network requests during tests.
 
 These results validate tool/package behavior only; they do not change the 10-query hosted capture's findings. Current hosted 12-query capture, source-ledger reconciliation, and W66 ACL observation are still pending.
+
+
+## Fresh 12-query capture — ledger and direct table ACL results
+
+The capture collected at `2026-10-15T18:45:25.121761+00:00` has ZIP SHA-256 `fff6f88aca42c73dc691ead099e969f3cfc911fea5504ce1291b6e04ae0320f6` and query-pack SHA-256 `a7aba3461786dbb5854f71dc4f87b7e0498d12509add535ab3df4a7ec231a284`.
+
+- Migration ledger: 74 rows; current source files: 89; 46 exact version/name matches; 22 same-name timestamp candidates; 43 local exact tuples absent and 28 hosted exact tuples absent.
+- W66 table ACL: 32 effective role/privilege rows inspected; `service_role` has effective direct privileges for all eight tested privileges on `public.agent_executions`. Stored ACL also contains all eight grants for `service_role`. In particular, direct INSERT/UPDATE/DELETE/TRUNCATE remain available, contrary to W66’s REVOKE ALL.
+- Two budget tables, 26 selected columns and eight selected indexes are absent; W75/W76 receipt trigger is absent; ten of 11 selected constraints are absent and the remaining state check is outdated. The tested function-signature matrix reports 23/40 mismatches.
+
+The new report `docs/ZAVQERA_HOSTED_12_QUERY_AUDIT_REVIEW_2026-10-15.md` supersedes the prior statement that the 12-query hosted capture was pending. These are observed catalog differences, not authorization to remediate hosted state.

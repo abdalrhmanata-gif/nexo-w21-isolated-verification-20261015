@@ -55,3 +55,17 @@
 After this report's 10-query hosted evidence was captured, the pinned effect pack was extended to 12 queries and both packs passed disposable PostgreSQL 17 smoke in W80 run 38786902560. The new pack hash is a7aba3461786dbb5854f71dc4f87b7e0498d12509add535ab3df4a7ec231a284. The offline comparison tool and its seven tests also passed.
 
 This later local verification does not change the underlying hosted evidence above. Queries 11/12 still must be executed against Development via the explicit read-only endpoint before the current migration-ledger tuples and W66 ACL can be reviewed.
+
+
+## Fresh 12-query hosted capture received — 2026-10-15 18:45:25 UTC
+
+This addendum supersedes the previous note that queries 11/12 had not yet been executed. The new uploaded ZIP was reviewed with SHA-256 `fff6f88aca42c73dc691ead099e969f3cfc911fea5504ce1291b6e04ae0320f6`; query pack SHA-256 `a7aba3461786dbb5854f71dc4f87b7e0498d12509add535ab3df4a7ec231a284`. Project identity, role gate, 74 ledger tuples, and the W66 ACL result set were manually inspected.
+
+The fresh result confirms:
+- 89 current source migration files; 74 ledger rows; 46 exact tuple matches; 22 same-name timestamp candidates; 43 source tuples and 28 hosted tuples absent by exact version/name.
+- Six hosted-only names remain un-recoverable from all current branch-tip trees and exact-path commit history inspected.
+- The two authority budget tables, all 26 selected columns, all eight expected indexes, and the W75/W76 success-receipt trigger are absent. Ten of 11 selected constraints are absent; the one existing reservation-state constraint is still the older definition.
+- **W66 critical mismatch:** `service_role` retains direct effective/stored table privileges on `public.agent_executions` for all eight queried privileges, including direct INSERT/UPDATE/DELETE/TRUNCATE. W66’s checked-in SQL expects REVOKE ALL.
+- The read-only role reports `rolbypassrls=true`; the pack stayed within catalog/ledger metadata, with no application rows or writes.
+
+Detailed current report: `docs/ZAVQERA_HOSTED_12_QUERY_AUDIT_REVIEW_2026-10-15.md`. Release remains NO-GO; no hosted migrations or fixes were applied.
