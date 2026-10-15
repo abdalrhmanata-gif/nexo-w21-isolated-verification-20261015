@@ -145,3 +145,26 @@ New uploaded evidence ZIP SHA-256: `fff6f88aca42c73dc691ead099e969f3cfc911fea550
 Reconciliation counts are internally consistent: 89 source migrations; 74 hosted rows; 46 exact tuples; 22 same-name/timestamp conflicts; 43 source tuples absent from the hosted exact tuple set; 28 hosted tuples absent from the source exact tuple set; 21 source names absent by exact name; six hosted names absent by exact name.
 
 Most important new result: `service_role` still has all eight queried effective privileges and explicit stored ACL privileges on `public.agent_executions`, including INSERT, UPDATE, DELETE and TRUNCATE. This directly disagrees with W66’s checked-in `REVOKE ALL PRIVILEGES` effect. Treat as a critical security blocker; do not patch the hosted database or migration ledger without historical/source reconciliation, a reviewed forward-only candidate and separate owner approval.
+
+## Superseding all-ref historical path search — 2026-10-15
+
+This section supersedes earlier narrower descriptions of which branch histories were checked. A full path-by-path sweep was completed for every one of the 28 unavailable hosted historical filenames: 22 same-name/different-timestamp paths plus six hosted-only ledger names. Each exact path was queried against each of the 23 branch refs visible in the original repository at the time of the sweep.
+
+| Scope | Exact paths | Current branch refs | Path/ref queries | Commits returned | API/tool errors |
+|---|---:|---:|---:|---:|---:|
+| Same-name / timestamp conflicts | 22 | 23 | 506 | 0 | 0 |
+| Hosted-only ledger names | 6 | 23 | 138 | 0 | 0 |
+| **Total** | **28** | **23** | **644** | **0** | **0** |
+
+The branch names and exact head SHAs used are recorded in `docs/ZAVQERA_HISTORICAL_MIGRATION_PATH_RECOVERY_CHECK_2026-10-15.md`. This is the current visible-ref search result, not a proof the historic SQL never existed. Deleted or private branches not represented in the 23-ref snapshot, local Git objects/reflogs, CI artifacts, deployment bundles, reviewed release archives, or backups may still contain the original SQL.
+
+### Operational consequence
+
+- Treat the historical SQL provenance for these 28 paths as **UNKNOWN**, not as identical to the current differently timestamped migration and not as absent from the hosted database.
+- The current 89-file checked-in source baseline is still the basis for the recorded comparison. W86 is a new isolated correction candidate and is not a historical or hosted ledger row.
+- Keep the hosted migration ledger untouched. Do not invent old SQL from filenames, insert/delete ledger rows, run migration repair, or replay guessed history.
+- The demonstrated W86 repair is limited to disposable PostgreSQL 17.11: seeded ACL drift was removed and W66/W86 assertions passed after repair and repeat application. It has **not** changed hosted Development. The hosted effective `service_role` grants on `public.agent_executions` remain a critical blocker until an authorized operator makes and verifies an approved hosted change.
+- Next external dependency is recovery of authoritative historical source from a local clone/reflog, source archive, CI/deployment artifact, backup, or another owner-held copy. Once recovered, hash each file and compare the complete SQL and ordered effect with current source before classifying it `EXACT`, `EQUIVALENT_EFFECT_BUT_DIFFERENT_SQL`, or `UNRESOLVED`.
+
+**Disposition: BLOCKED / RELEASE NO-GO.** No hosted database or ledger was changed as part of this work.
+
