@@ -147,6 +147,12 @@ begin
   end;
   insert into w81_behavior_results values ('changed_authority_denied', v_caught);
 
+  -- This completes the authority-change scenario. Restore the dedicated test Agent
+  -- before testing the independent unclaimed-failure/UNKNOWN completion cases below.
+  update public.workspace_agents
+     set authority = '{"mode":"read_only","external_side_effects":false,"requires_approval":false}'::jsonb
+   where id = v_agent;
+
   insert into public.agent_executions(workspace_id, mission_id, agent_id, requested_by,
     idempotency_key, status, authority_snapshot, request)
   values (v_workspace, v_mission, v_agent, v_owner,
@@ -171,7 +177,8 @@ begin
       '{"reason":"RESEARCH_JIT_CLAIM_DENIED"}'::jsonb,
       jsonb_build_object('outcome','FAILED','verified',false,'request_id','w81-unclaimed-request-0001', 'extra','forged'),
       'RESEARCH_JIT_CLAIM_DENIED', null);
-  exception when sqlstate '42501' then v_caught := true;
+  exception when sqlstate '42501' then
+    if sqlerrm = 'RESEARCH_JIT_CLAIM_REQUIRED' then v_caught := true; else raise; end if;
   end;
   insert into w81_behavior_results values ('unclaimed_denial_reason_is_exact', v_caught);
 
