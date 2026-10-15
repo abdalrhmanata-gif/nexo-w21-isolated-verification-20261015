@@ -6,6 +6,7 @@ on:
     branches:
       - codex/mission-action-runtime-seam-test-20261014
       - codex/w80-forward-correction-20261015
+      - codex/w86-agent-executions-acl-correction-20261015
     paths:
       - .github/workflows/zavqera-w80-isolated-pgtap.yml
       - supabase/tests/w44_workspace_invitations.sql
@@ -13,6 +14,8 @@ on:
       - supabase/tests/w80_invitation_helper_privileges.sql
       - supabase/tests/w83_invitation_catalog_reconciliation.sql
       - supabase/tests/w85_supabase_admin_default_acl_audit.sql
+      - supabase/tests/w66_service_role_table_privilege_hardening.sql
+      - supabase/tests/w86_agent_executions_acl_correction.sql
       - supabase/tests/hosted_readonly_catalog_audit_queries.sql
       - tools/supabase_readonly_catalog_audit.py
       - tests/test_supabase_readonly_catalog_audit.py
@@ -23,6 +26,7 @@ on:
       - tests/test_review_hosted_migration_ledger.py
       - supabase/migrations/20261013100000_w80_fail_closed_workspace_role_checks.sql
       - supabase/migrations/20261015100000_w83_workspace_invitation_privilege_correction.sql
+      - supabase/migrations/20261015120000_w86_agent_executions_acl_correction.sql
 
 permissions:
   contents: read
@@ -168,6 +172,10 @@ jobs:
             "${workdir}/supabase/tests/w46_workspace_activity.sql"
           cp "${GITHUB_WORKSPACE}/supabase/tests/w80_invitation_helper_privileges.sql" \
             "${workdir}/supabase/tests/w80_invitation_helper_privileges.sql"
+          cp "${GITHUB_WORKSPACE}/supabase/tests/w66_service_role_table_privilege_hardening.sql" \
+            "${workdir}/supabase/tests/w66_service_role_table_privilege_hardening.sql"
+          cp "${GITHUB_WORKSPACE}/supabase/tests/w86_agent_executions_acl_correction.sql" \
+            "${workdir}/supabase/tests/w86_agent_executions_acl_correction.sql"
           cp "${GITHUB_WORKSPACE}/supabase/tests/w84_postgres_function_default_acl_hardening.sql" \
             "${workdir}/supabase/tests/w84_postgres_function_default_acl_hardening.sql"
           cp "${GITHUB_WORKSPACE}/supabase/tests/w85_supabase_admin_default_acl_audit.sql" \
@@ -184,7 +192,12 @@ jobs:
             echo "w80_test_blob=$(git -C "${GITHUB_WORKSPACE}" rev-parse HEAD:supabase/tests/w80_invitation_helper_privileges.sql)"
             echo "w84_migration_blob=$(git -C "${GITHUB_WORKSPACE}" rev-parse HEAD:supabase/migrations/20261015110000_w84_postgres_function_default_acl_hardening.sql)"
             echo "w84_test_blob=$(git -C "${GITHUB_WORKSPACE}" rev-parse HEAD:supabase/tests/w84_postgres_function_default_acl_hardening.sql)"
+            echo "w86_migration_blob=$(git -C "${GITHUB_WORKSPACE}" rev-parse HEAD:supabase/migrations/20261015120000_w86_agent_executions_acl_correction.sql)"
+            echo "w66_test_blob=$(git -C "${GITHUB_WORKSPACE}" rev-parse HEAD:supabase/tests/w66_service_role_table_privilege_hardening.sql)"
+            echo "w86_test_blob=$(git -C "${GITHUB_WORKSPACE}" rev-parse HEAD:supabase/tests/w86_agent_executions_acl_correction.sql)"
             echo "expected_w84_pgtap_assertions=21"
+            echo "expected_w66_pgtap_assertions=11"
+            echo "expected_w86_pgtap_assertions=20"
             echo "w44_test_blob=$(git -C "${GITHUB_WORKSPACE}" rev-parse HEAD:supabase/tests/w44_workspace_invitations.sql)"
             echo "expected_w80_pgtap_assertions=49"
             echo "expected_w44_pgtap_assertions=17"
@@ -363,6 +376,7 @@ jobs:
           # in the disposable PG17 stack and rerun all assertions to establish idempotency.
           w84_status=0
           w85_status=0
+          w86_status=0
           if [ "${later_status}" -eq 0 ]; then
             run_pgtap W84_AFTER_CHAIN supabase/tests/w84_postgres_function_default_acl_hardening.sql 21 || w84_status=1
             docker cp "${GITHUB_WORKSPACE}/supabase/migrations/20261015110000_w84_postgres_function_default_acl_hardening.sql" \
@@ -379,9 +393,12 @@ jobs:
             fi
             run_pgtap W84_AFTER_REAPPLY supabase/tests/w84_postgres_function_default_acl_hardening.sql 21 || w84_status=1
             run_pgtap W85_SUPABASE_ADMIN_AUDIT supabase/tests/w85_supabase_admin_default_acl_audit.sql 12 || w85_status=1
+            run_pgtap W66_AFTER_W86_FORWARD_CORRECTION supabase/tests/w66_service_role_table_privilege_hardening.sql 11 || w86_status=1
+            run_pgtap W86_AGENT_EXECUTIONS_ACL_CORRECTION supabase/tests/w86_agent_executions_acl_correction.sql 20 || w86_status=1
           fi
           echo "w84_idempotency_and_pg_tap_status=${w84_status}" >> "${RUNNER_TEMP}/W80_EVIDENCE.txt"
           echo "w85_supabase_admin_audit_status=${w85_status}" >> "${RUNNER_TEMP}/W80_EVIDENCE.txt"
+          echo "w86_agent_executions_acl_status=${w86_status}" >> "${RUNNER_TEMP}/W80_EVIDENCE.txt"
 
           # Execute both pinned catalog packs as SELECT-only SQL on disposable PostgreSQL 17.
           # This validates local SQL syntax/catalog compatibility, not hosted identity or schema parity.
@@ -422,7 +439,7 @@ jobs:
             if [ "${pack_status}" -ne 0 ]; then query_pack_status=1; fi
           done
 
-          if [ "${regression_status}" -ne 0 ] || [ "${later_status}" -ne 0 ] || [ "${w84_status}" -ne 0 ] || [ "${w85_status}" -ne 0 ] || [ "${query_pack_status}" -ne 0 ]; then exit 1; fi
+          if [ "${regression_status}" -ne 0 ] || [ "${later_status}" -ne 0 ] || [ "${w84_status}" -ne 0 ] || [ "${w85_status}" -ne 0 ] || [ "${w86_status}" -ne 0 ] || [ "${query_pack_status}" -ne 0 ]; then exit 1; fi
 
       - name: Stop and prove disposable resource cleanup
         if: always()
@@ -471,7 +488,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          for artifact in "${RUNNER_TEMP}"/W80_*.txt "${RUNNER_TEMP}"/W85_*.txt; do
+          for artifact in "${RUNNER_TEMP}"/W66_*.txt "${RUNNER_TEMP}"/W80_*.txt "${RUNNER_TEMP}"/W85_*.txt "${RUNNER_TEMP}"/W86_*.txt; do
             [ -f "${artifact}" ] || continue
             sed -E -i \
               -e 's/sb_(publishable|secret)_[A-Za-z0-9_-]+/sb_\1_[REDACTED_LOCAL_KEY]/g' \
@@ -501,5 +518,7 @@ jobs:
             ${{ runner.temp }}/W80_CLEANUP_PROOF.txt
             ${{ runner.temp }}/W80_MIGRATION_MANIFEST.sha256
             ${{ runner.temp }}/W85_SUPABASE_ADMIN_AUDIT_PGTAP_OUTPUT.txt
+            ${{ runner.temp }}/W66_AFTER_W86_FORWARD_CORRECTION_PGTAP_OUTPUT.txt
+            ${{ runner.temp }}/W86_AGENT_EXECUTIONS_ACL_CORRECTION_PGTAP_OUTPUT.txt
             ${{ runner.temp }}/W85_READONLY_CATALOG_QUERY_PACK.txt
             ${{ runner.temp }}/MIGRATION_EFFECT_READONLY_QUERY_PACK.txt
