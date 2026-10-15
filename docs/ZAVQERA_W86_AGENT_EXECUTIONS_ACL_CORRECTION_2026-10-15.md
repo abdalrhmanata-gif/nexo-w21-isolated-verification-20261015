@@ -93,3 +93,22 @@ A later workflow-only commit `24af5583113e606bf8ec80f179cca0854073abac` adds the
 
 **Scope limit:** This evidence proves the correction against a deliberately seeded ACL drift in disposable PostgreSQL only. It does not prove hosted Development has been changed or reconciled, and it does not resolve the historic migration-ledger conflicts or other missing hosted schema/function contracts.
 
+
+
+## Verification addendum — injected ACL-drift negative control (2026-10-15)
+
+A follow-up isolated workflow now proves active repair, rather than only asserting the already-hardened post-migration state:
+
+1. After the complete candidate migration chain runs on a brand-new local Supabase/PostgreSQL 17 stack, it injects the specific privilege drift **into the disposable database only**: all table privileges for `service_role`, plus a column-level grant on one real `agent_executions` column.
+2. A pre-repair catalog assertion must return `W86_DRIFT_FIXTURE_PASS`, proving that effective INSERT/UPDATE/DELETE/TRUNCATE/MAINTAIN and stored column-level grants were recreated. If this seed/check fails, CI stops.
+3. The workflow applies the W86 SQL a second time to that simulated drift state. It then runs W66 (11 assertions) and W86 (20 assertions); both pass.
+4. It reapplies W86 once more and runs both test suites again. W66 is 11/11 and W86 is 20/20 a second time. The SQL replay exit codes are zero and disposable cleanup is verified, with no containers or volumes left.
+
+Evidence:
+- W80 isolated PostgreSQL 17 run [38793355077](https://github.com/abdalrhmanata-gif/nexo-w21-isolated-verification-20261015/actions/runs/38793355077) — **SUCCESS** on source/workflow commit `6a0795b0635a1063900192d92abca22580891199`.
+- Artifact `12000544561`, ZIP digest `sha256:b11c8228c7f771c4513081a8a778e4728319b99e3f0381d65ba07c9584b9c2b4`.
+- Verified artifact evidence: `w86_drift_fixture_check_exit_code=0`; file output exactly `W86_DRIFT_FIXTURE_PASS`; `w86_drift_repair_exit_code=0`; W66/W86 each passed after repair and after reapply; `cleanup=VERIFIED`.
+
+A subsequent workflow commit `24af5583113e606bf8ec80f179cca0854073abac` only adds the two drift-repair pgTAP output files to the artifact upload list. Its W80 run is [38793792365](https://github.com/abdalrhmanata-gif/nexo-w21-isolated-verification-20261015/actions/runs/38793792365); inspect its final result/artifact before considering the latest artifact set closed.
+
+The negative control is still **disposable/local-only**. It reproduces the ACL state and corrects it on a local stack; it is not a hosted repair. The original hosted Development remains unmodified and release remains NO-GO.
