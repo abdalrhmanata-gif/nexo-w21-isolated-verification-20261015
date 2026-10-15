@@ -45,6 +45,7 @@ test("W21 can only test a disposable repository-migration stack", () => {
     "w80_invitation_helper_privileges.sql",
     "w81_read_only_research_jit_claim.sql",
     "w82_ai_generation_reservation_identity.sql",
+    "w84_postgres_function_default_acl_hardening.sql",
   ];
   for (const testFile of requiredPgTapTests) {
     assert.ok(
@@ -59,6 +60,7 @@ test("W21 can only test a disposable repository-migration stack", () => {
     "w67_legacy_research_rpc_privilege_hardening.sql",
     "w80_invitation_helper_privileges.sql",
     "w81_read_only_research_jit_claim.sql",
+    "w84_postgres_function_default_acl_hardening.sql",
   ]) {
     assert.ok(
       missionAuthorityRegressionList.includes(`supabase/tests/${testFile}`),
@@ -83,6 +85,8 @@ test("W21 can only test a disposable repository-migration stack", () => {
     "psql -X -v ON_ERROR_STOP=1",
     "READ_ONLY_GUARD=CONFIRMED",
     "20261015100000",
+    "20261015110000",
+    "W84 expected for future functions created by postgres",
     "Default ACL overrides",
     "Built-in function EXECUTE default ACL baseline",
   ]) {

@@ -149,6 +149,7 @@ jobs:
           cp "$GITHUB_WORKSPACE/supabase/tests/w80_invitation_helper_privileges.sql" "$workdir/supabase/tests/w80_invitation_helper_privileges.sql"
           cp "$GITHUB_WORKSPACE/supabase/tests/w81_read_only_research_jit_claim.sql" "$workdir/supabase/tests/w81_read_only_research_jit_claim.sql"
           cp "$GITHUB_WORKSPACE/supabase/tests/w82_ai_generation_reservation_identity.sql" "$workdir/supabase/tests/w82_ai_generation_reservation_identity.sql"
+          cp "$GITHUB_WORKSPACE/supabase/tests/w84_postgres_function_default_acl_hardening.sql" "$workdir/supabase/tests/w84_postgres_function_default_acl_hardening.sql"
           cp "$GITHUB_WORKSPACE/supabase/tests/w83_invitation_catalog_reconciliation.sql" "$workdir/supabase/tests/w83_invitation_catalog_reconciliation.sql"
           cat > "$workdir/supabase/migrations/20260921180005_e2e_historical_auth_compat.sql" <<'SQL'
           create schema if not exists private;
@@ -218,6 +219,8 @@ jobs:
           docker exec -u postgres "$db_container" psql -X -v ON_ERROR_STOP=1 -d postgres -f /tmp/w83_invitation_catalog_reconciliation.sql 2>&1 | tee "$RUNNER_TEMP/W83_LOCAL_CATALOG_RECONCILIATION.txt"
           grep -Fq 'READ_ONLY_GUARD=CONFIRMED' "$RUNNER_TEMP/W83_LOCAL_CATALOG_RECONCILIATION.txt"
           grep -Fq '20261015100000' "$RUNNER_TEMP/W83_LOCAL_CATALOG_RECONCILIATION.txt"
+          grep -Fq '20261015110000' "$RUNNER_TEMP/W83_LOCAL_CATALOG_RECONCILIATION.txt"
+          grep -Fq 'W84 expected for future functions created by postgres' "$RUNNER_TEMP/W83_LOCAL_CATALOG_RECONCILIATION.txt"
           grep -Fq 'Default ACL overrides' "$RUNNER_TEMP/W83_LOCAL_CATALOG_RECONCILIATION.txt"
           grep -Fq 'Built-in function EXECUTE default ACL baseline' "$RUNNER_TEMP/W83_LOCAL_CATALOG_RECONCILIATION.txt"
 
@@ -242,7 +245,8 @@ jobs:
             supabase/tests/w78_research_history_event_binding.sql \
             supabase/tests/w79_trusted_research_completion.sql \
             supabase/tests/w80_invitation_helper_privileges.sql \
-            supabase/tests/w81_read_only_research_jit_claim.sql
+            supabase/tests/w81_read_only_research_jit_claim.sql \
+            supabase/tests/w84_postgres_function_default_acl_hardening.sql
           do
             echo "Running Mission Authority regression: $test_file"
             timeout 10m supabase test db "$test_file"

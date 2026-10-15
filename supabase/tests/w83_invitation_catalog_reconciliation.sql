@@ -173,11 +173,13 @@ select owner_role.rolname as object_creator,
    and (d.defaclnamespace = 0 or ns.nspname in ('public','private'))
  order by object_creator, schema_name, grantee, privilege_type;
 
-\echo '=== Expected post-W83 state for manual classification ==='
+\echo '=== Expected existing invitation ACLs after W83 and future-function defaults after W84 ==='
 \echo 'Function inventory: exactly one overload per each of the eight names/signatures specified in W80.'
 \echo 'Owner/security/search_path: postgres owner; private helpers SECURITY DEFINER; public GET SECURITY DEFINER; three public mutation wrappers SECURITY INVOKER; all configured search_path=pg_catalog, public.'
 \echo 'Direct non-owner EXECUTE grantees: public create/accept/revoke and private create/accept/revoke = authenticated only; public/private GET = anon and authenticated only; no service_role or PUBLIC.'
 \echo 'Effective role matrix is defined by unchanged supabase/tests/w80_invitation_helper_privileges.sql; expected service_role=false for all eight; anon private schema USAGE=false.'
+\echo 'W84 expected for future functions created by postgres: global function default ACL omits PUBLIC, anon, authenticated, service_role; public-schema defaults omit PUBLIC and those API roles.'
+\echo 'supabase_admin is a distinct function creator; its built-in/global and scoped default ACLs are reported separately and are not changed by W84. Owner-side review remains required.'
 \echo 'Classify all other grants, memberships, owners, overloads, configuration or ledger gaps as unexpected/unknown and stop for review. This report is not an automated rollout approval.'
 
 rollback;
