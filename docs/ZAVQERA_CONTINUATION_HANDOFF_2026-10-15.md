@@ -599,3 +599,25 @@ Do not reconstruct their SQL from names or neighboring versions. Historical prov
 - Continued schema drift: two mission authority budget tables absent; all 26 selected expected columns absent; ten of 11 selected constraints absent (the remaining state constraint is an outdated definition); all eight selected indexes absent; W75/W76 receipt trigger absent; 23/40 tested function-signature expectations differ; W80/W82/W83/W84 function/ACL mismatches remain.
 - Full review: `docs/ZAVQERA_HOSTED_12_QUERY_AUDIT_REVIEW_2026-10-15.md`. The previous report's statement that the updated pack was awaiting its first hosted capture is superseded by this capture.
 - **Disposition stays NO-GO.** No hosted migration, ledger edit, deployment, secret change, or source product-code mutation occurred. Keep PR #39 OPEN/Draft/unmerged, Issue #23 OPEN and `TRUSTED_DISPATCH_ADAPTERS = Object.freeze({})` empty.
+
+
+## 13. Verified W86 forward-only ACL candidate — 2026-10-15
+
+**Candidate repo only:** https://github.com/abdalrhmanata-gif/nexo-w21-isolated-verification-20261015  
+**Branch:** `codex/w86-agent-executions-acl-correction-20261015`  
+**Isolated review PR:** https://github.com/abdalrhmanata-gif/nexo-w21-isolated-verification-20261015/pull/1 — OPEN / DRAFT / UNMERGED.  
+**Exact tested code/workflow SHA:** `8dbaa7cb27abbb15144f6b81f1bb8538dd2ce5be`.
+
+Latest isolated CI evidence:
+
+- W80 isolated PostgreSQL 17 workflow [run 38790810307](https://github.com/abdalrhmanata-gif/nexo-w21-isolated-verification-20261015/actions/runs/38790810307) — SUCCESS.
+- Flutter CI [run 38790810387](https://github.com/abdalrhmanata-gif/nexo-w21-isolated-verification-20261015/actions/runs/38790810387) — SUCCESS.
+- Artifact ID `11999338335`, ZIP SHA-256 `906c3bf9035432cb26a3852969cb342dca23800718bf7bbc5cc7ebdac275a58f`.
+- Disposable PostgreSQL `170011` / 17.11 full migration replay PASS.
+- W66 original test 11/11 and W86 20/20 both pass after the migration chain and again after reapplying W86. W86 reapply exit code 0.
+- W84 21/21 before/after reapply; W85 actual-`supabase_admin` audit 12/12; W44 17/17 before/after W83 reapply; W46 8/8; W80 49/49 before/after W83 reapply. Both read-only packs passed local smoke.
+- Cleanup proof: `cleanup=VERIFIED`; no disposable project containers/volumes remained.
+
+W86 is a candidate only. Do not apply it to hosted Development or Main/Production. Current hosted evidence remains critical: `service_role` has eight effective table privileges on `public.agent_executions`; migration history remains unreconciled (89 checked-in source files versus 74 hosted ledger rows, 46 exact tuples, 22 timestamp conflicts, six hosted-only names). Source/ledger provenance and effect mapping are required before any hosted repair. No hosted write was performed.
+
+Unchanged release/guardrails: **NO-GO**, original PR #39 OPEN/DRAFT/UNMERGED, Issue #23 OPEN, `TRUSTED_DISPATCH_ADAPTERS = Object.freeze({})` empty/fail-closed; no paid services/credits or real provider credentials.
