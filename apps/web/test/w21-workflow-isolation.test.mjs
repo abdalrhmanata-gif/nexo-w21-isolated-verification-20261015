@@ -83,7 +83,7 @@ test("W21 can only test a disposable repository-migration stack", () => {
     "psql -X -v ON_ERROR_STOP=1",
     "READ_ONLY_GUARD=CONFIRMED",
     "20261015100000",
-    "Default ACLs",
+    "Default ACL overrides",
     "Built-in function EXECUTE default ACL baseline",
   ]) {
     assert.ok(catalogStep.includes(required), `W21 catalog reconciliation must include ${required}`);
