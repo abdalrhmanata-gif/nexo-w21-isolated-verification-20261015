@@ -237,7 +237,11 @@ The runner also performs a GET of **/v1/projects/{ref}** before sending any SQL 
 
 ### Windows PowerShell execution
 
-Run from a local checkout of this verification branch, with Python 3.10+:
+Download the ZIP of [this exact verification branch](https://github.com/abdalrhmanata-gif/nexo-w21-isolated-verification-20261015/archive/refs/heads/codex/w80-forward-correction-20261015.zip) and extract it, or clone it with Git. Run in PowerShell from the extracted repository root; Python 3.10+ is required.
+
+~~~powershell
+git clone --branch codex/w80-forward-correction-20261015 https://github.com/abdalrhmanata-gif/nexo-w21-isolated-verification-20261015.git
+Set-Location nexo-w21-isolated-verification-20261015
 
 ~~~powershell
 $env:SUPABASE_PROJECT_REF = Read-Host "Verified ZAVQERA Development project ref"
