@@ -245,11 +245,17 @@ $secure = Read-Host "Scoped Supabase PAT (Project Settings Read + Database Read)
 $env:SUPABASE_ACCESS_TOKEN = [System.Net.NetworkCredential]::new("", $secure).Password
 $env:ZAVQERA_AUDIT_CONFIRMATION = "DEVELOPMENT_ONLY_READ_ONLY"
 
-py -3 tools/supabase_readonly_catalog_audit.py --self-test
-py -3 -m unittest discover -s tests -p "test_supabase_readonly_catalog_audit.py" -v
-py -3 tools/supabase_readonly_catalog_audit.py
-
-Remove-Item Env:SUPABASE_ACCESS_TOKEN, Env:SUPABASE_PROJECT_REF, Env:ZAVQERA_AUDIT_CONFIRMATION
+try {
+    py -3 tools/supabase_readonly_catalog_audit.py --self-test
+    if ($LASTEXITCODE -ne 0) { throw "Read-only audit self-test failed; no hosted query was run." }
+    py -3 -m unittest discover -s tests -p "test_supabase_readonly_catalog_audit.py" -v
+    if ($LASTEXITCODE -ne 0) { throw "Read-only audit unit tests failed; no hosted query was run." }
+    py -3 tools/supabase_readonly_catalog_audit.py
+    if ($LASTEXITCODE -ne 0) { throw "Audit stopped or found a blocking mismatch; inspect the local report." }
+}
+finally {
+    Remove-Item Env:SUPABASE_ACCESS_TOKEN, Env:SUPABASE_PROJECT_REF, Env:ZAVQERA_AUDIT_CONFIRMATION -ErrorAction SilentlyContinue
+}
 ~~~
 
 Review that the project identity check passes before queries are sent. The script stores metadata/SQL responses only under zavqera-readonly-audit-output/<UTC timestamp>/; do not upload raw output anywhere until it has been reviewed and redacted. If the token lacks the required narrow permissions, if the API rejects the response format, or if any project/role/ledger gate fails, the script stops and records the blocker.
