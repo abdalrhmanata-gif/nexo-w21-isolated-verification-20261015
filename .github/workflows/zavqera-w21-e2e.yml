@@ -219,6 +219,7 @@ jobs:
           grep -Fq 'READ_ONLY_GUARD=CONFIRMED' "$RUNNER_TEMP/W83_LOCAL_CATALOG_RECONCILIATION.txt"
           grep -Fq '20261015100000' "$RUNNER_TEMP/W83_LOCAL_CATALOG_RECONCILIATION.txt"
           grep -Fq 'Default ACLs' "$RUNNER_TEMP/W83_LOCAL_CATALOG_RECONCILIATION.txt"
+          grep -Fq 'Built-in function EXECUTE default ACL baseline' "$RUNNER_TEMP/W83_LOCAL_CATALOG_RECONCILIATION.txt"
 
       - name: Run Mission Authority execution security regressions
         run: |
