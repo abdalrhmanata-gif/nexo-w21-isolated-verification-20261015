@@ -234,14 +234,14 @@ The new regression includes root `app/page.tsx` and `app/layout.tsx`, nested pag
 
 ## Static dependency-graph parser hardening — 2026-10-15
 
-**Current code/test checkpoint before publication:** `9d752a59f0683ea7149633138dc85bb33cf9a41b` plus an uncommitted test-only change.
+**Local code/test commit:** `9e71be9a90f572129411a585812860196d01e817` (the previous remote head remains `9d752a59f0683ea7149633138dc85bb33cf9a41b`).
 
 Inspection found the Mission Action source-graph guard extracted import edges with regular expressions. That missed the valid TypeScript `import name = require("...")` form and could mistake import-like text in comments/strings for a dependency. Replaced that parser with TypeScript AST extraction for import/export declarations, import-equals, literal dynamic imports, and literal CommonJS `require`; added a regression covering all forms and comment/string decoys. The existing full-entrypoint reachability and outbound-capability checks remain unchanged.
 
-Local validation before commit:
+Local validation on this code commit:
 - Focused `node --test test/mission-authority-worker-auth.test.mjs` from `apps/web`: **27 passed, 0 failed**.
 - `npm test` from `apps/web`: **368 passed, 0 failed, 1 skipped** (369 total).
 - `git diff --check`: PASS.
 - `TRUSTED_DISPATCH_ADAPTERS` remains an empty frozen object.
 
-This makes static edge parsing more complete; it does not cover computed/runtime loading, arbitrary transitive/native behavior, or prove production-wide egress enforcement. Exact-SHA GitHub CI/W21 evidence is pending for the change. PR #39 must remain Draft/open/unmerged, Issue #23 open, hosted Supabase untouched, and release **NO-GO**.
+This makes static edge parsing more complete; it does not cover computed/runtime loading, arbitrary transitive/native behavior, or prove production-wide egress enforcement. Local Web Unit passed on this source, but exact-SHA GitHub CI/W21 evidence is pending. The change is committed locally and not published: prior pushes to this PR branch caused automatic Vercel Preview deployments, and this continuation prohibits deployments. PR #39 remains Draft/open/unmerged, Issue #23 open, hosted Supabase untouched, and release **NO-GO**.
