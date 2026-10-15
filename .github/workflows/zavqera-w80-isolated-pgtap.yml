@@ -507,7 +507,7 @@ jobs:
           query_pack_status=0
           for specification in \
             "catalog hosted_readonly_catalog_audit_queries.sql" \
-            "migration_effect hosted_readonly_migration_effect_audit_queries.sql" \\
+            "migration_effect hosted_readonly_migration_effect_audit_queries.sql" \
             "w86_acl_provenance hosted_readonly_w86_acl_provenance_query.sql"; do
             read -r label filename <<< "${specification}"
             query_pack="${GITHUB_WORKSPACE}/supabase/tests/${filename}"
