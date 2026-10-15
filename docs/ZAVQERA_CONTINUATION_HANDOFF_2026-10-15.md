@@ -621,3 +621,14 @@ Latest isolated CI evidence:
 W86 is a candidate only. Do not apply it to hosted Development or Main/Production. Current hosted evidence remains critical: `service_role` has eight effective table privileges on `public.agent_executions`; migration history remains unreconciled (89 checked-in source files versus 74 hosted ledger rows, 46 exact tuples, 22 timestamp conflicts, six hosted-only names). Source/ledger provenance and effect mapping are required before any hosted repair. No hosted write was performed.
 
 Unchanged release/guardrails: **NO-GO**, original PR #39 OPEN/DRAFT/UNMERGED, Issue #23 OPEN, `TRUSTED_DISPATCH_ADAPTERS = Object.freeze({})` empty/fail-closed; no paid services/credits or real provider credentials.
+
+
+## 14. Historical migration source recovery audit — 2026-10-15
+
+**Report:** [Historical migration path recovery check](https://github.com/abdalrhmanata-gif/nexo-w21-isolated-verification-20261015/blob/codex/w86-agent-executions-acl-correction-20261015/docs/ZAVQERA_HISTORICAL_MIGRATION_PATH_RECOVERY_CHECK_2026-10-15.md).
+
+A second read-only check queried the original repository's exact commit history for every hosted timestamp-conflict filename (22) and hosted-only ledger filename (6). **All 28 exact-path queries returned zero commits.** The existing audit had already checked all 23 visible original branch-tip migration trees and found none of the six hosted-only migration files. This confirms the current GitHub-visible repository history does not provide exact SQL for these paths; it does not prove the SQL never existed in a deleted/private/local ref or deployment artifact.
+
+Do not reconstruct old SQL from similar names, adjust timestamps, or modify the migration ledger. Next provenance sources to inspect are an authoritative local clone/reflog, deleted/private branch backups, CI artifacts, deployment bundle, release archive, or migration-directory backup. Hash any recovered SQL and compare the entire file/effects against current source before marking a historical mapping exact/equivalent. Until evidence is recovered, classify these paths as `UNRESOLVED`.
+
+The hosted effect map still independently confirms the W66 ACL drift and other catalog gaps; W86 is verified as an isolated forward-only candidate, not an applied hosted correction. The original repo remains untouched; PR #39 must stay OPEN/Draft/unmerged and Issue #23 OPEN. Keep `TRUSTED_DISPATCH_ADAPTERS` empty/fail-closed and launch **NO-GO**.
