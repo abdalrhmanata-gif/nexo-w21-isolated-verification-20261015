@@ -212,6 +212,11 @@ jobs:
           tap_assertions="$(grep -Ec '^(ok|not ok) [0-9]+' "${log}" || true)"
           summary_tests="$(sed -nE 's/.*Tests=([0-9]+).*/\1/p' "${log}" | tail -n 1)"
           if [ -z "${planned}" ]; then planned="${summary_tests}"; fi
+          failed_subtests="$(sed -nE 's/^Failed ([0-9]+)\/[0-9]+ subtests.*/\1/p' "${log}" | tail -n 1)"
+          if [ -z "${failed_subtests}" ]; then
+            failed_subtests="$(sed -nE 's/^Looks like you failed ([0-9]+) tests of [0-9]+.*/\1/p' "${log}" | tail -n 1)"
+          fi
+          failed_names="$(sed -nE 's/^# Failed test [0-9]+: "(.*)"$/\1/p' "${log}" | paste -sd ';' -)"
           if [ "${tap_assertions}" -gt 0 ]; then
             reported="${tap_assertions}"
             failed="$(grep -Ec '^not ok [0-9]+' "${log}" || true)"
@@ -219,6 +224,9 @@ jobs:
             && grep -Eq '^(Result: PASS|All tests successful\.)' "${log}"; then
             reported="${summary_tests}"
             failed=0
+          elif [ -n "${summary_tests}" ] && [ -n "${failed_subtests}" ]; then
+            reported="${summary_tests}"
+            failed="${failed_subtests}"
           else
             reported="${summary_tests:-0}"
             failed=not-reported
@@ -228,6 +236,7 @@ jobs:
             echo "w80_assertions_planned=${planned:-not-reported}"
             echo "w80_assertions_reported=${reported}"
             echo "w80_assertions_failed=${failed}"
+            echo "w80_failed_test_names=${failed_names:-none}"
           } >> "${RUNNER_TEMP}/W80_EVIDENCE.txt"
 
           test_status="${status}"
