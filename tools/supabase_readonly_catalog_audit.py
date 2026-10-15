@@ -133,7 +133,7 @@ def no_comments(sql: str) -> str:
 
 def load_pack(root: Path) -> tuple[list[str], str]:
     path = root / PACK_RELATIVE
-    raw = path.read_bytes()
+    raw = path.read_bytes().replace(b"\r\n", b"\n")
     digest = hashlib.sha256(raw).hexdigest()
     if digest != PACK_SHA256:
         raise ValueError(f"approved query-pack hash mismatch ({digest}); stop for review")
