@@ -38,4 +38,37 @@ test("W21 can only test a disposable repository-migration stack", () => {
   assert.match(workflow, /supabase stop --no-backup --workdir "\$ZAVQERA_E2E_SUPABASE_WORKDIR"/);
   assert.match(workflow, /cleanup_verified=true/);
   assert.doesNotMatch(workflow, /netlify (?:deploy|build)|deploy-to-production|production-deploy/i);
+
+  const requiredPgTapTests = [
+    "w66_service_role_table_privilege_hardening.sql",
+    "w67_legacy_research_rpc_privilege_hardening.sql",
+    "w80_invitation_helper_privileges.sql",
+    "w81_read_only_research_jit_claim.sql",
+    "w82_ai_generation_reservation_identity.sql",
+  ];
+  for (const testFile of requiredPgTapTests) {
+    assert.ok(
+      workflow.includes(`cp "$GITHUB_WORKSPACE/supabase/tests/${testFile}" "$workdir/supabase/tests/${testFile}"`),
+      `W21 must copy ${testFile} into the disposable database workdir`,
+    );
+  }
+
+  const missionAuthorityRegressionList = workflow.split("for test_file in \\\n")[1]?.split("\n          do")[0] ?? "";
+  for (const testFile of [
+    "w66_service_role_table_privilege_hardening.sql",
+    "w67_legacy_research_rpc_privilege_hardening.sql",
+    "w80_invitation_helper_privileges.sql",
+    "w81_read_only_research_jit_claim.sql",
+  ]) {
+    assert.ok(
+      missionAuthorityRegressionList.includes(`supabase/tests/${testFile}`),
+      `W21 must explicitly execute ${testFile}`,
+    );
+  }
+
+  const quotaRegressionStep = workflow.split("Run AI quota, plan and workspace security tests")[1]?.split("Run actual-ledger concurrent idempotency proof")[0] ?? "";
+  assert.ok(
+    quotaRegressionStep.includes("supabase test db supabase/tests/w82_ai_generation_reservation_identity.sql"),
+    "W21 must explicitly execute W82 AI generation reservation identity pgTAP",
+  );
 });
