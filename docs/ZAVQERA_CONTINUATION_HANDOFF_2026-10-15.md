@@ -362,3 +362,39 @@ Before any canonical rollout, perform read-only reconciliation of every environm
 - Local `npm test` from `apps/web`: exit **0**, 372 passed, 0 failed, 1 skipped (373 total; Docker OS egress test skipped). YAML parse and `bash -n` for all five workflow blocks passed; `git diff --check` passed before documentation updates. Docker/Supabase CLI/psql/pg_prove remain unavailable locally, so no local PostgreSQL pass is claimed. This is the dedicated W80 workflow, not the complete W21 Local Launch Gate.
 - Independent review: `public.get_workspace_invitation` is the sole public SECURITY DEFINER exception and calls a fully qualified private helper under pinned `pg_catalog, public`; it returns token-gated invitation metadata. The existing private helper marks a matching expired PENDING invitation as EXPIRED before returning; W83 does not introduce this behavior, so the endpoint is not strictly read-only with respect to application data. Mutation wrappers remain SECURITY INVOKER, and app callers use the cookie-bound server client. Keep expiry mutation and token disclosure in scope for the database security owner's review.
 - W66 service-role table boundaries and W81/W82-specific security properties are not newly proven by this invitation suite. Hosted migration-ledger parity, W66/W67/W81/W82 environment state, default-ACL policy, production egress/provider guarantees and universal Mission Authority remain blockers. PR #39 remains OPEN/Draft/unmerged at `9d752a59f0683ea7149633138dc85bb33cf9a41`; Issue #23 remains OPEN; adapters empty/fail-closed; release **NO-GO**.
+
+
+## Exact-SHA W21 launch gate after W80/W81 coverage correction — 2026-10-15
+
+**Result: SUCCESS. Exact code/workflow/test SHA:** `77e4ca26157137dfcd3146a066f8503cd72c1c67` on temporary verification branch `codex/w80-forward-correction-20261015` in `abdalrhmanata-gif/nexo-w21-isolated-verification-20261015` only.
+
+- Full W21 Local Launch Gate: [run 38740599618](https://github.com/abdalrhmanata-gif/nexo-w21-isolated-verification-20261015/actions/runs/38740599618) — SUCCESS.
+- W21 evidence and cleanup artifact: [11975193299](https://github.com/abdalrhmanata-gif/nexo-w21-isolated-verification-20261015/actions/runs/38740599618/artifacts/11975193299).
+- Browser diagnostics: [11975083311](https://github.com/abdalrhmanata-gif/nexo-w21-isolated-verification-20261015/actions/runs/38740599618/artifacts/11975083311).
+- Flutter CI on the exact same SHA: [run 38740599747](https://github.com/abdalrhmanata-gif/nexo-w21-isolated-verification-20261015/actions/runs/38740599747) — SUCCESS.
+- Web Unit and the workflow coverage regression passed on the immediate predecessor `f2adb2444193eb22e98c6902fa1c9df5a1a854f9`: [run 38740358556](https://github.com/abdalrhmanata-gif/nexo-w21-isolated-verification-20261015/actions/runs/38740358556). The suite reported 372 passed, 0 failed, 1 skipped (373 total); the skipped test requires Docker-backed egress isolation. TypeScript typecheck and the separate `--network none` adversarial egress integration step passed. The later `77e4ca` change is only the SQL W81 fixture; the exact-SHA W21 run re-executed the relevant SQL tests.
+
+### What this run actually proved
+
+- W30 PostgreSQL 17 launch-gate pgTAP — PASS after a narrow change to treat only exact signature `public.get_workspace_invitation(text)` as the reviewed SECURITY DEFINER exception. The test now separately checks postgres ownership, pinned `search_path=pg_catalog, public`, delegation to the private token helper, token validation, permitted role EXECUTE, no `service_role` EXECUTE, and no anon schema USAGE.
+- Mission Authority SQL regression group — PASS, including W66, W67, W80 and W81. The unchanged W80 test returned PASS for its 49-assertion contract; the W81 test's 23-test plan completed successfully.
+- The W81 false start was a test-fixture isolation bug, not a reason to weaken the policy: its authority-change scenario changed a shared Agent to require external effects/approval, then did not restore it before later unclaimed failure/UNKNOWN scenarios. The test now restores the initial read-only authority before starting the independent scenarios and checks the exact `RESEARCH_JIT_CLAIM_REQUIRED` error rather than treating any SQLSTATE 42501 as success.
+- AI quota/plan/workspace tests, including W82 reservation identity, — PASS.
+- Concurrent idempotency, atomic authority-budget, one-time dispatch-claim and one-time reconciliation-claim proofs — PASS.
+- W72 persistent gateway integration with fake providers — PASS.
+- Browser E2E: `2 passed (2.3m)`.
+- Cleanup: `supabase_stop_exit_code=0`, `remaining_containers=none`, `remaining_volumes=none`, `cleanup_verified=true`.
+
+### Workflow durability improvements
+
+The temporary verification workflow now copies and explicitly invokes the canonical `supabase/tests/w80_invitation_helper_privileges.sql` and `supabase/tests/w81_read_only_research_jit_claim.sql`. The workflow guard test also requires W66/W67/W80/W81/W82 SQL tests to remain wired into the W21 workflow, preventing a future green W21 run from silently omitting those contracts.
+
+Two prior W21 runs are retained as honest regression evidence: [run 38739418494](https://github.com/abdalrhmanata-gif/nexo-w21-isolated-verification-20261015/actions/runs/38739418494) exposed the stale blanket W30 assumption; [run 38739915781](https://github.com/abdalrhmanata-gif/nexo-w21-isolated-verification-20261015/actions/runs/38739915781) exposed the contaminated W81 fixture. Both were corrected before the successful exact-SHA run above.
+
+### Boundaries and remaining blockers
+
+This is the full W21 disposable PG17/fake-provider gate for the exact temporary verification SHA, not a proof of hosted Supabase Development/Production parity or universal production runtime isolation. The W81 fixture fix and W30 policy exception have only been pushed to this temporary verification repository, not to the original Nexo repository or the user's local Windows checkout.
+
+Still outstanding: authorized owner-run read-only reconciliation for hosted migration ledgers, invitation function ACLs, role memberships and default function ACLs; independent W66/W67/W81/W82 hosted-state evidence; broad Mission Authority acceptance across every external effect; deployed universal egress enforcement; real-provider idempotency, receipt authenticity and authoritative reconciliation.
+
+Original repository `abdalrhmanata-gif/Nexo` was not changed. PR #39 remains OPEN/Draft/unmerged at original head `9d752a59f0683ea7149633138dc85bb33cf9a41b`; Issue #23 remains OPEN. `TRUSTED_DISPATCH_ADAPTERS` remains empty/fail-closed. No hosted Supabase migration or external provider/email action was executed. Release remains **NO-GO**.
