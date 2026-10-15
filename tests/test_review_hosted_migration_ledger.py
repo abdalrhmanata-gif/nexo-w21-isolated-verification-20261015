@@ -92,7 +92,7 @@ class HostedLedgerReviewTests(unittest.TestCase):
             second["source_migration_manifest_sha256"],
         )
         migration = self.repo / "supabase" / "migrations" / "20261013100000_w80_example.sql"
-        migration.write_text("select 999;\\n", encoding="utf-8")
+        migration.write_text("select 999;\n", encoding="utf-8")
         changed = review.reconcile(self.evidence, self.repo)
         self.assertNotEqual(
             first["source_migration_manifest_sha256"],
@@ -118,7 +118,7 @@ class HostedLedgerReviewTests(unittest.TestCase):
         self.assertRegex(clean["source_checkout_head_sha"], r"^[0-9a-f]{40,64}$")
         self.assertIs(clean["source_migrations_worktree_clean"], True)
         migration = self.repo / "supabase" / "migrations" / "20261013100000_w80_example.sql"
-        migration.write_text("select 88;\\n", encoding="utf-8")
+        migration.write_text("select 88;\n", encoding="utf-8")
         dirty = review.reconcile(self.evidence, self.repo)
         self.assertEqual(dirty["source_checkout_head_sha"], clean["source_checkout_head_sha"])
         self.assertIs(dirty["source_migrations_worktree_clean"], False)
