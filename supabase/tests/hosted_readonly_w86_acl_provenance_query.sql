@@ -86,10 +86,10 @@ SELECT jsonb_build_object(
     ) ORDER BY a.attnum, COALESCE(grantee_role.rolname, 'PUBLIC'), acl.privilege_type), '[]'::jsonb)
       FROM target t
       JOIN pg_attribute a ON a.attrelid = t.relid
-     WHERE a.attnum > 0 AND NOT a.attisdropped
-     CROSS JOIN LATERAL aclexplode(a.attacl) acl
+      CROSS JOIN LATERAL aclexplode(a.attacl) acl
       LEFT JOIN pg_roles grantee_role ON grantee_role.oid = acl.grantee
       LEFT JOIN pg_roles grantor_role ON grantor_role.oid = acl.grantor
+     WHERE a.attnum > 0 AND NOT a.attisdropped
   ),
   'service_role_inherited_table_acl_entries', (
     SELECT COALESCE(jsonb_agg(jsonb_build_object(
