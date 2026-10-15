@@ -149,6 +149,8 @@ jobs:
             "${workdir}/supabase/tests/w46_workspace_activity.sql"
           cp "${GITHUB_WORKSPACE}/supabase/tests/w80_invitation_helper_privileges.sql" \
             "${workdir}/supabase/tests/w80_invitation_helper_privileges.sql"
+          cp "${GITHUB_WORKSPACE}/supabase/tests/w84_postgres_function_default_acl_hardening.sql" \
+            "${workdir}/supabase/tests/w84_postgres_function_default_acl_hardening.sql"
           printf '%s\n' 'zavqera-w80-local' > "${workdir}/ZAVQERA_W80_DISPOSABLE"
           printf '%s\n' "${workdir}" > "${RUNNER_TEMP}/w80-workdir"
           {
@@ -159,6 +161,9 @@ jobs:
             echo "w80_migration_blob=$(git -C "${GITHUB_WORKSPACE}" rev-parse HEAD:supabase/migrations/20261013100000_w80_fail_closed_workspace_role_checks.sql)"
             echo "w83_migration_blob=$(git -C "${GITHUB_WORKSPACE}" rev-parse HEAD:supabase/migrations/20261015100000_w83_workspace_invitation_privilege_correction.sql)"
             echo "w80_test_blob=$(git -C "${GITHUB_WORKSPACE}" rev-parse HEAD:supabase/tests/w80_invitation_helper_privileges.sql)"
+            echo "w84_migration_blob=$(git -C "${GITHUB_WORKSPACE}" rev-parse HEAD:supabase/migrations/20261015110000_w84_postgres_function_default_acl_hardening.sql)"
+            echo "w84_test_blob=$(git -C "${GITHUB_WORKSPACE}" rev-parse HEAD:supabase/tests/w84_postgres_function_default_acl_hardening.sql)"
+            echo "expected_w84_pgtap_assertions=21"
             echo "w44_test_blob=$(git -C "${GITHUB_WORKSPACE}" rev-parse HEAD:supabase/tests/w44_workspace_invitations.sql)"
             echo "expected_w80_pgtap_assertions=49"
             echo "expected_w44_pgtap_assertions=17"
@@ -325,7 +330,28 @@ jobs:
           if [ "${later_status}" -ne 0 ]; then
             echo "::error::The remaining checked-in migration chain failed after W83."
           fi
-          if [ "${regression_status}" -ne 0 ] || [ "${later_status}" -ne 0 ]; then exit 1; fi
+
+          # W84 guards the future-function defaults set by role postgres. Reapply it
+          # in the disposable PG17 stack and rerun all assertions to establish idempotency.
+          w84_status=0
+          if [ "${later_status}" -eq 0 ]; then
+            run_pgtap W84_AFTER_CHAIN supabase/tests/w84_postgres_function_default_acl_hardening.sql 21 || w84_status=1
+            docker cp "${GITHUB_WORKSPACE}/supabase/migrations/20261015110000_w84_postgres_function_default_acl_hardening.sql" \
+              "${db_container}:/tmp/w84_postgres_function_default_acl_hardening.sql"
+            set +e
+            docker exec "${db_container}" psql -U postgres -d postgres -v ON_ERROR_STOP=1 \
+              -f /tmp/w84_postgres_function_default_acl_hardening.sql 2>&1 | tee -a "${replay_log}"
+            w84_reapply_status="${PIPESTATUS[0]}"
+            set -e
+            echo "w84_idempotent_reapply_exit_code=${w84_reapply_status}" >> "${RUNNER_TEMP}/W80_EVIDENCE.txt"
+            if [ "${w84_reapply_status}" -ne 0 ]; then
+              echo "::error::Reapplying W84 on the disposable database failed."
+              w84_status=1
+            fi
+            run_pgtap W84_AFTER_REAPPLY supabase/tests/w84_postgres_function_default_acl_hardening.sql 21 || w84_status=1
+          fi
+          echo "w84_idempotency_and_pg_tap_status=${w84_status}" >> "${RUNNER_TEMP}/W80_EVIDENCE.txt"
+          if [ "${regression_status}" -ne 0 ] || [ "${later_status}" -ne 0 ] || [ "${w84_status}" -ne 0 ]; then exit 1; fi
 
       - name: Stop and prove disposable resource cleanup
         if: always()
