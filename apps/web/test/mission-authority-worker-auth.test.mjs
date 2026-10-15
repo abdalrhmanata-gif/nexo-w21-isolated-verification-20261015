@@ -1,6 +1,7 @@
-import { readFile, readdir, stat } from "node:fs/promises";
+import { mkdtemp, mkdir, readFile, readdir, rm, stat, writeFile } from "node:fs/promises";
 import { builtinModules } from "node:module";
-import { dirname, join, relative, resolve } from "node:path";
+import { tmpdir } from "node:os";
+import { dirname, extname, isAbsolute, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import test from "node:test";
 import assert from "node:assert/strict";
@@ -15,6 +16,11 @@ import {
 
 const TOKEN = "worker-token-abcdefghijklmnopqrstuvwxyz-123456";
 const webRoot = join(dirname(fileURLToPath(import.meta.url)), "..");
+const webTsConfig = ts.readConfigFile(join(webRoot, "tsconfig.json"), ts.sys.readFile);
+assert.equal(webTsConfig.error, undefined, "the web TypeScript config must be readable for source resolution");
+const webParsedConfig = ts.parseJsonConfigFileContent(webTsConfig.config, ts.sys, webRoot);
+assert.equal(webParsedConfig.errors.length, 0, "the web TypeScript path aliases must parse cleanly for source resolution");
+const webCompilerOptions = webParsedConfig.options;
 
 async function listApiRouteFiles(directory) {
   const entries = await readdir(directory, { withFileTypes: true });
@@ -28,52 +34,141 @@ async function listApiRouteFiles(directory) {
 
 const LOCAL_SOURCE_EXTENSIONS = [".ts", ".tsx", ".mts", ".cts", ".js", ".jsx", ".mjs", ".cjs"];
 
-async function resolveLocalSourceImport(specifier, importer) {
-  let base;
-  if (specifier.startsWith("./") || specifier.startsWith("../")) {
-    base = resolve(dirname(importer), specifier);
-  } else if (specifier.startsWith("@/")) {
-    base = resolve(webRoot, specifier.slice(2));
-  } else {
-    return null;
+function getPathAliasTargets(specifier, compilerOptions, sourceRoot) {
+  const mappings = compilerOptions.paths ?? {};
+  const baseUrl = resolve(sourceRoot, compilerOptions.baseUrl ?? ".");
+  const targets = [];
+  let matched = false;
+
+  for (const [pattern, replacements] of Object.entries(mappings)) {
+    const wildcardAt = pattern.indexOf("*");
+    let wildcardValue = null;
+    if (wildcardAt < 0) {
+      if (specifier !== pattern) continue;
+    } else {
+      if (pattern.indexOf("*", wildcardAt + 1) >= 0) continue;
+      const prefix = pattern.slice(0, wildcardAt);
+      const suffix = pattern.slice(wildcardAt + 1);
+      if (!specifier.startsWith(prefix) || !specifier.endsWith(suffix)
+          || specifier.length < prefix.length + suffix.length) continue;
+      wildcardValue = specifier.slice(prefix.length, specifier.length - suffix.length || undefined);
+    }
+
+    matched = true;
+    for (const replacement of replacements) {
+      const mapped = wildcardValue === null ? replacement : replacement.replace("*", wildcardValue);
+      targets.push(resolve(baseUrl, mapped.replace(/\\/g, "/")));
+    }
   }
 
-  const candidates = [
-    base,
-    ...LOCAL_SOURCE_EXTENSIONS.map((extension) => `${base}${extension}`),
-    ...LOCAL_SOURCE_EXTENSIONS.map((extension) => join(base, `index${extension}`)),
-  ];
+  return { matched, targets };
+}
 
-  for (const candidate of candidates) {
-    if (candidate !== webRoot && !candidate.startsWith(`${webRoot}${process.platform === "win32" ? "\\" : "/"}`)) continue;
-    try {
-      if ((await stat(candidate)).isFile()) return candidate;
-    } catch {
-      // Non-resolving source candidates are normal while checking extensionless imports.
+function isWithinSourceRoot(sourceRoot, candidate) {
+  const relativePath = relative(resolve(sourceRoot), resolve(candidate));
+  return relativePath === ""
+    || (relativePath !== ".." && !relativePath.startsWith(`..${process.platform === "win32" ? "\\" : "/"}`)
+      && !isAbsolute(relativePath));
+}
+
+function sourceResolutionCandidates(base) {
+  const extension = extname(base).toLowerCase();
+  const substitutions = {
+    ".js": [".ts", ".tsx"],
+    ".jsx": [".tsx"],
+    ".mjs": [".mts"],
+    ".cjs": [".cts"],
+  };
+  const withoutExtension = extension ? base.slice(0, -extension.length) : base;
+  return [
+    base,
+    ...(substitutions[extension] ?? []).map((candidateExtension) => `${withoutExtension}${candidateExtension}`),
+    ...LOCAL_SOURCE_EXTENSIONS.map((candidateExtension) => `${base}${candidateExtension}`),
+    ...LOCAL_SOURCE_EXTENSIONS.map((candidateExtension) => join(base, `index${candidateExtension}`)),
+  ];
+}
+
+const NON_EXECUTABLE_IMPORT_EXTENSIONS = new Set([
+  ".css", ".scss", ".sass", ".less", ".json", ".svg", ".png", ".jpg", ".jpeg",
+  ".gif", ".webp", ".avif", ".ico", ".woff", ".woff2", ".ttf", ".otf",
+]);
+
+function isLocalSourceResolutionIntent(specifier, compilerOptions = webCompilerOptions, sourceRoot = webRoot) {
+  const normalized = specifier.replace(/\\/g, "/");
+  return normalized.startsWith("./") || normalized.startsWith("../") || normalized.startsWith("@/")
+    || getPathAliasTargets(normalized, compilerOptions, sourceRoot).matched;
+}
+
+function isUnresolvedExecutableLocalImport(specifier, compilerOptions = webCompilerOptions, sourceRoot = webRoot) {
+  if (!isLocalSourceResolutionIntent(specifier, compilerOptions, sourceRoot)) return false;
+  return !NON_EXECUTABLE_IMPORT_EXTENSIONS.has(extname(specifier).toLowerCase());
+}
+
+async function resolveLocalSourceImport(specifier, importer, compilerOptions = webCompilerOptions, sourceRoot = webRoot) {
+  const normalizedSpecifier = specifier.replace(/\\/g, "/");
+  let bases;
+  if (normalizedSpecifier.startsWith("./") || normalizedSpecifier.startsWith("../")) {
+    bases = [resolve(dirname(importer), normalizedSpecifier)];
+  } else {
+    const mapped = getPathAliasTargets(normalizedSpecifier, compilerOptions, sourceRoot);
+    if (mapped.matched) {
+      bases = mapped.targets;
+    } else if (normalizedSpecifier.startsWith("@/")) {
+      // The existing Next application convention resolves @/ from its root;
+      // retain this explicit mapping even though tsconfig currently has no paths.
+      bases = [resolve(sourceRoot, normalizedSpecifier.slice(2))];
+    } else if (compilerOptions.baseUrl) {
+      bases = [resolve(sourceRoot, compilerOptions.baseUrl, normalizedSpecifier)];
+    } else {
+      return null;
+    }
+  }
+
+  for (const base of bases) {
+    for (const candidate of sourceResolutionCandidates(base)) {
+      if (!isWithinSourceRoot(sourceRoot, candidate)
+          || candidate.split(/[\\/]/).includes("node_modules")
+          || (extname(candidate) && !LOCAL_SOURCE_EXTENSIONS.includes(extname(candidate).toLowerCase()))
+          || /\.d\.(?:ts|mts|cts)$/i.test(candidate)) continue;
+      try {
+        if ((await stat(candidate)).isFile()) return candidate;
+      } catch {
+        // Non-resolving source candidates are normal while checking extensions and index files.
+      }
     }
   }
   return null;
 }
 
-function readStaticLocalImportSpecifiers(source) {
+function readStaticLocalImportSpecifiers(source, filePath = "source.ts") {
   const specifiers = new Set();
   const isStaticModuleSpecifier = (node) => Boolean(
     node && (ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node))
   );
   const sourceFile = ts.createSourceFile(
-    "source.ts",
+    filePath,
     source,
     ts.ScriptTarget.Latest,
     true,
-    ts.ScriptKind.TS,
+    sourceScriptKind(filePath),
   );
+  assert.equal(sourceFile.parseDiagnostics.length, 0,
+    `${filePath} must parse before its static import graph can be trusted: ${sourceFile.parseDiagnostics.map((item) => ts.flattenDiagnosticMessageText(item.messageText, " ")).join("; ")}`);
 
   function visit(node) {
+    if (ts.isImportDeclaration(node) && node.importClause?.isTypeOnly) {
+      ts.forEachChild(node, visit);
+      return;
+    }
+    if (ts.isExportDeclaration(node) && node.isTypeOnly) {
+      ts.forEachChild(node, visit);
+      return;
+    }
     if ((ts.isImportDeclaration(node) || ts.isExportDeclaration(node))
         && node.moduleSpecifier && ts.isStringLiteral(node.moduleSpecifier)) {
       specifiers.add(node.moduleSpecifier.text);
     }
-    if (ts.isImportEqualsDeclaration(node)
+    if (ts.isImportEqualsDeclaration(node) && !node.isTypeOnly
         && ts.isExternalModuleReference(node.moduleReference)
         && node.moduleReference.expression && ts.isStringLiteral(node.moduleReference.expression)) {
       specifiers.add(node.moduleReference.expression.text);
@@ -81,8 +176,9 @@ function readStaticLocalImportSpecifiers(source) {
     if (ts.isCallExpression(node)) {
       const isDynamicImport = node.expression.kind === ts.SyntaxKind.ImportKeyword;
       const isRequire = ts.isIdentifier(node.expression) && node.expression.text === "require";
+      const isModuleRequire = normalizeExpressionPath(astExpressionPath(node.expression)) === "module.require";
       const argument = node.arguments[0];
-      if ((isDynamicImport || isRequire) && isStaticModuleSpecifier(argument)) {
+      if ((isDynamicImport || isRequire || isModuleRequire) && isStaticModuleSpecifier(argument)) {
         specifiers.add(argument.text);
       }
     }
@@ -93,28 +189,37 @@ function readStaticLocalImportSpecifiers(source) {
   return [...specifiers];
 }
 
-async function findReachableSensitiveModule(entry, sensitiveModules, visited = new Set()) {
+async function findReachableSensitiveModule(entry, sensitiveModules, visited = new Set(), compilerOptions = webCompilerOptions, sourceRoot = webRoot) {
   if (sensitiveModules.has(entry)) return [entry];
   if (visited.has(entry)) return null;
   visited.add(entry);
 
   const source = await readFile(entry, "utf8");
-  for (const specifier of readStaticLocalImportSpecifiers(source)) {
-    const resolved = await resolveLocalSourceImport(specifier, entry);
-    if (!resolved) continue;
-    const childPath = await findReachableSensitiveModule(resolved, sensitiveModules, visited);
+  for (const specifier of readStaticLocalImportSpecifiers(source, entry)) {
+    const resolved = await resolveLocalSourceImport(specifier, entry, compilerOptions, sourceRoot);
+    if (!resolved) {
+      assert.equal(isUnresolvedExecutableLocalImport(specifier, compilerOptions, sourceRoot), false,
+        `${relative(sourceRoot, entry)} has an unresolved local executable import: ${specifier}`);
+      continue;
+    }
+    const childPath = await findReachableSensitiveModule(resolved, sensitiveModules, visited, compilerOptions, sourceRoot);
     if (childPath) return [entry, ...childPath];
   }
   return null;
 }
 
-async function collectReachableLocalSourceModules(entry, visited = new Set()) {
+async function collectReachableLocalSourceModules(entry, visited = new Set(), compilerOptions = webCompilerOptions, sourceRoot = webRoot) {
   if (visited.has(entry)) return visited;
   visited.add(entry);
   const source = await readFile(entry, "utf8");
-  for (const specifier of readStaticLocalImportSpecifiers(source)) {
-    const resolved = await resolveLocalSourceImport(specifier, entry);
-    if (resolved) await collectReachableLocalSourceModules(resolved, visited);
+  for (const specifier of readStaticLocalImportSpecifiers(source, entry)) {
+    const resolved = await resolveLocalSourceImport(specifier, entry, compilerOptions, sourceRoot);
+    if (!resolved) {
+      assert.equal(isUnresolvedExecutableLocalImport(specifier, compilerOptions, sourceRoot), false,
+        `${relative(sourceRoot, entry)} has an unresolved local executable import: ${specifier}`);
+      continue;
+    }
+    await collectReachableLocalSourceModules(resolved, visited, compilerOptions, sourceRoot);
   }
   return visited;
 }
@@ -474,6 +579,19 @@ test("only the trusted internal worker route reaches Mission Action dispatch mod
       entrypoint: relative(webRoot, entrypoint).replace(/\\/g, "/"),
       target: relative(webRoot, chain.at(-1)).replace(/\\/g, "/"),
     });
+
+    const reachableModules = await collectReachableLocalSourceModules(entrypoint);
+    for (const modulePath of reachableModules) {
+      const source = await readFile(modulePath, "utf8");
+      const relativeModule = relative(webRoot, modulePath).replace(/\\/g, "/");
+      const loaderMarkers = findUnreviewedRuntimeLoaderMarkers(source, modulePath);
+      assert.deepEqual(loaderMarkers, [],
+        `${relativeModule} uses runtime code loading that static graph analysis cannot safely resolve`);
+      const restrictedImports = readStaticLocalImportSpecifiers(source, modulePath)
+        .filter((specifier) => RESTRICTED_RUNTIME_CAPABILITY_IMPORTS.has(specifier));
+      assert.deepEqual(restrictedImports, [],
+        `${relativeModule} imports restricted runtime loader/code-generation capabilities`);
+    }
   }
 
   assert.deepEqual(
@@ -594,7 +712,7 @@ function findDirectOutboundMatches(source, pattern) {
   return [...source.matchAll(freshPattern)];
 }
 
-const GLOBAL_OBJECT_PATHS = new Set(["globalThis", "global", "self", "window", "process"]);
+const GLOBAL_OBJECT_PATHS = new Set(["globalThis", "global", "self", "window", "process", "module", "WebAssembly"]);
 const DYNAMIC_LOADER_OR_CODE_PATHS = new Set([
   "require", "createRequire", "module.require", "module.constructor._load",
   "process.mainModule.require", "process.getBuiltinModule", "process.binding",
@@ -603,6 +721,9 @@ const DYNAMIC_LOADER_OR_CODE_PATHS = new Set([
   "globalThis.createRequire", "global.createRequire", "self.createRequire", "window.createRequire",
   "globalThis.eval", "global.eval", "self.eval", "window.eval",
   "globalThis.Function", "global.Function", "self.Function", "window.Function",
+  "WebAssembly.compile", "WebAssembly.compileStreaming", "WebAssembly.instantiate", "WebAssembly.instantiateStreaming",
+  "WebAssembly.Module", "WebAssembly.Instance",
+  "globalThis.WebAssembly.compile", "globalThis.WebAssembly.instantiate",
 ]);
 
 function sourceScriptKind(filePath) {
@@ -682,6 +803,8 @@ function readAstOutboundMarkers(source, filePath = "source.mjs") {
     true,
     sourceScriptKind(filePath),
   );
+  assert.equal(sourceFile.parseDiagnostics.length, 0,
+    `${filePath} must parse before outbound capabilities can be analyzed: ${sourceFile.parseDiagnostics.map((item) => ts.flattenDiagnosticMessageText(item.messageText, " ")).join("; ")}`);
   const markers = [];
   const seen = new Set();
   const aliases = new Map();
@@ -701,7 +824,9 @@ function readAstOutboundMarkers(source, filePath = "source.mjs") {
     if (ts.isPropertyAccessExpression(node) || ts.isElementAccessExpression(node)) {
       const accessPath = resolveAliasedExpressionPath(node, aliases);
       if (isSensitiveAliasPath(accessPath) && !GLOBAL_OBJECT_PATHS.has(accessPath)) {
-        add(node, "outbound-capable transport/loader reference");
+        add(node, DYNAMIC_LOADER_OR_CODE_PATHS.has(accessPath)
+          ? `dynamic loader/codegen capability reference (${accessPath})`
+          : "outbound-capable transport reference");
       }
     }
 
@@ -765,10 +890,18 @@ function readAstOutboundMarkers(source, filePath = "source.mjs") {
           add(node, "all global property descriptors expose transport/codegen capabilities");
         }
       }
+      if (callPath === "Reflect.construct") {
+        const constructorPath = resolveAliasedExpressionPath(node.arguments[0], aliases);
+        if (!constructorPath || DYNAMIC_LOADER_OR_CODE_PATHS.has(constructorPath)
+            || constructorPath === "Function" || constructorPath === "globalThis.Function") {
+          add(node, "Reflect.construct may create runtime code or a loader");
+        }
+      }
       if (callPath && /^(?:globalThis|global|self|window)\.(?:fetch|WebSocket|XMLHttpRequest|EventSource)$/.test(callPath)) {
         add(node, "global transport call");
       }
-      if (callPath?.endsWith(".require") && !staticString(node.arguments[0])) {
+      if ((callPath === "module.require" || callPath === "module.constructor._load"
+          || callPath === "process.mainModule.require") && !staticString(node.arguments[0])) {
         add(node, "computed require()");
       }
     }
@@ -808,9 +941,11 @@ function readAstOutboundMarkers(source, filePath = "source.mjs") {
           const propertyName = ts.isIdentifier(property) || ts.isStringLiteral(property) ? property.text : null;
           const localName = element.name.getText(sourceFile);
           const globalCapabilities = ["fetch", "WebSocket", "XMLHttpRequest", "EventSource", "require", "eval", "Function"];
+          const webAssemblyCapabilities = ["compile", "compileStreaming", "instantiate", "instantiateStreaming"];
           const processCapabilities = ["binding", "_linkedBinding", "dlopen", "getBuiltinModule", "mainModule"];
           if (GLOBAL_OBJECT_PATHS.has(base) && (
             globalCapabilities.includes(propertyName)
+            || (base === "WebAssembly" && webAssemblyCapabilities.includes(propertyName))
             || (base === "process" && processCapabilities.includes(propertyName))
           )) {
             add(element, `destructured global transport/codegen (${propertyName})`);
@@ -827,6 +962,11 @@ function readAstOutboundMarkers(source, filePath = "source.mjs") {
   }
   visit(sourceFile);
   return markers;
+}
+
+function findUnreviewedRuntimeLoaderMarkers(source, filePath) {
+  const loaderMarker = /computed import\(\)|computed require\(\)|createRequire\(\)|dynamic code execution|dynamic loader\/codegen|dynamic loader\/codegen capability reference|Reflect\.construct may create runtime code or a loader|computed global property access|destructured global transport\/codegen \((?:require|createRequire|eval|Function|binding|_linkedBinding|dlopen|getBuiltinModule|mainModule|compile|compileStreaming|instantiate|instantiateStreaming)\)|Reflect\.get (?:global|module) transport\/codegen capability \((?:require|createRequire|eval|Function|computed-key)|property descriptor exposes global transport\/codegen capability \((?:require|createRequire|eval|Function|computed-key)|all global property descriptors expose transport\/codegen capabilities/;
+  return readAstOutboundMarkers(source, filePath).filter((marker) => loaderMarker.test(marker));
 }
 
 test("direct outbound regex scans reset global match state for every source file", () => {
@@ -910,7 +1050,7 @@ test("outbound-source detectors recognize representative transport and dynamic-l
     "aliased imports and CommonJS module loading must surface restricted runtime capabilities",
   );
   const specifiers = readStaticLocalImportSpecifiers(
-    'import Client from "openai";\\nconst mail = require("resend");',
+    'import Client from "openai";\nconst mail = require("resend");',
   );
   assert.deepEqual(specifiers.sort(), ["openai", "resend"]);
   assert.equal(specifiers.every((specifier) => EXPLICIT_PROVIDER_SDK_IMPORTS.has(specifier)), true,
@@ -933,7 +1073,6 @@ test("static dependency graph extracts TypeScript AST import forms without readi
   const specifiers = readStaticLocalImportSpecifiers(source);
 
   assert.deepEqual(specifiers.sort(), [
-    "../domain/mission",
     "./legacy-worker",
     "./runtime-worker.cjs",
     "./runtime-worker.mjs",
@@ -945,6 +1084,104 @@ test("static dependency graph extracts TypeScript AST import forms without readi
     readAstOutboundMarkers(source).some((marker) => marker.includes("computed import()")),
     "a dynamic template import with substitutions must be rejected by the runtime-capability guard",
   );
+});
+
+test("AST dependency resolution follows configured aliases, source extensions, indexes and normalized paths", async (context) => {
+  const root = await mkdtemp(join(tmpdir(), "mission-import-graph-"));
+  context.after(async () => rm(root, { recursive: true, force: true }));
+  await mkdir(join(root, "src", "components"), { recursive: true });
+  await mkdir(join(root, "src", "nested", "index"), { recursive: true });
+  await writeFile(join(root, "src", "components", "button.tsx"), "export const Button = () => <button />;\n");
+  await writeFile(join(root, "src", "nested", "index", "index.ts"), "export const nested = true;\n");
+  const importer = join(root, "src", "entry.ts");
+  const options = { baseUrl: root, paths: { "@ui/*": ["src/components/*"], "@nested": ["src/nested/index"] } };
+
+  assert.equal(await resolveLocalSourceImport("@ui/button", importer, options, root), join(root, "src", "components", "button.tsx"));
+  assert.equal(await resolveLocalSourceImport("@nested", importer, options, root), join(root, "src", "nested", "index", "index.ts"));
+  assert.equal(await resolveLocalSourceImport("./components\\button", importer, options, root), join(root, "src", "components", "button.tsx"));
+  assert.equal(await resolveLocalSourceImport("@ui/missing", importer, options, root), null);
+  assert.equal(isUnresolvedExecutableLocalImport("@ui/missing", options, root), true);
+  assert.equal(isUnresolvedExecutableLocalImport("@ui/icon.svg", options, root), false);
+  assert.equal(isWithinSourceRoot(root, resolve(root, "..", "outside.ts")), false);
+});
+
+test("forbidden reachability through local re-exports is detected and unresolved aliases fail closed", async (context) => {
+  const root = await mkdtemp(join(tmpdir(), "mission-import-reachability-"));
+  context.after(async () => rm(root, { recursive: true, force: true }));
+  await mkdir(join(root, "src", "routes"), { recursive: true });
+  await mkdir(join(root, "src", "lib"), { recursive: true });
+  await writeFile(join(root, "src", "routes", "entry.tsx"), [
+    'import "../routes/bridge";',
+    '// import "../lib/privileged" is only a comment',
+    'const documentation = "export * from \'../lib/privileged\'";',
+  ].join("\n"));
+  await writeFile(join(root, "src", "routes", "bridge.ts"), 'export * from "@core/privileged";\n');
+  const privileged = join(root, "src", "lib", "privileged.ts");
+  await writeFile(privileged, "export const dispatch = () => {};\n");
+  const options = { baseUrl: root, paths: { "@core/*": ["src/lib/*"] } };
+
+  const chain = await findReachableSensitiveModule(
+    join(root, "src", "routes", "entry.tsx"), new Set([privileged]), new Set(), options, root,
+  );
+  assert.deepEqual(chain, [join(root, "src", "routes", "entry.tsx"), join(root, "src", "routes", "bridge.ts"), privileged]);
+
+  await writeFile(join(root, "src", "routes", "unresolved.ts"), 'import "@core/missing";\n');
+  await assert.rejects(
+    () => findReachableSensitiveModule(join(root, "src", "routes", "unresolved.ts"), new Set(), new Set(), options, root),
+    /unresolved local executable import/,
+  );
+});
+
+test("AST parser selects JavaScript, TypeScript, JSX and TSX grammars and ignores type-only edges", () => {
+  const fixtures = [
+    ["entry.js", 'import "./dep.js"; const jsx = <main />;'],
+    ["entry.jsx", 'import "./dep.jsx"; const jsx = <main />;'],
+    ["entry.ts", 'import type { Shape } from "./types"; import "./runtime";'],
+    ["entry.tsx", 'import "./view"; const jsx = <main />;'],
+  ];
+  for (const [path, source] of fixtures) {
+    const edges = readStaticLocalImportSpecifiers(source, path);
+    assert.deepEqual(edges, path === "entry.ts" ? ["./runtime"] : [path === "entry.js" ? "./dep.js" : path === "entry.jsx" ? "./dep.jsx" : "./view"]);
+  }
+});
+
+test("static graph records literal module.require and rejects unresolved or computed runtime loaders", () => {
+  assert.deepEqual(readStaticLocalImportSpecifiers('module.require("./worker");'), ["./worker"]);
+  assert.ok(findUnreviewedRuntimeLoaderMarkers('module.require("./worker");', "entry.mjs").length > 0,
+    "module.require remains explicit for review even when its argument is literal");
+
+  const blocked = [
+    'const m = module; m.require("./hidden");',
+    'module["require"](moduleName);',
+    'const load = module.require; load(moduleName);',
+    'const { require: load } = module; load(moduleName);',
+    'const load = require; load(moduleName);',
+    'process.mainModule.require(moduleName);',
+    'const localRequire = createRequire(import.meta.url);',
+    'eval(source);',
+    'new Function(source);',
+    'const compile = globalThis.Function; compile(source);',
+    'const loader = Reflect.get(module, "require"); loader(moduleName);',
+    'Reflect.construct(Function, ["return fetch(url)"])();',
+    'WebAssembly.compile(wasmBytes);',
+    'const { compile: compileWasm } = WebAssembly; compileWasm(bytes);',
+    'const key = getRuntimeKey(); Reflect.get(module, key);',
+    'module[runtimeLoaderName]("./hidden");',
+  ];
+  for (const source of blocked) {
+    assert.ok(findUnreviewedRuntimeLoaderMarkers(source, "entry.ts").length > 0, source);
+  }
+
+  const harmless = [
+    '// module.require(moduleName) and eval(source) are examples',
+    'const note = "createRequire(import.meta.url); new Function(source)";',
+    'const metadata = { require: "not a loader", module: "not Node module" };',
+    'const resolved = require.resolve("./metadata");',
+    'Reflect.construct(Date, [0]);',
+  ].join("\n");
+  assert.deepEqual(findUnreviewedRuntimeLoaderMarkers(harmless, "entry.ts"), []);
+  assert.deepEqual(readStaticLocalImportSpecifiers(harmless), [],
+    "require.resolve finds a path but does not execute or load the target");
 });
 
 test("AST outbound analysis rejects sensitive transport references passed through helpers", () => {
