@@ -247,12 +247,32 @@ jobs:
             supabase/tests/w79_trusted_research_completion.sql \
             supabase/tests/w80_invitation_helper_privileges.sql \
             supabase/tests/w81_read_only_research_jit_claim.sql \
-            supabase/tests/w84_postgres_function_default_acl_hardening.sql \
-            supabase/tests/w85_supabase_admin_default_acl_audit.sql
+            supabase/tests/w84_postgres_function_default_acl_hardening.sql
           do
             echo "Running Mission Authority regression: $test_file"
             timeout 10m supabase test db "$test_file"
           done
+
+      - name: Run W85 supabase_admin default ACL audit as creator on disposable PG17
+        run: |
+          set -euo pipefail
+          db_container="$(docker ps --filter name=supabase_db_zavqera-e2e-local --format "{{.ID}}" | head -n 1)"
+          if [ -z "$db_container" ]; then
+            echo "::error::Refusing W85 because the disposable PostgreSQL 17 container could not be identified."
+            exit 1
+          fi
+          docker cp "$GITHUB_WORKSPACE/supabase/tests/w85_supabase_admin_default_acl_audit.sql" "$db_container:/tmp/w85_supabase_admin_default_acl_audit.sql"
+          log="$RUNNER_TEMP/W85_SUPABASE_ADMIN_AUDIT_PGTAP_OUTPUT.txt"
+          set +e
+          docker exec "$db_container" psql -U supabase_admin -d postgres -X -v ON_ERROR_STOP=1 -f /tmp/w85_supabase_admin_default_acl_audit.sql 2>&1 | tee "$log"
+          status="${PIPESTATUS[0]}"
+          set -e
+          reported="$(grep -Ec "^(ok|not ok) [0-9]+" "$log" || true)"
+          failed="$(grep -Ec "^not ok [0-9]+" "$log" || true)"
+          if [ "$status" -ne 0 ] || ! grep -Fxq "1..12" "$log" || [ "$reported" -ne 12 ] || [ "$failed" -ne 0 ]; then
+            echo "::error::W85 expected 12 passing pgTAP assertions; reported=$reported failed=$failed status=$status."
+            exit 1
+          fi
 
       - name: Run AI quota, plan and workspace security tests
         run: |
@@ -386,6 +406,12 @@ jobs:
             cat "$RUNNER_TEMP/W83_LOCAL_CATALOG_RECONCILIATION.txt" >> "$RUNNER_TEMP/W21_EVIDENCE.txt"
           else
             echo "w83_local_catalog_reconciliation=missing" >> "$RUNNER_TEMP/W21_EVIDENCE.txt"
+          fi
+          if [ -f "$RUNNER_TEMP/W85_SUPABASE_ADMIN_AUDIT_PGTAP_OUTPUT.txt" ]; then
+            echo "=== W85 supabase_admin function-default ACL probe (disposable PG17) ===" >> "$RUNNER_TEMP/W21_EVIDENCE.txt"
+            cat "$RUNNER_TEMP/W85_SUPABASE_ADMIN_AUDIT_PGTAP_OUTPUT.txt" >> "$RUNNER_TEMP/W21_EVIDENCE.txt"
+          else
+            echo "w85_supabase_admin_audit=missing" >> "$RUNNER_TEMP/W21_EVIDENCE.txt"
           fi
           if [ ! -f "$RUNNER_TEMP/W21_CLEANUP_PROOF.txt" ] || ! grep -q '^cleanup_verified=true$' "$RUNNER_TEMP/W21_CLEANUP_PROOF.txt"; then
             echo "Cleanup proof missing or not verified; see W21 evidence artifact." >&2

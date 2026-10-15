@@ -235,8 +235,15 @@ jobs:
             expected="$3"
             log="${RUNNER_TEMP}/${label}_PGTAP_OUTPUT.txt"
             set +e
-            (cd "${workdir}" && timeout 10m supabase test db --local "${test_file}") 2>&1 | tee "${log}"
-            status="${PIPESTATUS[0]}"
+            if [ "${label}" = "W85_SUPABASE_ADMIN_AUDIT" ]; then
+              docker cp "${GITHUB_WORKSPACE}/${test_file}" "${db_container}:/tmp/w85_supabase_admin_default_acl_audit.sql"
+              docker exec "${db_container}" psql -U supabase_admin -d postgres -X -v ON_ERROR_STOP=1 \
+                -f /tmp/w85_supabase_admin_default_acl_audit.sql 2>&1 | tee "${log}"
+              status="${PIPESTATUS[0]}"
+            else
+              (cd "${workdir}" && timeout 10m supabase test db --local "${test_file}") 2>&1 | tee "${log}"
+              status="${PIPESTATUS[0]}"
+            fi
             set -e
             planned="$(sed -n 's/^1\.\.\([0-9][0-9]*\)$/\1/p' "${log}" | tail -n 1)"
             tap_assertions="$(grep -Ec '^(ok|not ok) [0-9]+' "${log}" || true)"
@@ -353,7 +360,7 @@ jobs:
               w84_status=1
             fi
             run_pgtap W84_AFTER_REAPPLY supabase/tests/w84_postgres_function_default_acl_hardening.sql 21 || w84_status=1
-            run_pgtap W85_SUPABASE_ADMIN_AUDIT supabase/tests/w85_supabase_admin_default_acl_audit.sql 11 || w85_status=1
+            run_pgtap W85_SUPABASE_ADMIN_AUDIT supabase/tests/w85_supabase_admin_default_acl_audit.sql 12 || w85_status=1
           fi
           echo "w84_idempotency_and_pg_tap_status=${w84_status}" >> "${RUNNER_TEMP}/W80_EVIDENCE.txt"
           echo "w85_supabase_admin_audit_status=${w85_status}" >> "${RUNNER_TEMP}/W80_EVIDENCE.txt"

@@ -123,3 +123,18 @@ test("W84 default ACL hardening is replayed and explicitly re-applied in disposa
   assert.ok(w80Workflow.includes('[ "${w84_status}" -ne 0 ]'),
     "Any W84 test or reapplication failure must fail the isolated workflow");
 });
+
+
+test("W85 audits supabase_admin defaults using an actual creator connection and rolls back", () => {
+  const auditSql = readFileSync(join(repoRoot, "supabase", "tests", "w85_supabase_admin_default_acl_audit.sql"), "utf8");
+  assert.ok(workflow.includes('cp "$GITHUB_WORKSPACE/supabase/tests/w85_supabase_admin_default_acl_audit.sql"'));
+  assert.ok(workflow.includes("Run W85 supabase_admin default ACL audit as creator on disposable PG17"));
+  assert.ok(workflow.includes("psql -U supabase_admin -d postgres -X -v ON_ERROR_STOP=1"));
+  assert.ok(workflow.includes('cat "$RUNNER_TEMP/W85_SUPABASE_ADMIN_AUDIT_PGTAP_OUTPUT.txt" >> "$RUNNER_TEMP/W21_EVIDENCE.txt"'));
+  assert.ok(w80Workflow.includes('if [ "${label}" = "W85_SUPABASE_ADMIN_AUDIT" ]; then'));
+  assert.ok(w80Workflow.includes("run_pgtap W85_SUPABASE_ADMIN_AUDIT supabase/tests/w85_supabase_admin_default_acl_audit.sql 12"));
+  assert.ok(w80Workflow.includes('[ "${w85_status}" -ne 0 ]'), "W80 must fail closed if the W85 audit fails");
+  assert.match(auditSql, /current_user = 'supabase_admin' and session_user = 'supabase_admin'/);
+  assert.ok(auditSql.includes("select * from finish();\nrollback;"), "all test-only objects must roll back");
+  assert.doesNotMatch(auditSql, /set local role/i, "the probe must not impersonate supabase_admin");
+});

@@ -1,9 +1,13 @@
--- W85: audit the function ACL defaults applied when supabase_admin is the creator.
--- This is disposable PostgreSQL 17 diagnostic coverage, not a proposed policy change.
--- The temporary schema grant and probe function are rolled back at the end.
+-- W85: audit function ACL defaults when supabase_admin is the actual creator.
+-- Diagnostic coverage only: this file is run on disposable PostgreSQL 17.
+-- No role impersonation is attempted; the temporary probe is rolled back.
 begin;
 create extension if not exists pgtap;
-select plan(11);
+select plan(12);
+
+select ok(
+  current_user = 'supabase_admin' and session_user = 'supabase_admin',
+  'the audit connects as the actual supabase_admin creator role');
 
 select ok(to_regrole('supabase_admin') is not null,
   'the disposable Supabase role supabase_admin exists');
@@ -15,13 +19,14 @@ select ok(exists (
 ), 'PostgreSQL built-in function defaults include PUBLIC EXECUTE for this creator');
 
 select diag(format(
-  'supabase_admin attributes: rolsuper=%s, rolcanlogin=%s, rolcreaterole=%s, rolbypassrls=%s; postgres member of supabase_admin=%s; public CREATE before temporary grant=%s',
+  'supabase_admin attributes: rolsuper=%s, rolcanlogin=%s, rolcreaterole=%s, rolbypassrls=%s; postgres member of supabase_admin=%s; public CREATE=%s; current_user=%s',
   (select rolsuper from pg_roles where rolname = 'supabase_admin'),
   (select rolcanlogin from pg_roles where rolname = 'supabase_admin'),
   (select rolcreaterole from pg_roles where rolname = 'supabase_admin'),
   (select rolbypassrls from pg_roles where rolname = 'supabase_admin'),
   pg_has_role('postgres', 'supabase_admin', 'MEMBER'),
-  has_schema_privilege('supabase_admin', 'public', 'CREATE')
+  has_schema_privilege('supabase_admin', 'public', 'CREATE'),
+  current_user
 ));
 
 select ok(exists (
@@ -60,13 +65,8 @@ select ok(exists (
      and r.rolname = 'service_role'
 ), 'supabase_admin public-schema defaults explicitly include service_role EXECUTE');
 
--- Disposable-only permission setup: model creation in public, then undo it all.
--- This does not assert that supabase_admin should create application RPCs.
-grant usage, create on schema public to supabase_admin;
-set local role supabase_admin;
 create function public.w85_supabase_admin_probe()
 returns integer language sql immutable as $probe$ select 85 $probe$;
-reset role;
 
 select ok(
   (select pg_get_userbyid(p.proowner) = 'supabase_admin'
