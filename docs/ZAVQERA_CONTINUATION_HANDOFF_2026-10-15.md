@@ -260,3 +260,24 @@ Exact-source local checks on `dad0734e1fbc76a31d40ac66b19dd7332963a78a`:
 W21 was not run on this SHA locally or remotely. Docker, Supabase CLI and `psql` are unavailable, so disposable PostgreSQL 17/pgTAP, database-backed concurrency/security races, Docker fake-provider integration and network-isolation components could not run. Node-only tests in Web Unit passed but are not a substitute for those W21 components.
 
 No safe remote exact-commit path was found: `workflow_dispatch` is available in W21/Web Unit, but the remote branch does not contain this commit; using it would test the old remote SHA. Publishing this PR branch has previously triggered automatic Vercel Preview deployments, which this task forbids. No push or dispatch was made. Current PR #39 is still OPEN/DRAFT/UNMERGED at the recorded remote SHA; Issue #23 remains OPEN; provider registry remains empty; release **NO-GO**.
+
+## Adversarial Mission Action AST guard audit — 2026-10-15
+
+**Exact source/test commit:** `6f4bb1be0f852a69425269f2bfafa7c6ac4d3c0e`. The previous documentation commit is its parent `e0c7e9d0ec95bbe0ac2ca3c4464f11c1c8116ce4`. The source/test commit is local only; nothing was pushed.
+
+Changed `apps/web/test/mission-authority-worker-auth.test.mjs` only for the code/test commit. The graph resolver now reads the web TypeScript configuration, applies configured `paths` mappings plus the existing `@/` root convention, normalizes slash styles, follows source extensions and `index.*`, restricts traversal to the source root, and skips declaration files and known non-executable assets. It uses JS/JSX/TS/TSX grammars, ignores erased type-only imports, and rejects syntax errors before trusting AST results. Unresolved local executable imports now fail the graph test closed.
+
+The all-production-entrypoint graph now scans each reachable source module for runtime loader/code-generation constructs and restricted runtime imports. Covered forms include static imports/re-exports, TS import-equals, literal dynamic imports and CommonJS loads, `module.require`, aliases/destructuring, computed global/module properties, `process.mainModule`, `createRequire`, computed import/require, `eval`, `Function`, `Reflect.get`/descriptors/construct, and WebAssembly compile/instantiate capabilities. Regression fixtures prove forbidden local reachability through re-exports and fail-closed unresolved aliases, and ensure comments, strings, metadata keys, `require.resolve`, and ordinary `Reflect.construct(Date, ...)` do not create false loader edges.
+
+Local checks on the exact source/test content at `6f4bb1be0f852a69425269f2bfafa7c6ac4d3c0e`:
+
+- From `apps/web`: `node --test test/mission-authority-worker-auth.test.mjs` — exit **0**, **31 passed, 0 failed**.
+- From `apps/web`: `npm test` — exit **0**, **372 passed, 0 failed, 1 skipped** (373 total). The skipped test requires OS-level Docker network isolation.
+- From repository root: `git diff --check` — exit **0** before commit.
+- Provider registry source still defines `TRUSTED_DISPATCH_ADAPTERS = Object.freeze({})`.
+
+W21 was not run on this exact source/test commit. Rechecked local tools: `docker`, `supabase`, `psql`, and `pg_prove` are all `NOT_FOUND`; therefore disposable PostgreSQL 17 migration replay/pgTAP, database concurrency/security components, Docker fake-provider integration, W21 browser E2E and teardown verification remain unperformed for this SHA. No remote workflow was dispatched: the branch was not pushed, and any remote run would not verify this exact local source. Node Web Unit is not W21 evidence.
+
+Remaining AST limitations: this is a source-level import/capability guard. It cannot prove behavior of arbitrary transitive package/native code, reflective patterns outside the enumerated AST forms, generated/evaluated code after opaque transformations, or runtime/process contexts not represented by the production-entrypoint inventory. The real W21 disposable runtime check is the next verification action once an isolated runner with the required tools can test this exact source without a deploy preview.
+
+Live GitHub state was checked after the audit: PR #39 remains OPEN / Draft / unmerged with head `9d752a59f0683ea7149633138dc85bb33cf9a41b`; Issue #23 remains OPEN. No remote refs, hosted Supabase, deployment settings, provider credentials, or external effects changed. `TRUSTED_DISPATCH_ADAPTERS` remains empty and release remains **NO-GO**. The working branch is `codex/mission-action-runtime-seam-test-20261014`; documentation updates are local and uncommitted at this handoff checkpoint.
