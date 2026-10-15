@@ -714,7 +714,8 @@ function findDirectOutboundMatches(source, pattern) {
 
 const GLOBAL_OBJECT_PATHS = new Set(["globalThis", "global", "self", "window", "process", "module", "WebAssembly"]);
 const DYNAMIC_LOADER_OR_CODE_PATHS = new Set([
-  "require", "createRequire", "module.require", "module.constructor._load",
+  "require", "createRequire", "module.require", "module.createRequire", "module._compile",
+  "module.constructor._load", "process.mainModule.constructor._load",
   "process.mainModule.require", "process.getBuiltinModule", "process.binding",
   "process._linkedBinding", "process.dlopen", "eval", "Function",
   "globalThis.require", "global.require", "self.require", "window.require",
@@ -941,7 +942,7 @@ function readAstOutboundMarkers(source, filePath = "source.mjs") {
           const propertyName = ts.isIdentifier(property) || ts.isStringLiteral(property) ? property.text : null;
           const localName = element.name.getText(sourceFile);
           const globalCapabilities = ["fetch", "WebSocket", "XMLHttpRequest", "EventSource", "require", "eval", "Function"];
-          const webAssemblyCapabilities = ["compile", "compileStreaming", "instantiate", "instantiateStreaming"];
+          const webAssemblyCapabilities = ["compile", "compileStreaming", "instantiate", "instantiateStreaming", "Module", "Instance"];
           const processCapabilities = ["binding", "_linkedBinding", "dlopen", "getBuiltinModule", "mainModule"];
           if (GLOBAL_OBJECT_PATHS.has(base) && (
             globalCapabilities.includes(propertyName)
@@ -965,7 +966,7 @@ function readAstOutboundMarkers(source, filePath = "source.mjs") {
 }
 
 function findUnreviewedRuntimeLoaderMarkers(source, filePath) {
-  const loaderMarker = /computed import\(\)|computed require\(\)|createRequire\(\)|dynamic code execution|dynamic loader\/codegen|dynamic loader\/codegen capability reference|Reflect\.construct may create runtime code or a loader|computed global property access|destructured global transport\/codegen \((?:require|createRequire|eval|Function|binding|_linkedBinding|dlopen|getBuiltinModule|mainModule|compile|compileStreaming|instantiate|instantiateStreaming)\)|Reflect\.get (?:global|module) transport\/codegen capability \((?:require|createRequire|eval|Function|computed-key)|property descriptor exposes global transport\/codegen capability \((?:require|createRequire|eval|Function|computed-key)|all global property descriptors expose transport\/codegen capabilities/;
+  const loaderMarker = /computed import\(\)|computed require\(\)|createRequire\(\)|dynamic code execution|dynamic loader\/codegen|dynamic loader\/codegen capability reference|Reflect\.construct may create runtime code or a loader|computed global property access|destructured global transport\/codegen \((?:require|createRequire|eval|Function|binding|_linkedBinding|dlopen|getBuiltinModule|mainModule|compile|compileStreaming|instantiate|instantiateStreaming|Module|Instance)\)|Reflect\.get (?:global|module) transport\/codegen capability \((?:require|createRequire|eval|Function|computed-key)|property descriptor exposes global transport\/codegen capability \((?:require|createRequire|eval|Function|computed-key)|all global property descriptors expose transport\/codegen capabilities/;
   return readAstOutboundMarkers(source, filePath).filter((marker) => loaderMarker.test(marker));
 }
 
@@ -1165,6 +1166,9 @@ test("static graph records literal module.require and rejects unresolved or comp
     'Reflect.construct(Function, ["return fetch(url)"])();',
     'WebAssembly.compile(wasmBytes);',
     'const { compile: compileWasm } = WebAssembly; compileWasm(bytes);',
+    'const { Instance: RunWasm } = WebAssembly; new RunWasm(compiledModule, imports);',
+    'module._compile(source, filename);',
+    'module.createRequire(import.meta.url);',
     'const key = getRuntimeKey(); Reflect.get(module, key);',
     'module[runtimeLoaderName]("./hidden");',
   ];
