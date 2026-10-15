@@ -32,6 +32,27 @@ This is evidence of the local test image's role/default configuration only. It d
 - Before any future change, an authorized environment owner must independently identify the exact hosted project and run a read-only catalog/default-ACL/role-membership/ownership query. Stop on unknown or inconsistent ownership, role capabilities, or migration-ledger evidence. This note authorizes no hosted query or mutation.
 - `TRUSTED_DISPATCH_ADAPTERS` remains empty and fail-closed. PR #39 remains Draft/open/unmerged, Issue #23 remains open, and release remains **NO-GO** until all production enforcement and provider evidence is independently closed.
 
-## Next safe step
+## Exact-SHA full W21 result
 
-Finish and review the separate full W21 Local Launch Gate on this exact source/test SHA. A W80 PASS is not a substitute for W21, and neither proves hosted-schema parity or production-wide Mission Authority/provider guarantees.
+The full [W21 Local Launch Gate run 38755183191 — SUCCESS](https://github.com/abdalrhmanata-gif/nexo-w21-isolated-verification-20261015/actions/runs/38755183191) completed on the same code/test SHA `eb723c68ef73f54758ddb37d34ec713ba9e9d4d5` used for W85. Its checks included:
+
+- Disposable PostgreSQL 17 migration replay and launch-gate pgTAP.
+- Read-only W83 catalog report with `READ_ONLY_GUARD=CONFIRMED`.
+- Mission Authority and quota/workspace SQL regressions, including the separate W85 audit connected as `supabase_admin`.
+- Four actual-ledger concurrency proofs and W72 persistent fake-provider integration.
+- Browser E2E: **2 passed (2.7m)**.
+- Disposable database cleanup: `supabase_stop_exit_code=0`, `remaining_containers=none`, `remaining_volumes=none`, `cleanup_verified=true`.
+
+Artifacts:
+- [W21 evidence and cleanup — artifact 11982878731](https://github.com/abdalrhmanata-gif/nexo-w21-isolated-verification-20261015/actions/runs/38755183191/artifacts/11982878731), SHA-256 `b9a380ea826b83b354fb3099d5cc9a3ba65cd6f4bc02ffbe51f168af22786f9c`.
+- [Browser diagnostics — artifact 11982529470](https://github.com/abdalrhmanata-gif/nexo-w21-isolated-verification-20261015/actions/runs/38755183191/artifacts/11982529470), SHA-256 `7e69662880fd057c742054a597e7742835317d82063eb980c0b09179faca5474`.
+- On that same SHA, [Web Unit 38755183119](https://github.com/abdalrhmanata-gif/nexo-w21-isolated-verification-20261015/actions/runs/38755183119) and [Flutter CI 38755183147](https://github.com/abdalrhmanata-gif/nexo-w21-isolated-verification-20261015/actions/runs/38755183147) also succeeded. The dedicated W85-enabled isolated PostgreSQL run is [38755183112](https://github.com/abdalrhmanata-gif/nexo-w21-isolated-verification-20261015/actions/runs/38755183112).
+
+The W21 pass is disposable engineering evidence only. It does not prove hosted Supabase migration/ACL parity, universal production egress enforcement, deployed credential isolation, or real-provider idempotency/receipt/reconciliation guarantees.
+
+## Current release posture
+
+- `TRUSTED_DISPATCH_ADAPTERS` remains empty and fail-closed.
+- Original Nexo PR #39 remains OPEN / Draft / UNMERGED at `9d752a59f0683ea7149633138dc85bb33cf9a41b`; Issue #23 remains OPEN.
+- No hosted Supabase state, deployment, secret, billing, or DNS configuration was changed; no commit was pushed to the original Nexo repository.
+- Launch remains **NO-GO** until the hosted parity audit and all production-wide Mission Authority/provider gates are independently closed.
