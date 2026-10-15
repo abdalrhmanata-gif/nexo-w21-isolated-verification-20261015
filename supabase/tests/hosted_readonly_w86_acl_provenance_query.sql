@@ -4,7 +4,7 @@
 WITH RECURSIVE role_path (
   role_oid, role_name, depth, oid_path, inherits_all, member_role_name
 ) AS (
-  SELECT r.oid, r.rolname, 0, ARRAY[r.oid]::oid[], true, NULL::text
+  SELECT r.oid, r.rolname, 0, ARRAY[r.oid]::oid[], true, NULL::text COLLATE "C"
     FROM pg_roles r
    WHERE r.rolname = 'service_role'
   UNION ALL
@@ -13,7 +13,7 @@ WITH RECURSIVE role_path (
          child.depth + 1,
          child.oid_path || parent.oid,
          child.inherits_all AND membership.inherit_option,
-         child.role_name
+         child.role_name::text COLLATE "C"
     FROM role_path child
     JOIN pg_auth_members membership ON membership.member = child.role_oid
     JOIN pg_roles parent ON parent.oid = membership.roleid
