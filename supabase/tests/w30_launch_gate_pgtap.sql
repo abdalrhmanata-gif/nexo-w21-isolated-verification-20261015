@@ -3,7 +3,7 @@
 begin;
 create extension if not exists pgtap;
 
-select plan(38);
+select plan(39);
 
 select ok(to_regclass('public.missions') is not null, 'missions exists');
 select ok(to_regclass('public.mission_actions') is not null, 'mission_actions exists');
@@ -37,7 +37,8 @@ select ok(not exists(
   select 1 from pg_proc p join pg_namespace n on n.oid=p.pronamespace
   where n.nspname='public' and p.prosecdef
     and has_function_privilege('anon',p.oid,'EXECUTE')
-), 'no SECURITY DEFINER function is executable by anon');
+    and p.oid is distinct from to_regprocedure('public.get_workspace_invitation(text)')
+), 'no public SECURITY DEFINER function other than the reviewed invitation GET is executable by anon');
 
 select ok(not exists(
   select 1 from pg_proc p join pg_namespace n on n.oid=p.pronamespace
@@ -53,7 +54,8 @@ select ok(not exists(
       'prevent_mission_action_reparent','complete_read_only_research_execution',
       'claim_read_only_research_execution'
     )
-), 'public application SECURITY DEFINER runtime functions bind to auth.uid');
+    and p.oid is distinct from to_regprocedure('public.get_workspace_invitation(text)')
+), 'public application SECURITY DEFINER runtime functions bind to auth.uid, except the separately verified invitation GET bridge');
 
 select ok(
   to_regprocedure('public.complete_read_only_research_execution(uuid,uuid,text,jsonb,jsonb,text,text)') is not null
@@ -72,7 +74,26 @@ select ok(not exists(
   select 1 from pg_proc p join pg_namespace n on n.oid=p.pronamespace
   where n.nspname='public' and p.prosecdef
     and has_function_privilege('authenticated', p.oid, 'EXECUTE')
-), 'no public SECURITY DEFINER function is executable by authenticated');
+    and p.oid is distinct from to_regprocedure('public.get_workspace_invitation(text)')
+), 'no public SECURITY DEFINER function other than the reviewed invitation GET is executable by authenticated');
+
+select ok(
+  to_regprocedure('public.get_workspace_invitation(text)') is not null
+  and (select p.prosecdef
+            and pg_get_userbyid(p.proowner) = 'postgres'
+            and p.proconfig = array['search_path=pg_catalog, public']::text[]
+            and lower(pg_get_functiondef(p.oid)) like '%private.get_workspace_invitation%'
+         from pg_proc p where p.oid = to_regprocedure('public.get_workspace_invitation(text)'))
+  and (select p.prosecdef
+            and p.proconfig = array['search_path=pg_catalog, public']::text[]
+            and lower(pg_get_functiondef(p.oid)) like '%invalid_invitation_token%'
+         from pg_proc p where p.oid = to_regprocedure('private.get_workspace_invitation(text)'))
+  and has_function_privilege('anon', 'public.get_workspace_invitation(text)', 'EXECUTE')
+  and has_function_privilege('authenticated', 'public.get_workspace_invitation(text)', 'EXECUTE')
+  and not has_function_privilege('service_role', 'public.get_workspace_invitation(text)', 'EXECUTE')
+  and not has_schema_privilege('anon', 'private', 'USAGE'),
+  'the sole anon/authenticated SECURITY DEFINER GET exception is postgres-owned, pinned, token-validated, and keeps anon off private schema'
+);
 
 select ok(
   pg_get_functiondef('private.start_agent_execution(uuid,uuid,uuid,text,jsonb)'::regprocedure)
