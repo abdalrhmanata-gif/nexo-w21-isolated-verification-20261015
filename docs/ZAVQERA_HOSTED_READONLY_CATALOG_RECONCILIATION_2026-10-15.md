@@ -265,3 +265,11 @@ Review that the project identity check passes before queries are sent. The scrip
 OpenAI's current help article states custom MCP server connections are available on ChatGPT Business and Enterprise/Edu web workspaces, and not on mobile. This current session's already connected Supabase integration does not expose a read-only Management API action or its MCP URL configuration; therefore its generic execute_sql remains prohibited as a substitute. [OpenAI custom MCP availability](https://help.openai.com/en/articles/12584461-connecting-custom-mcp-servers-in-chatgpt).
 
 **Status:** runner prepared in the temporary verification repository; check the exact-SHA W80 CI run before relying on its self-test. Hosted query still **not executed**. Keep Main/Production untouched; do not apply migrations or alter ACLs; launch remains **NO-GO**.
+
+
+## Guarded runner CI follow-up — 2026-10-15
+
+- [W80 run 38762249277 — SUCCESS](https://github.com/abdalrhmanata-gif/nexo-w21-isolated-verification-20261015/actions/runs/38762249277), SHA `11a61a91e86d705e3503aee61bdd8fb9f717d801`. Log inspection confirms **8/8 Python unit tests passed**, including mocked project-identity failure (no SQL), wrong effective-role failure (stops after Query 1), and the happy path issuing all eight requests exclusively to the explicit read-only endpoint. It also records `SELF_TEST=PASS` with the expected pinned query-pack hash and explicitly no network requests. The actual database portion replayed/tested only the disposable PostgreSQL 17 stack.
+- The runner then received a cross-platform line-ending normalization correction so the hash pin remains stable on Windows checkouts that convert LF to CRLF. Exact post-fix W80 validation: [run 38762280083](https://github.com/abdalrhmanata-gif/nexo-w21-isolated-verification-20261015/actions/runs/38762280083), source SHA `7c99e12cbb8b94ad90d302067ebac68274869d5`, was **in progress** when this update was recorded. Do not treat that final portability check as closed until this run is terminal and successful.
+- The script does not call any hosted URL in CI. It is tested with mocked responses only. The real Development execution still requires a local, project-scoped Management API token with Project Settings Read and Database Read, never added to the repository or GitHub secrets.
+
