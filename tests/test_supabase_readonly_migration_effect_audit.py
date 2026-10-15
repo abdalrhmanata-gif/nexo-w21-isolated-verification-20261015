@@ -1,0 +1,177 @@
+import contextlib
+import importlib.util
+import io
+import json
+import os
+from pathlib import Path
+import re
+import shutil
+import unittest
+from unittest.mock import patch
+
+SCRIPT = Path(__file__).resolve().parents[1] / "tools" / "supabase_readonly_migration_effect_audit.py"
+spec = importlib.util.spec_from_file_location("readonly_effect_audit", SCRIPT)
+audit = importlib.util.module_from_spec(spec)
+assert spec.loader is not None
+spec.loader.exec_module(audit)
+
+PROJECT_REF = "a" * 20
+TOKEN = "test-token-never-persist-this"
+ENV = {
+    "SUPABASE_PROJECT_REF": PROJECT_REF,
+    "SUPABASE_ACCESS_TOKEN": TOKEN,
+    "ZAVQERA_AUDIT_CONFIRMATION": "DEVELOPMENT_ONLY_READ_ONLY",
+}
+
+
+def valid_project(name="ZAVQERA Development"):
+    return {"id": PROJECT_REF, "name": name, "region": "eu-west-1", "status": "ACTIVE_HEALTHY"}
+
+
+def valid_role_row(**overrides):
+    row = {
+        "current_user": "supabase_read_only_user",
+        "session_user": "supabase_read_only_user",
+        "server_version_num": 170006,
+        "transaction_read_only": True,
+        "rolsuper": False,
+        "rolcreatedb": False,
+        "rolcreaterole": False,
+        "rolbypassrls": True,
+        "migration_ledger_relation": "supabase_migrations.schema_migrations",
+    }
+    row.update(overrides)
+    return row
+
+
+class ReadOnlyEffectAuditTests(unittest.TestCase):
+    def setUp(self):
+        self.created_output = []
+
+    def _capture_evidence_path(self, text):
+        match = re.search(r"Evidence: (.+)", text)
+        if match:
+            path = Path(match.group(1).strip())
+            self.created_output.append(path)
+
+    def tearDown(self):
+        for path in self.created_output:
+            if path.exists():
+                shutil.rmtree(path, ignore_errors=True)
+            try:
+                parent = path.parent
+                if parent.exists() and not any(parent.iterdir()):
+                    parent.rmdir()
+            except OSError:
+                pass
+
+    def _run_with_fake_api(self, fake_api):
+        stdout, stderr = io.StringIO(), io.StringIO()
+        with patch.dict(os.environ, ENV, clear=False), \
+             patch.object(audit, "request_json", side_effect=fake_api), \
+             contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
+            code = audit.main()
+        output = stdout.getvalue() + stderr.getvalue()
+        self._capture_evidence_path(output)
+        return code, output
+
+    def test_checked_in_pack_is_pinned_to_ten_selects(self):
+        root = Path(__file__).resolve().parents[1]
+        statements, digest = audit.load_pack(root)
+        self.assertEqual(len(statements), 10)
+        self.assertEqual(digest, audit.PACK_SHA256)
+        self.assertTrue(all(re.match(r"(?is)^\s*SELECT\b", audit.no_comments(s).strip()) for s in statements))
+
+    def test_splitter_handles_literals_nested_comments_and_dollar_quotes(self):
+        sql = "-- semicolon ;\nSELECT 'a;''b' AS x; /* outer ; /* inner ; */ end */ SELECT $$c;d$$ AS y;"
+        self.assertEqual(len(audit.split_statements(sql)), 2)
+
+    def test_project_identity_mismatch_stops_before_sql(self):
+        calls = []
+        def fake_api(token, method, path, body=None):
+            calls.append((method, path, body))
+            return valid_project(name="ZAVQERA Main")
+        code, output = self._run_with_fake_api(fake_api)
+        self.assertEqual(code, 3)
+        self.assertEqual(len(calls), 1)
+        self.assertEqual(calls[0][0], "GET")
+        self.assertIn("no SQL sent", output)
+
+    def test_wrong_effective_role_stops_after_first_read_only_query(self):
+        calls = []
+        def fake_api(token, method, path, body=None):
+            calls.append((method, path, body))
+            if method == "GET":
+                return valid_project()
+            return {"result": [valid_role_row(current_user="postgres")]}
+        code, output = self._run_with_fake_api(fake_api)
+        self.assertEqual(code, 5)
+        posts = [call for call in calls if call[0] == "POST"]
+        self.assertEqual(len(posts), 1)
+        self.assertTrue(posts[0][1].endswith("/database/query/read-only"))
+
+    def test_read_write_transaction_stops_after_first_query(self):
+        calls = []
+        def fake_api(token, method, path, body=None):
+            calls.append((method, path, body))
+            if method == "GET":
+                return valid_project()
+            return {"result": [valid_role_row(transaction_read_only=False)]}
+        code, _ = self._run_with_fake_api(fake_api)
+        self.assertEqual(code, 5)
+        self.assertEqual(len([call for call in calls if call[0] == "POST"]), 1)
+
+    def test_unknown_response_shape_fails_closed(self):
+        calls = []
+        def fake_api(token, method, path, body=None):
+            calls.append((method, path, body))
+            if method == "GET":
+                return valid_project()
+            return {"unknown_response": [{"current_user": "supabase_read_only_user"}]}
+        code, output = self._run_with_fake_api(fake_api)
+        self.assertEqual(code, 5)
+        self.assertEqual(len([call for call in calls if call[0] == "POST"]), 1)
+        self.assertIn("unknown response shape", output)
+
+    def test_happy_path_uses_only_explicit_read_only_endpoint_and_never_persists_token(self):
+        calls = []
+        def fake_api(token, method, path, body=None):
+            calls.append((token, method, path, body))
+            if method == "GET":
+                return valid_project()
+            number = sum(1 for _, verb, _, _ in calls if verb == "POST")
+            if number == 1:
+                return {"result": [valid_role_row()]}
+            return {"result": [{"query_number": number, "ok": True}]}
+        code, output = self._run_with_fake_api(fake_api)
+        self.assertEqual(code, 0)
+        self.assertIn('"status": "CAPTURED_FOR_MANUAL_REVIEW"', output)
+        posts = [call for call in calls if call[1] == "POST"]
+        self.assertEqual(len(posts), 10)
+        self.assertTrue(all(call[2].endswith("/database/query/read-only") for call in posts))
+        self.assertFalse(any(call[2].endswith("/database/query") for call in posts))
+        self.assertTrue(all(call[0] == TOKEN for call in calls))  # token is passed to the API client only
+        evidence = self.created_output[-1]
+        all_text = "\n".join(p.read_text(encoding="utf-8") for p in evidence.glob("*.json"))
+        self.assertNotIn(TOKEN, all_text)
+        metadata = json.loads((evidence / "run_metadata.json").read_text(encoding="utf-8"))
+        self.assertFalse(metadata["token_saved"])
+
+    def test_api_query_error_stops_without_sending_later_queries(self):
+        calls = []
+        def fake_api(token, method, path, body=None):
+            calls.append((method, path, body))
+            if method == "GET":
+                return valid_project()
+            number = sum(1 for verb, _, _ in calls if verb == "POST")
+            if number == 1:
+                return {"result": [valid_role_row()]}
+            return {"error": {"message": "catalog access denied"}}
+        code, output = self._run_with_fake_api(fake_api)
+        self.assertEqual(code, 4)
+        self.assertEqual(len([call for call in calls if call[0] == "POST"]), 2)
+        self.assertIn("query_02", output)
+
+
+if __name__ == "__main__":
+    unittest.main()
