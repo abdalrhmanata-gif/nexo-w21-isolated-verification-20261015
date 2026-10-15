@@ -6,10 +6,10 @@
 
 - Original repository searched: `abdalrhmanata-gif/Nexo`.
 - Audit scope: exact historic migration paths implied by the 22 same-name/different-version ledger conflicts, plus all six hosted-only ledger names.
-- Method: exact-path GitHub REST commit-history lookup under `supabase/migrations/` (page size 5) on (a) the repository default branch `main`, (b) branch `codex/w66-w82-dev-audit-refresh-20261014`, and (c) the active PR #39 branch `codex/mission-action-runtime-seam-test-20261014`, each explicitly passed as `sha`. Independently scanned the recursive migration trees of all 23 currently listed original-repository branch refs for the 22 historical timestamp-conflict filenames. The existing audit also scanned all 23 branch-tip trees for the six hosted-only filenames.
-- Result checked on 2026-10-15: all 28 exact-path queries returned zero commit-history entries in each of the three queried history scopes (84 exact-path lookups, zero results); the 22 timestamp-conflict filenames were absent from all 23 current branch-tip trees; the six hosted-only names were also absent from all 23 current branch-tip trees.
-- Scope limitation: path-history queries were not run independently on every one of the 23 refs; current tip absence does not exclude that a file once existed and was later deleted in another branch's history.
-- Current W86 candidate branch in the isolated repository is `codex/w86-agent-executions-acl-correction-20261015`, tested SHA `8dbaa7cb27abbb15144f6b81f1bb8538dd2ce5be`. It contains one additional isolated candidate migration (W86). W86 is not part of the historical 89-file baseline used in the hosted ledger reconciliation and must not be counted as a previously deployed migration.
+- Method: exact-path GitHub REST commit-history lookup under `supabase/migrations/` (page size 1) on (a) the repository default branch `main`, (b) branch `codex/w66-w82-dev-audit-refresh-20261014`, and (c) the active PR #39 branch `codex/mission-action-runtime-seam-test-20261014`, each explicitly passed as `sha`. Independently scanned the recursive migration trees of all 23 currently listed original-repository branch refs for the 22 historical timestamp-conflict filenames. For the six hosted-only ledger names, additionally queried the exact-path commit history on **all 23 current branch refs** (138 more queries).
+- Result checked on 2026-10-15: all 28 exact-path queries returned zero commit-history entries in each of the three queried history scopes (84 lookups, zero results); the 22 timestamp-conflict filenames were absent from all 23 current branch-tip trees; the six hosted-only names were absent from all 23 current branch-tip trees, and all 138 additional exact-path history lookups for those six names across the 23 current refs also returned zero commits.
+- Scope limitation: the 22 timestamp-conflict filename histories have not been queried independently on every one of the 23 refs; their exact-path history was checked on `main`, the audit branch, and the active PR #39 branch. The six hosted-only filenames were path-history queried across all 23 current refs. No current-branch result can exclude a deleted/private branch, local Git object database, deployment bundle, or release archive.
+- Current W86 candidate branch in the isolated repository is `codex/w86-agent-executions-acl-correction-20261015`. The full disposable PostgreSQL 17.11 workflow passed on SHA `24af5583113e606bf8ec80f179cca0854073abac`; the W86 SQL blob remains `f870dd83a82c27057bf24390c254713d3fe29182`. W86 is one new isolated candidate migration and is not part of the historical 89-file baseline used in the hosted ledger reconciliation; do not count it as a previously deployed migration.
 
 ## Exact-path query results
 
@@ -72,3 +72,14 @@ A similarly named current source file is not an acceptable substitute for the or
 No hosted database or migration ledger was written. No migration was applied. The original repository and its PR #39/Issue #23 remain untouched by this path-history query. The W86 PR is an isolated Draft review only and does not close history reconciliation.
 
 **Release stays NO-GO.**
+
+## Complete hosted-only exact-path history sweep — 2026-10-15
+
+To test whether the six hosted-only ledger files can be recovered from any currently visible branch history, each exact `supabase/migrations/<filename>.sql` path was queried with GitHub's commits endpoint for every one of the 23 branch refs listed at the time of the check:
+
+- 6 exact filenames × 23 branch refs = **138 branch-scoped history lookups**.
+- **Result: 0 commits returned; 0 tool/API errors.**
+- The six names are listed in the “Six hosted-only ledger names” table above.
+- This is stronger than merely checking branch tips: no exact-path commit history was returned within any of the 23 current refs. It still does not rule out private/deleted refs, local reflogs/objects, or an external deployment/source archive.
+
+**Disposition remains UNKNOWN / NO-GO.** Seek the actual migration bundle, historic local clone or reflog, deployment artifact, reviewed release archive, backup, or another owner-held source. Do not synthesize these six migrations from labels, change the hosted ledger, or claim their effects are absent just because the source files are unavailable.
