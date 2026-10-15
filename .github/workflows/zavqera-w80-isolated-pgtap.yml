@@ -393,11 +393,230 @@ jobs:
             fi
             run_pgtap W84_AFTER_REAPPLY supabase/tests/w84_postgres_function_default_acl_hardening.sql 21 || w84_status=1
             run_pgtap W85_SUPABASE_ADMIN_AUDIT supabase/tests/w85_supabase_admin_default_acl_audit.sql 12 || w85_status=1
-            run_pgtap W66_AFTER_W86_FORWARD_CORRECTION supabase/tests/w66_service_role_table_privilege_hardening.sql 11 || w86_status=1
-            run_pgtap W86_AGENT_EXECUTIONS_ACL_CORRECTION supabase/tests/w86_agent_executions_acl_correction.sql 20 || w86_status=1
+            # Negative-control test: recreate the hosted ACL drift locally, then
+            # prove W86 actively repairs it. Never run this on hosted Supabase.
+            cat > "${RUNNER_TEMP}/W86_SIMULATED_DRIFT_SEED.sql" <<'SQL'
+          grant all privileges on table public.agent_executions to service_role;
+          do $seed$
+          declare
+            target_column text;
+          begin
+            select a.attname into target_column
+              from pg_attribute a
+             where a.attrelid = 'public.agent_executions'::regclass
+               and a.attnum > 0 and not a.attisdropped
+             order by a.attnum
+             limit 1;
+            if target_column is null then
+              raise exception 'W86 drift seed cannot locate a live agent_executions column';
+            end if;
+            execute format(
+              'grant all privileges (%I) on table public.agent_executions to service_role',
+              target_column
+            );
+          end
+          $seed$;
+          SQL
+            set +e
+            docker cp "${RUNNER_TEMP}/W86_SIMULATED_DRIFT_SEED.sql" "${db_container}:/tmp/W86_SIMULATED_DRIFT_SEED.sql"
+            seed_copy_status=$?
+            if [ "$seed_copy_status" -eq 0 ]; then
+              docker exec "${db_container}" psql -U postgres -d postgres -X -v ON_ERROR_STOP=1 \
+                -f /tmp/W86_SIMULATED_DRIFT_SEED.sql 2>&1 | tee "${RUNNER_TEMP}/W86_SIMULATED_DRIFT_SEED_OUTPUT.txt"
+              seed_status="${PIPESTATUS[0]}"
+            else
+              seed_status="$seed_copy_status"
+            fi
+            set -e
+            echo "w86_simulated_drift_seed_exit_code=${seed_status}" >> "${RUNNER_TEMP}/W80_EVIDENCE.txt"
+            if [ "${seed_status}" -ne 0 ]; then
+              echo "::error::Unable to create the disposable W86 drift fixture."
+              w86_status=1
+            else
+              # Verify the fixture reproduced the important hosted privileges and
+              # stored column-level ACL before applying the correction.
+              set +e
+              docker exec "${db_container}" psql -U postgres -d postgres -X -qAt -v ON_ERROR_STOP=1 -c "
+                SELECT CASE
+                  WHEN has_table_privilege('service_role','public.agent_executions','INSERT')
+                   AND has_table_privilege('service_role','public.agent_executions','UPDATE')
+                   AND has_table_privilege('service_role','public.agent_executions','DELETE')
+                   AND has_table_privilege('service_role','public.agent_executions','TRUNCATE')
+                   AND has_table_privilege('service_role','public.agent_executions','MAINTAIN')
+                   AND EXISTS (
+                     SELECT 1 FROM pg_attribute a
+                     CROSS JOIN LATERAL aclexplode(a.attacl) acl
+                     WHERE a.attrelid = 'public.agent_executions'::regclass
+                       AND a.attnum > 0 AND NOT a.attisdropped
+                       AND acl.grantee = 'service_role'::regrole
+                       AND acl.privilege_type IN ('SELECT','INSERT','UPDATE','REFERENCES')
+                   )
+                  THEN 'W86_DRIFT_FIXTURE_PASS' ELSE 'W86_DRIFT_FIXTURE_FAIL' END" \
+                2>&1 | tee "${RUNNER_TEMP}/W86_DRIFT_FIXTURE_CHECK.txt"
+              fixture_status="${PIPESTATUS[0]}"
+              set -e
+              echo "w86_drift_fixture_check_exit_code=${fixture_status}" >> "${RUNNER_TEMP}/W80_EVIDENCE.txt"
+              if [ "${fixture_status}" -ne 0 ] || ! grep -q '^W86_DRIFT_FIXTURE_PASS
+          fi
+          echo "w84_idempotency_and_pg_tap_status=${w84_status}" >> "${RUNNER_TEMP}/W80_EVIDENCE.txt"
+          echo "w85_supabase_admin_audit_status=${w85_status}" >> "${RUNNER_TEMP}/W80_EVIDENCE.txt"
+          echo "w86_agent_executions_acl_status=${w86_status}" >> "${RUNNER_TEMP}/W80_EVIDENCE.txt"
 
-            # Reapply W86 on the disposable database to prove the forward ACL
-            # correction is idempotent, then rerun the complete W66/W86 checks.
+          # Execute both pinned catalog packs as SELECT-only SQL on disposable PostgreSQL 17.
+          # This validates local SQL syntax/catalog compatibility, not hosted identity or schema parity.
+          query_pack_status=0
+          for specification in \
+            "catalog hosted_readonly_catalog_audit_queries.sql" \
+            "migration_effect hosted_readonly_migration_effect_audit_queries.sql"; do
+            read -r label filename <<< "${specification}"
+            query_pack="${GITHUB_WORKSPACE}/supabase/tests/${filename}"
+            label_upper="$(printf '%s' "$label" | tr '[:lower:]' '[:upper:]')"
+            query_log="${RUNNER_TEMP}/${label_upper}_READONLY_QUERY_PACK.txt"
+            if [ ! -f "${query_pack}" ]; then
+              echo "::error::Missing read-only query pack: ${filename}"
+              echo "${label}_readonly_query_pack_local_smoke_status=missing" >> "${RUNNER_TEMP}/W80_EVIDENCE.txt"
+              query_pack_status=1
+              continue
+            fi
+            pack_sha="$(sha256sum "${query_pack}" | awk '{print $1}')"
+            echo "${label}_readonly_query_pack_sha256=${pack_sha}" >> "${RUNNER_TEMP}/W80_EVIDENCE.txt"
+            if grep -Eiq '^[[:space:]]*(CREATE|ALTER|DROP|INSERT|UPDATE|DELETE|TRUNCATE|GRANT|REVOKE|SET|BEGIN|COMMIT|DO|CALL)([[:space:]]|$)' "${query_pack}"; then
+              echo "::error::${filename} contains a non-SELECT statement."
+              pack_status=1
+            else
+              docker cp "${query_pack}" "${db_container}:/tmp/${filename}"
+              set +e
+              docker exec "${db_container}" psql -U postgres -d postgres -X -qAt -v ON_ERROR_STOP=1 \
+                -f "/tmp/${filename}" 2>&1 | tee "${query_log}"
+              pack_status="${PIPESTATUS[0]}"
+              set -e
+              echo "${label}_readonly_query_pack_local_smoke_exit_code=${pack_status}" >> "${RUNNER_TEMP}/W80_EVIDENCE.txt"
+              if [ "${pack_status}" -eq 0 ] && [ -s "${query_log}" ]; then
+                pack_status=0
+              else
+                pack_status=1
+              fi
+            fi
+            echo "${label}_readonly_query_pack_local_smoke_status=${pack_status}" >> "${RUNNER_TEMP}/W80_EVIDENCE.txt"
+            if [ "${pack_status}" -ne 0 ]; then query_pack_status=1; fi
+          done
+
+          if [ "${regression_status}" -ne 0 ] || [ "${later_status}" -ne 0 ] || [ "${w84_status}" -ne 0 ] || [ "${w85_status}" -ne 0 ] || [ "${w86_status}" -ne 0 ] || [ "${query_pack_status}" -ne 0 ]; then exit 1; fi
+
+      - name: Stop and prove disposable resource cleanup
+        if: always()
+        shell: bash
+        run: |
+          set +e
+          proof="${RUNNER_TEMP}/W80_CLEANUP_PROOF.txt"
+          workdir="${RUNNER_TEMP}/zavqera-w80-local"
+          {
+            echo "cleanup_started=true"
+            echo "project_id=zavqera-w80-local"
+            if [ -d "${workdir}" ] && command -v supabase >/dev/null 2>&1; then
+              supabase stop --no-backup --workdir "${workdir}" >/tmp/w80-stop.log 2>&1
+              stop_status=$?
+              cat /tmp/w80-stop.log
+              echo "supabase_stop_exit_code=${stop_status}"
+            else
+              stop_status=0
+              echo "supabase_stop=not_started_or_cli_unavailable"
+            fi
+            if command -v docker >/dev/null 2>&1; then
+              labelled_containers="$(docker ps -aq --filter label=com.supabase.cli.project=zavqera-w80-local 2>/dev/null)"
+              named_containers="$(docker ps -aq --filter name=zavqera-w80-local 2>/dev/null)"
+              containers="$(printf '%s\n%s\n' "${labelled_containers}" "${named_containers}" | sed '/^$/d' | sort -u)"
+              labelled_volumes="$(docker volume ls -q --filter label=com.supabase.cli.project=zavqera-w80-local 2>/dev/null)"
+              named_volumes="$(docker volume ls -q --filter name=zavqera-w80-local 2>/dev/null)"
+              volumes="$(printf '%s\n%s\n' "${labelled_volumes}" "${named_volumes}" | sed '/^$/d' | sort -u)"
+              echo "remaining_project_containers=${containers:-none}"
+              echo "remaining_project_volumes=${volumes:-none}"
+              if [ -z "${containers}" ] && [ -z "${volumes}" ] && [ "${stop_status}" -eq 0 ]; then
+                echo "cleanup=VERIFIED"
+              else
+                echo "cleanup=NOT_VERIFIED"
+                exit_code=1
+              fi
+            else
+              echo "docker_inventory=unavailable"
+              echo "cleanup=NOT_VERIFIED"
+              exit_code=1
+            fi
+            exit "${exit_code:-0}"
+          } > "${proof}" 2>&1
+
+      - name: Redact disposable local credentials from evidence artifacts
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          for artifact in "${RUNNER_TEMP}"/W66_*.txt "${RUNNER_TEMP}"/W80_*.txt "${RUNNER_TEMP}"/W85_*.txt "${RUNNER_TEMP}"/W86_*.txt; do
+            [ -f "${artifact}" ] || continue
+            sed -E -i \
+              -e 's/sb_(publishable|secret)_[A-Za-z0-9_-]+/sb_\1_[REDACTED_LOCAL_KEY]/g' \
+              -e 's#eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+#[REDACTED_LOCAL_JWT]#g' \
+              -e 's#(postgresql?://[^:/[:space:]]+:)[^@/[:space:]]+@#\1[REDACTED_DB_PASSWORD]@#g' \
+              -e 's/(SERVICE_ROLE_KEY=|ANON_KEY=|JWT_SECRET=)[^[:space:]]+/\1[REDACTED_LOCAL_SECRET]/g' \
+              "${artifact}"
+          done
+
+      - name: Upload W80 isolated verification artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: zavqera-w80-isolated-pgtap-${{ github.sha }}
+          if-no-files-found: warn
+          path: |
+            ${{ runner.temp }}/W80_EVIDENCE.txt
+            ${{ runner.temp }}/W80_MIGRATION_REPLAY.txt
+            ${{ runner.temp }}/W44_BEFORE_REAPPLY_PGTAP_OUTPUT.txt
+            ${{ runner.temp }}/W46_BEFORE_REAPPLY_PGTAP_OUTPUT.txt
+            ${{ runner.temp }}/W80_BEFORE_REAPPLY_PGTAP_OUTPUT.txt
+            ${{ runner.temp }}/W44_AFTER_REAPPLY_PGTAP_OUTPUT.txt
+            ${{ runner.temp }}/W46_AFTER_REAPPLY_PGTAP_OUTPUT.txt
+            ${{ runner.temp }}/W80_AFTER_REAPPLY_PGTAP_OUTPUT.txt
+            ${{ runner.temp }}/W83_CATALOG_BEFORE_REAPPLY.txt
+            ${{ runner.temp }}/W83_CATALOG_AFTER_REAPPLY.txt
+            ${{ runner.temp }}/W80_CLEANUP_PROOF.txt
+            ${{ runner.temp }}/W80_MIGRATION_MANIFEST.sha256
+            ${{ runner.temp }}/W85_SUPABASE_ADMIN_AUDIT_PGTAP_OUTPUT.txt
+            ${{ runner.temp }}/W66_AFTER_W86_FORWARD_CORRECTION_PGTAP_OUTPUT.txt
+            ${{ runner.temp }}/W86_AGENT_EXECUTIONS_ACL_CORRECTION_PGTAP_OUTPUT.txt
+            ${{ runner.temp }}/W66_AFTER_W86_REAPPLY_PGTAP_OUTPUT.txt
+            ${{ runner.temp }}/W86_AFTER_REAPPLY_PGTAP_OUTPUT.txt
+            ${{ runner.temp }}/W86_MIGRATION_REAPPLY.txt
+            ${{ runner.temp }}/W86_SIMULATED_DRIFT_SEED.sql
+            ${{ runner.temp }}/W86_SIMULATED_DRIFT_SEED_OUTPUT.txt
+            ${{ runner.temp }}/W86_DRIFT_FIXTURE_CHECK.txt
+            ${{ runner.temp }}/W86_MIGRATION_DRIFT_REPAIR.txt
+            ${{ runner.temp }}/W85_READONLY_CATALOG_QUERY_PACK.txt
+            ${{ runner.temp }}/MIGRATION_EFFECT_READONLY_QUERY_PACK.txt
+ "${RUNNER_TEMP}/W86_DRIFT_FIXTURE_CHECK.txt"; then
+                echo "::error::The disposable ACL drift fixture did not reproduce all required privileges."
+                w86_status=1
+              fi
+            fi
+
+            if [ "${w86_status}" -eq 0 ]; then
+              # Explicitly apply W86 after seeding drift; this must fix the injected grants.
+              docker cp "${GITHUB_WORKSPACE}/supabase/migrations/20261015120000_w86_agent_executions_acl_correction.sql" \
+                "${db_container}:/tmp/w86_agent_executions_acl_correction.sql"
+              set +e
+              docker exec "${db_container}" psql -U postgres -d postgres -v ON_ERROR_STOP=1 \
+                -f /tmp/w86_agent_executions_acl_correction.sql 2>&1 | tee "${RUNNER_TEMP}/W86_MIGRATION_DRIFT_REPAIR.txt"
+              w86_repair_status="${PIPESTATUS[0]}"
+              set -e
+              echo "w86_drift_repair_exit_code=${w86_repair_status}" >> "${RUNNER_TEMP}/W80_EVIDENCE.txt"
+              if [ "${w86_repair_status}" -ne 0 ]; then
+                echo "::error::W86 failed while repairing the injected disposable ACL drift."
+                w86_status=1
+              fi
+            fi
+
+            run_pgtap W66_AFTER_W86_DRIFT_REPAIR supabase/tests/w66_service_role_table_privilege_hardening.sql 11 || w86_status=1
+            run_pgtap W86_AFTER_W86_DRIFT_REPAIR supabase/tests/w86_agent_executions_acl_correction.sql 20 || w86_status=1
+
+            # Reapply W86 once more and rerun both suites for idempotency.
             docker cp "${GITHUB_WORKSPACE}/supabase/migrations/20261015120000_w86_agent_executions_acl_correction.sql" \
               "${db_container}:/tmp/w86_agent_executions_acl_correction.sql"
             set +e
