@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""Offline reconciliation of query 11/12 evidence against local migration filenames.
+"""Offline reconciliation of query 11/12 evidence against local migrations.
 
-Reads evidence JSON and checked-in migration filenames only. No network client,
-SQL execution, migration repair, deployment, or hosted mutation exists in this tool.
+Reads evidence JSON, migration filenames/content hashes, and local Git metadata.
+No network client, SQL execution, migration repair, deployment, or hosted mutation.
 """
 from __future__ import annotations
 
