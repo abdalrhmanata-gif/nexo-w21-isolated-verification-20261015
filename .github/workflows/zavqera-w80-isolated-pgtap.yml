@@ -10,6 +10,7 @@ on:
       - .github/workflows/zavqera-w80-isolated-pgtap.yml
       - supabase/tests/w44_workspace_invitations.sql
       - supabase/tests/w80_invitation_helper_privileges.sql
+      - supabase/tests/w83_invitation_catalog_reconciliation.sql
       - supabase/migrations/20261013100000_w80_fail_closed_workspace_role_checks.sql
       - supabase/migrations/20261015100000_w83_workspace_invitation_privilege_correction.sql
 
@@ -158,6 +159,7 @@ jobs:
             echo "w44_test_blob=$(git -C "${GITHUB_WORKSPACE}" rev-parse HEAD:supabase/tests/w44_workspace_invitations.sql)"
             echo "expected_w80_pgtap_assertions=49"
             echo "expected_w44_pgtap_assertions=17"
+            echo "expected_catalog_snapshots=2 (post-clean-replay and post-idempotent-reapply)"
             echo "verification_source_branch=${GITHUB_REF_NAME}"
             echo "verification_source_ref=${GITHUB_REF}"
             echo "migration_manifest_sha256=${migration_manifest_sha256}"
@@ -204,7 +206,7 @@ jobs:
           fi
           exit "${status}"
 
-      - name: Run W44 and W80 pgTAP after W83 and replay any later migrations
+      - name: Capture clean-replay state, run W44/W80, reapply W83, and repeat
         id: test_and_remainder
         shell: bash
         run: |
@@ -215,19 +217,6 @@ jobs:
             echo "::error::Disposable PostgreSQL container was not found for W83 idempotency verification."
             exit 1
           fi
-          docker cp "${GITHUB_WORKSPACE}/supabase/migrations/20261015100000_w83_workspace_invitation_privilege_correction.sql" \
-            "${db_container}:/tmp/w83_workspace_invitation_privilege_correction.sql"
-          set +e
-          docker exec "${db_container}" psql -U postgres -d postgres -v ON_ERROR_STOP=1 \
-            -f /tmp/w83_workspace_invitation_privilege_correction.sql 2>&1 | tee -a "${RUNNER_TEMP}/W80_MIGRATION_REPLAY.txt"
-          reapply_status="${PIPESTATUS[0]}"
-          set -e
-          echo "w83_idempotent_reapply_exit_code=${reapply_status}" >> "${RUNNER_TEMP}/W80_EVIDENCE.txt"
-          if [ "${reapply_status}" -ne 0 ]; then
-            echo "::error::Reapplying the W83 correction on the disposable database failed."
-            exit "${reapply_status}"
-          fi
-
           run_pgtap() {
             label="$1"
             test_file="$2"
@@ -271,9 +260,49 @@ jobs:
               && [ "${reported}" = "${expected}" ] && [ "${failed}" = 0 ]
           }
 
+          capture_catalog() {
+            label="$1"
+            log="${RUNNER_TEMP}/${label}.txt"
+            docker cp "${GITHUB_WORKSPACE}/supabase/tests/w83_invitation_catalog_reconciliation.sql" \
+              "${db_container}:/tmp/w83_invitation_catalog_reconciliation.sql"
+            set +e
+            docker exec "${db_container}" psql -U postgres -d postgres -X -v ON_ERROR_STOP=1 \
+              -f /tmp/w83_invitation_catalog_reconciliation.sql 2>&1 | tee "${log}"
+            status="${PIPESTATUS[0]}"
+            set -e
+            echo "${label,,}_exit_code=${status}" >> "${RUNNER_TEMP}/W80_EVIDENCE.txt"
+            [ "${status}" -eq 0 ]
+          }
+
+          # The clean replay has already applied W83 once. These form the
+          # baseline immediately before testing idempotent reapplication.
+          catalog_status=0
+          capture_catalog W83_CATALOG_BEFORE_REAPPLY || catalog_status=1
+          baseline_status=0
+          run_pgtap W44_BEFORE_REAPPLY supabase/tests/w44_workspace_invitations.sql 17 || baseline_status=1
+          run_pgtap W80_BEFORE_REAPPLY supabase/tests/w80_invitation_helper_privileges.sql 49 || baseline_status=1
+
+          docker cp "${GITHUB_WORKSPACE}/supabase/migrations/20261015100000_w83_workspace_invitation_privilege_correction.sql" \
+            "${db_container}:/tmp/w83_workspace_invitation_privilege_correction.sql"
+          set +e
+          docker exec "${db_container}" psql -U postgres -d postgres -v ON_ERROR_STOP=1 \
+            -f /tmp/w83_workspace_invitation_privilege_correction.sql 2>&1 | tee -a "${RUNNER_TEMP}/W80_MIGRATION_REPLAY.txt"
+          reapply_status="${PIPESTATUS[0]}"
+          set -e
+          echo "w83_idempotent_reapply_exit_code=${reapply_status}" >> "${RUNNER_TEMP}/W80_EVIDENCE.txt"
+          if [ "${reapply_status}" -ne 0 ]; then
+            echo "::error::Reapplying the W83 correction on the disposable database failed."
+            exit "${reapply_status}"
+          fi
+
           regression_status=0
-          run_pgtap W44 supabase/tests/w44_workspace_invitations.sql 17 || regression_status=1
-          run_pgtap W80 supabase/tests/w80_invitation_helper_privileges.sql 49 || regression_status=1
+          capture_catalog W83_CATALOG_AFTER_REAPPLY || regression_status=1
+          run_pgtap W44_AFTER_REAPPLY supabase/tests/w44_workspace_invitations.sql 17 || regression_status=1
+          run_pgtap W80_AFTER_REAPPLY supabase/tests/w80_invitation_helper_privileges.sql 49 || regression_status=1
+          if [ "${catalog_status}" -ne 0 ] || [ "${baseline_status}" -ne 0 ]; then
+            echo "::error::The clean-replay catalog snapshot or pre-reapply pgTAP baseline failed."
+            regression_status=1
+          fi
           if [ "${regression_status}" -ne 0 ]; then
             echo "::error::One or more invitation pgTAP regressions failed."
           fi
@@ -358,7 +387,11 @@ jobs:
           path: |
             ${{ runner.temp }}/W80_EVIDENCE.txt
             ${{ runner.temp }}/W80_MIGRATION_REPLAY.txt
-            ${{ runner.temp }}/W44_PGTAP_OUTPUT.txt
-            ${{ runner.temp }}/W80_PGTAP_OUTPUT.txt
+            ${{ runner.temp }}/W44_BEFORE_REAPPLY_PGTAP_OUTPUT.txt
+            ${{ runner.temp }}/W80_BEFORE_REAPPLY_PGTAP_OUTPUT.txt
+            ${{ runner.temp }}/W44_AFTER_REAPPLY_PGTAP_OUTPUT.txt
+            ${{ runner.temp }}/W80_AFTER_REAPPLY_PGTAP_OUTPUT.txt
+            ${{ runner.temp }}/W83_CATALOG_BEFORE_REAPPLY.txt
+            ${{ runner.temp }}/W83_CATALOG_AFTER_REAPPLY.txt
             ${{ runner.temp }}/W80_CLEANUP_PROOF.txt
             ${{ runner.temp }}/W80_MIGRATION_MANIFEST.sha256
