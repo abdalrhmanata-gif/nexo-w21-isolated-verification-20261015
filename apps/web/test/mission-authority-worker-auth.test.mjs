@@ -57,6 +57,9 @@ async function resolveLocalSourceImport(specifier, importer) {
 
 function readStaticLocalImportSpecifiers(source) {
   const specifiers = new Set();
+  const isStaticModuleSpecifier = (node) => Boolean(
+    node && (ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node))
+  );
   const sourceFile = ts.createSourceFile(
     "source.ts",
     source,
@@ -79,7 +82,7 @@ function readStaticLocalImportSpecifiers(source) {
       const isDynamicImport = node.expression.kind === ts.SyntaxKind.ImportKeyword;
       const isRequire = ts.isIdentifier(node.expression) && node.expression.text === "require";
       const argument = node.arguments[0];
-      if ((isDynamicImport || isRequire) && argument && ts.isStringLiteral(argument)) {
+      if ((isDynamicImport || isRequire) && isStaticModuleSpecifier(argument)) {
         specifiers.add(argument.text);
       }
     }
@@ -915,23 +918,33 @@ test("outbound-source detectors recognize representative transport and dynamic-l
 });
 
 test("static dependency graph extracts TypeScript AST import forms without reading comments or strings", () => {
-  const specifiers = readStaticLocalImportSpecifiers(`
+  const source = `
     import type { Mission } from "../domain/mission";
     export { dispatch } from "@/lib/mission-authority/dispatch";
     import legacy = require("./legacy-worker");
     const loaded = await import("./runtime-worker.mjs");
     const cjs = require("./runtime-worker.cjs");
+    const templateImport = await import(\`./template-worker.mjs\`);
+    const templateRequire = require(\`./template-worker.cjs\`);
+    const computedImport = await import(\`./\${runtimeModule}\`);
     // require("./comment-only")
     const example = 'import("./string-only")';
-  `);
+  `;
+  const specifiers = readStaticLocalImportSpecifiers(source);
 
   assert.deepEqual(specifiers.sort(), [
     "../domain/mission",
     "./legacy-worker",
     "./runtime-worker.cjs",
     "./runtime-worker.mjs",
+    "./template-worker.cjs",
+    "./template-worker.mjs",
     "@/lib/mission-authority/dispatch",
   ].sort());
+  assert.ok(
+    readAstOutboundMarkers(source).some((marker) => marker.includes("computed import()")),
+    "a dynamic template import with substitutions must be rejected by the runtime-capability guard",
+  );
 });
 
 test("AST outbound analysis rejects sensitive transport references passed through helpers", () => {
