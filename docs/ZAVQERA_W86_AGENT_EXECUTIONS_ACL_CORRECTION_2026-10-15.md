@@ -52,3 +52,26 @@ The isolated W80 workflow is extended to apply the full checked-in migration cha
 ## 5. Decision
 
 **Candidate correction prepared for isolated testing only. Hosted release remains NO-GO.** Keep `TRUSTED_DISPATCH_ADAPTERS = Object.freeze({})` empty/fail-closed, original PR #39 open/Draft/unmerged, and original Issue #23 open. No hosted object, secret, deployment, billing setting, DNS record, or migration ledger has been changed.
+
+
+## 6. Isolated PG17 verification complete — 2026-10-15
+
+**Exact source/test/workflow SHA:** `8dbaa7cb27abbb15144f6b81f1bb8538dd2ce5be`  
+**Workflow:** [W80 isolated PostgreSQL 17 pgTAP run 38790810307](https://github.com/abdalrhmanata-gif/nexo-w21-isolated-verification-20261015/actions/runs/38790810307) — **SUCCESS**.  
+**Flutter/Web validation:** [Flutter CI run 38790810387](https://github.com/abdalrhmanata-gif/nexo-w21-isolated-verification-20261015/actions/runs/38790810387) — **SUCCESS**.
+
+Verified from the uploaded evidence artifact (artifact ID `11999338335`, ZIP SHA-256 `906c3bf9035432cb26a3852969cb342dca23800718bf7bbc5cc7ebdac275a58f`):
+
+- Complete checked-in migration replay exit code 0 on disposable PostgreSQL `170011` (PostgreSQL 17.11).
+- W66 regression: 11/11 PASS before and after the W86 reapplication.
+- W86 ACL regression: 20/20 PASS before and after the W86 reapplication.
+- W86 reapplication exit code 0; output contains `REVOKE`, `DO`, `GRANT`.
+- W84: 21/21 PASS before and after its reapplication.
+- W85 `supabase_admin` diagnostic: 12/12 PASS.
+- W44: 17/17 before and after W83 reapplication; W46: 8/8; W80: 49/49 before and after W83 reapplication.
+- Both pinned read-only query packs passed the disposable PostgreSQL syntax/catalog smoke.
+- Temporary Supabase stack stopped, no project containers or volumes remained: `cleanup=VERIFIED`.
+
+The isolated verification PR is [#1 — W86 ACL boundary candidate](https://github.com/abdalrhmanata-gif/nexo-w21-isolated-verification-20261015/pull/1), OPEN / DRAFT / UNMERGED. A later documentation-only commit may change the branch head; the exact tested code/workflow SHA remains the one above.
+
+**Disposition unchanged:** these are disposable-environment results, not proof of hosted Development parity. No hosted write was made. Do not apply W86 until migration-history/source provenance is reconciled and separate owner approval is recorded. Original repository PR #39 stays OPEN/DRAFT/UNMERGED; Issue #23 stays OPEN; `TRUSTED_DISPATCH_ADAPTERS` remains empty/fail-closed; release remains NO-GO.
