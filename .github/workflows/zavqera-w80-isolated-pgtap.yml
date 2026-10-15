@@ -2,6 +2,13 @@ name: ZAVQERA W80 Isolated PostgreSQL 17 pgTAP
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - codex/mission-action-runtime-seam-test-20261014
+    paths:
+      - .github/workflows/zavqera-w80-isolated-pgtap.yml
+      - supabase/tests/w80_invitation_helper_privileges.sql
+      - supabase/migrations/20261013100000_w80_fail_closed_workspace_role_checks.sql
 
 permissions:
   contents: read
