@@ -5,6 +5,7 @@ on:
   push:
     branches:
       - "codex/mission-action-runtime-seam-test-20261014"
+      - "codex/w80-forward-correction-20261015"
     paths:
       - ".github/workflows/zavqera-w21-e2e.yml"
       - ".github/workflows/zavqera-web-unit.yml"
@@ -145,6 +146,8 @@ jobs:
           cp "$GITHUB_WORKSPACE/supabase/tests/w77_read_only_research_payload_bounds.sql" "$workdir/supabase/tests/w77_read_only_research_payload_bounds.sql"
           cp "$GITHUB_WORKSPACE/supabase/tests/w78_research_history_event_binding.sql" "$workdir/supabase/tests/w78_research_history_event_binding.sql"
           cp "$GITHUB_WORKSPACE/supabase/tests/w79_trusted_research_completion.sql" "$workdir/supabase/tests/w79_trusted_research_completion.sql"
+          cp "$GITHUB_WORKSPACE/supabase/tests/w80_invitation_helper_privileges.sql" "$workdir/supabase/tests/w80_invitation_helper_privileges.sql"
+          cp "$GITHUB_WORKSPACE/supabase/tests/w81_read_only_research_jit_claim.sql" "$workdir/supabase/tests/w81_read_only_research_jit_claim.sql"
           cp "$GITHUB_WORKSPACE/supabase/tests/w82_ai_generation_reservation_identity.sql" "$workdir/supabase/tests/w82_ai_generation_reservation_identity.sql"
           cat > "$workdir/supabase/migrations/20260921180005_e2e_historical_auth_compat.sql" <<'SQL'
           create schema if not exists private;
@@ -218,7 +221,9 @@ jobs:
             supabase/tests/w76_external_success_insert_guard.sql \
             supabase/tests/w77_read_only_research_payload_bounds.sql \
             supabase/tests/w78_research_history_event_binding.sql \
-            supabase/tests/w79_trusted_research_completion.sql
+            supabase/tests/w79_trusted_research_completion.sql \
+            supabase/tests/w80_invitation_helper_privileges.sql \
+            supabase/tests/w81_read_only_research_jit_claim.sql
           do
             echo "Running Mission Authority regression: $test_file"
             timeout 10m supabase test db "$test_file"
