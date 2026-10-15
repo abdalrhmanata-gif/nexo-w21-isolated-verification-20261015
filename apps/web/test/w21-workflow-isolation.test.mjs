@@ -98,3 +98,28 @@ test("W21 can only test a disposable repository-migration stack", () => {
   );
 
 });
+
+
+const w80Workflow = readFileSync(
+  join(repoRoot, ".github", "workflows", "zavqera-w80-isolated-pgtap.yml"),
+  "utf8",
+);
+
+test("W84 default ACL hardening is replayed and explicitly re-applied in disposable PG17", () => {
+  assert.ok(
+    w80Workflow.includes('cp "${GITHUB_WORKSPACE}/supabase/tests/w84_postgres_function_default_acl_hardening.sql"'),
+    "The W80 isolated PG17 workflow must stage the W84 pgTAP test",
+  );
+  assert.ok(
+    w80Workflow.includes('echo "expected_w84_pgtap_assertions=21"'),
+    "W80 evidence must pin W84 to its 21-assertion contract",
+  );
+  assert.ok(w80Workflow.includes("run_pgtap W84_AFTER_CHAIN supabase/tests/w84_postgres_function_default_acl_hardening.sql 21"),
+    "W80 must test W84 after full migration replay");
+  assert.ok(w80Workflow.includes("w84_idempotent_reapply_exit_code="),
+    "W80 must preserve W84 reapplication exit code");
+  assert.ok(w80Workflow.includes("run_pgtap W84_AFTER_REAPPLY supabase/tests/w84_postgres_function_default_acl_hardening.sql 21"),
+    "W80 must rerun all W84 assertions after reapplication");
+  assert.ok(w80Workflow.includes('[ "${w84_status}" -ne 0 ]'),
+    "Any W84 test or reapplication failure must fail the isolated workflow");
+});
