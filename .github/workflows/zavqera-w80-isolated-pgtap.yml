@@ -6,6 +6,7 @@ on:
     branches:
       - codex/mission-action-runtime-seam-test-20261014
       - codex/w80-forward-correction-20261015
+      - codex/migration-ledger-provenance-20261015
     paths:
       - .github/workflows/zavqera-w80-isolated-pgtap.yml
       - supabase/tests/w44_workspace_invitations.sql
