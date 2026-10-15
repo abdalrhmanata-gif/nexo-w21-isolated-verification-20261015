@@ -6,9 +6,9 @@
 
 - Original repository searched: `abdalrhmanata-gif/Nexo`.
 - Audit scope: exact historic migration paths implied by the 22 same-name/different-version ledger conflicts, plus all six hosted-only ledger names.
-- Method: exact-path GitHub REST commit-history lookup under `supabase/migrations/` (page size 1) on (a) the repository default branch `main`, (b) branch `codex/w66-w82-dev-audit-refresh-20261014`, and (c) the active PR #39 branch `codex/mission-action-runtime-seam-test-20261014`, each explicitly passed as `sha`. Independently scanned the recursive migration trees of all 23 currently listed original-repository branch refs for the 22 historical timestamp-conflict filenames. For the six hosted-only ledger names, additionally queried the exact-path commit history on **all 23 current branch refs** (138 more queries).
-- Result checked on 2026-10-15: all 28 exact-path queries returned zero commit-history entries in each of the three queried history scopes (84 lookups, zero results); the 22 timestamp-conflict filenames were absent from all 23 current branch-tip trees; the six hosted-only names were absent from all 23 current branch-tip trees, and all 138 additional exact-path history lookups for those six names across the 23 current refs also returned zero commits.
-- Scope limitation: the 22 timestamp-conflict filename histories have not been queried independently on every one of the 23 refs; their exact-path history was checked on `main`, the audit branch, and the active PR #39 branch. The six hosted-only filenames were path-history queried across all 23 current refs. No current-branch result can exclude a deleted/private branch, local Git object database, deployment bundle, or release archive.
+- Method: for each of the 28 historical exact paths listed below, queried GitHub's commits endpoint with `path=supabase/migrations/<filename>.sql` and `sha=<branch>` independently on **all 23 currently visible original-repository branch refs**. Each query used `per_page=1`, which is sufficient to distinguish an empty path history from at least one commit. Also inspected the recursive migration trees at all 23 branch tips.
+- Result checked on 2026-10-15: **28 paths × 23 current branch refs = 644 branch-scoped exact-path history lookups; all returned empty lists, with zero commits and zero API/tool errors.** The 22 timestamp-conflict filenames and the six hosted-only filenames were also absent from the 23 current branch-tip migration trees.
+- Scope limitation: the search is complete for the 28 exact paths within the 23 branch refs listed in the branch-tip snapshot appended below. It cannot inspect unlisted/deleted/private refs, users' local Git object databases and reflogs, CI/deployment artifacts not exposed by GitHub's repository API, or release archives stored elsewhere.
 - Current W86 candidate branch in the isolated repository is `codex/w86-agent-executions-acl-correction-20261015`. The full disposable PostgreSQL 17.11 workflow passed on SHA `24af5583113e606bf8ec80f179cca0854073abac`; the W86 SQL blob remains `f870dd83a82c27057bf24390c254713d3fe29182`. W86 is one new isolated candidate migration and is not part of the historical 89-file baseline used in the hosted ledger reconciliation; do not count it as a previously deployed migration.
 
 ## Exact-path query results
@@ -73,13 +73,48 @@ No hosted database or migration ledger was written. No migration was applied. Th
 
 **Release stays NO-GO.**
 
-## Complete hosted-only exact-path history sweep — 2026-10-15
+## All-branch exact-path history sweep — 2026-10-15
 
-To test whether the six hosted-only ledger files can be recovered from any currently visible branch history, each exact `supabase/migrations/<filename>.sql` path was queried with GitHub's commits endpoint for every one of the 23 branch refs listed at the time of the check:
+The same-name/different-timestamp paths and the six hosted-only paths were each queried against all current refs. For every exact path, the branch-specific endpoint returned an empty list.
 
-- 6 exact filenames × 23 branch refs = **138 branch-scoped history lookups**.
-- **Result: 0 commits returned; 0 tool/API errors.**
-- The six names are listed in the “Six hosted-only ledger names” table above.
-- This is stronger than merely checking branch tips: no exact-path commit history was returned within any of the 23 current refs. It still does not rule out private/deleted refs, local reflogs/objects, or an external deployment/source archive.
+| Scope | Exact paths | Branch refs | Lookups | Commits found | API/tool errors |
+|---|---:|---:|---:|---:|---:|
+| Same-name / timestamp-conflict paths | 22 | 23 | 506 | 0 | 0 |
+| Hosted-only ledger paths | 6 | 23 | 138 | 0 | 0 |
+| **Total unique path/ref pairs** | **28** | **23** | **644** | **0** | **0** |
 
-**Disposition remains UNKNOWN / NO-GO.** Seek the actual migration bundle, historic local clone or reflog, deployment artifact, reviewed release archive, backup, or another owner-held source. Do not synthesize these six migrations from labels, change the hosted ledger, or claim their effects are absent just because the source files are unavailable.
+The previous targeted review of `main`, the audit branch, and active PR #39 branch had reported 84 lookups; those are overlapping checks, not additional unique pairs beyond the 644 above. All currently listed refs were included in the full sweep.
+
+**Consequence:** exact historical SQL for the 22 hosted timestamp paths and six hosted-only paths is **not available from path history on any of these 23 refs**. Do not mark an old migration as identical to a current differently timestamped file. Seek a local clone/reflog, CI artifact, deployment bundle, reviewed release archive, backup, or another authoritative owner-held source.
+
+### Branch-tip snapshot used for the 23-ref sweep
+
+The exact branch heads used in this run were:
+
+| Branch ref | Head SHA |
+|---|---|
+| `abdalrhmanata-gif-import-nexo-v1-9` | `9219518b853a4125721b4292067840a685c7e74a` |
+| `abdalrhmanata-gif-netlify-alternative-deployment` | `bc7dd99ad49a580392b8b64fd165cc2802be9c59` |
+| `agent-origin-main-clean-2df7` | `1de719f9cd1f4b15f22efc7e880c9374056a8c79` |
+| `codex/egress-gateway-auth-staging-20261015` | `b184b91540c80be8a07b455bddaeca9080fad4f0` |
+| `codex/mission-action-runtime-seam-test-20261014` | `9d752a59f0683ea7149633138dc85bb33cf9a41b` |
+| `codex/w66-w82-dev-audit-refresh-20261014` | `5aea5611bbb975b971a9c7f7947d4c47b1cb438b` |
+| `codex/w80-pgtap-verification-20261014` | `0c56de7c84d41c43f77d86e84dea67f2d88f6ec7` |
+| `codex/w80-sql-privilege-fix-20261014` | `2e7dcccf9679ecc78f2b522064a4b121135645c4` |
+| `codex/w80-sql-review-base-20261014` | `5e2094fd27c7de60496729956af562651de93137` |
+| `codex/w80-workflow-enablement-20261014` | `81ef820d160bfef04edbbab181fc562de203f7fa` |
+| `codex/zavqera-windows-path-guards` | `5c1d093d6b2c33c41e5446d10f2c5ed8256be996` |
+| `followthrough-action-loop` | `0e1daf921e72d248962d68d9cf29af26591ca166` |
+| `main` | `f64a87addb25a7455c6acde446b81bb3427d43cc` |
+| `zavqera/ai-planner-integration` | `5e2094fd27c7de60496729956af562651de93137` |
+| `zavqera/alternative-web-deployment` | `46dc6029f084fb000ba511478d6e8aec3eb532b3` |
+| `zavqera/controlled-adapter-ci-validation` | `96a6803b69dbe62e886bfe04fc4fee5c818e9565` |
+| `zavqera/first-user-validation-execution-kit` | `9402265722126333bdb684e5bd4fc0e4aff9a001` |
+| `zavqera/integrate-origin-main-clean` | `bb095b716c29d4c13e83d5c817bf2676d127d61a` |
+| `zavqera/netlify-preview-candidate` | `1c4e4b37f7378443ec1faaea169b1279469ceaa7` |
+| `zavqera/next-phase-first-user-validation` | `ff567e524c8358148922c8780674c16e2be67020` |
+| `zavqera/openai-responses-integration` | `45d335e4c8a7a6b9627795e51fcb73fdde453f43` |
+| `zavqera/public-preview-deployment` | `6f66b3b3c317fa7787753a8668c84ab8a076b959` |
+| `zavqera/web-technical-validation-ci` | `c61536c08014712877cefb9cfe8a4fdfc7bd7de1` |
+
+**Disposition stays UNKNOWN / NO-GO.** These results establish only that the exact paths cannot be recovered from the current visible refs. They do not establish whether their DDL effects are present or absent in the hosted database.
