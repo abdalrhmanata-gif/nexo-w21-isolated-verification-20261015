@@ -184,3 +184,18 @@ Mark the hosted audit **PASS** only when all are true:
 - The exact migration ledger and relevant catalog state are compared to a reviewed source baseline; every mismatch is either explained by authoritative evidence or remains a blocker.
 
 Otherwise report **BLOCKED / PARTIAL**, record the missing evidence, and stop. Do not create W86 or another migration, do not alter ACLs, and do not infer hosted state from the disposable PostgreSQL 17 runs. Keep \`TRUSTED_DISPATCH_ADAPTERS\` empty/fail-closed; PR #39 Draft/open/unmerged; Issue #23 open; launch **NO-GO**.
+
+
+## Local PostgreSQL 17 smoke validation — 2026-10-15
+
+**Result: PASS for local query compatibility only; hosted audit remains UNEXECUTED.**
+
+- Query pack: [`supabase/tests/hosted_readonly_catalog_audit_queries.sql`](https://github.com/abdalrhmanata-gif/nexo-w21-isolated-verification-20261015/blob/codex/w80-forward-correction-20261015/supabase/tests/hosted_readonly_catalog_audit_queries.sql), blob SHA `c9c29ec8cff4ff1b5021628ea8b61be9d69b7393`. Content review split it into exactly **8 statements**, each beginning with `SELECT`; no DDL/DML/role-change statement was found.
+- Exact isolated PG17 job: [W80 run 38759025529 — SUCCESS](https://github.com/abdalrhmanata-gif/nexo-w21-isolated-verification-20261015/actions/runs/38759025529), code/workflow SHA `5556da5d852a5bece34fe172b18d0aae921bf1f5`.
+- Captured artifact: [11985121817](https://github.com/abdalrhmanata-gif/nexo-w21-isolated-verification-20261015/actions/runs/38759025529/artifacts/11985121817), digest `sha256:0211687245bd2abab6df5ed55daff033f04066716176a482adc943889d5199b0`.
+- Artifact evidence records source query-pack SHA-256 `2462ff5f494b1acc6dd75e8290aa9eeb4fda4e4899a590e697d3c5a0be5790d2`, `hosted_readonly_query_pack_local_smoke_exit_code=0`, and `hosted_readonly_query_pack_local_smoke_status=0`.
+- Same run: PostgreSQL `170011`; migration replay through W83 exit 0; W44 17/17, W46 8/8, W80 49/49 before and after W83 reapply; W84 21/21 after chain and after reapply; W85 12/12; the pre/post W83 catalog snapshots are identical (both SHA-256 `3c7cbd6ff0258079c135d6d6edf8bcb3e4f0d2e1a5a4b384fac2c71af45b3e91`); cleanup verified with no remaining containers/volumes.
+- **Artifact gap found and corrected:** although the evidence file records local query smoke exit 0, the raw `W85_READONLY_CATALOG_QUERY_PACK.txt` was omitted from the artifact upload list. The only difference between SHA `5556da5d852a5bece34fe172b18d0aae921bf1f5` and `1ada382e4c320d6b7f7815a30238fe99b1519305` is the addition of that output file to the artifact paths. Revalidation run [38759493778](https://github.com/abdalrhmanata-gif/nexo-w21-isolated-verification-20261015/actions/runs/38759493778) was still **in progress** at the time this note was written; do not claim its conclusion until a terminal run result is visible.
+- This validates query execution on the **disposable local** PG17 stack only. It does not prove current hosted Development role identity, read-only transport, migration ledger, ACLs, function ownership or schema parity.
+
+The hosted step is still **BLOCKED** until a separately verifiable connection is configured with the exact Development project ref and `read_only=true`. No hosted SQL was executed. Do not use generic `execute_sql` as a substitute; do not change hosted grants/migrations; do not create W86 from local-only results.
