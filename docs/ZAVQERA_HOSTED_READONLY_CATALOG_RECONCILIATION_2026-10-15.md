@@ -242,6 +242,7 @@ Download the ZIP of [this exact verification branch](https://github.com/abdalrhm
 ~~~powershell
 git clone --branch codex/w80-forward-correction-20261015 https://github.com/abdalrhmanata-gif/nexo-w21-isolated-verification-20261015.git
 Set-Location nexo-w21-isolated-verification-20261015
+~~~
 
 ~~~powershell
 $env:SUPABASE_PROJECT_REF = Read-Host "Verified ZAVQERA Development project ref"
