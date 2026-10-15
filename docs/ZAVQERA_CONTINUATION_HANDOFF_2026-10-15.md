@@ -533,3 +533,13 @@ Windows commands and cleanup instructions are documented in the [hosted read-onl
 - Next self-contained engineering step: design and locally test a second pinned SELECT-only catalog pack that covers relation/table ACLs, migration-effect columns/constraints, expected signature existence, private schema USAGE, trigger definitions and targeted function definitions. It must use only the explicit read-only API endpoint, verify project identity/effective role/read-only transaction, and fail closed. Do not broaden the existing tested eight-query pack silently.
 - Historical SQL content recovery for 22 same-name timestamp conflicts and six host-only ledger names remains pending. Name-only mappings are not accepted as SQL equivalence proof.
 - No hosted change. No original Nexo change. PR #39 remains open/Draft/unmerged; Issue #23 remains open; provider registry remains empty/fail-closed; launch remains NO-GO.
+
+
+## Supplemental read-only effect audit pack — 2026-10-15
+
+- Added pinned 10-query pack `supabase/tests/hosted_readonly_migration_effect_audit_queries.sql`, LF-normalized SHA-256 `7fbe8b65aeb75c446ca942277d0541de27de905e9b2172f304924e9029de6c62`.
+- Added guarded stdlib-only runner `tools/supabase_readonly_migration_effect_audit.py` and tests `tests/test_supabase_readonly_migration_effect_audit.py`. Local tests/self-test run as part of [W80 isolated PostgreSQL 17 run 38779442480](https://github.com/abdalrhmanata-gif/nexo-w21-isolated-verification-20261015/actions/runs/38779442480); the runner/test step completed SUCCESS before disposable database replay was still underway at handoff time.
+- The runner requires the same exact project-scoped read-only PAT shape as the first audit, verifies project name/region before SQL, permits only the explicit read-only query endpoint, checks effective role/read-only transaction before query 2, and reports `CAPTURED_FOR_MANUAL_REVIEW` (not PASS). It stores no token; local output directory is ignored.
+- Windows runbook: [ZAVQERA_HOSTED_MIGRATION_EFFECT_AUDIT_RUNBOOK_2026-10-15.md](https://github.com/abdalrhmanata-gif/nexo-w21-isolated-verification-20261015/blob/codex/w80-forward-correction-20261015/docs/ZAVQERA_HOSTED_MIGRATION_EFFECT_AUDIT_RUNBOOK_2026-10-15.md).
+- No supplemental hosted query was executed yet. Ask only for the resulting sanitized evidence ZIP after the owner/operator runs the new local procedure; never ask for the PAT.
+- No hosted migration or source-repo mutation. PR #39 stays OPEN/Draft/unmerged; Issue #23 stays OPEN; dispatch adapters remain empty/fail-closed; launch is NO-GO.
