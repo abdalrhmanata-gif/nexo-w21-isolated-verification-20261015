@@ -621,6 +621,8 @@ jobs:
             ${{ runner.temp }}/W85_SUPABASE_ADMIN_AUDIT_PGTAP_OUTPUT.txt
             ${{ runner.temp }}/W66_AFTER_W86_FORWARD_CORRECTION_PGTAP_OUTPUT.txt
             ${{ runner.temp }}/W86_AGENT_EXECUTIONS_ACL_CORRECTION_PGTAP_OUTPUT.txt
+            ${{ runner.temp }}/W66_AFTER_W86_DRIFT_REPAIR_PGTAP_OUTPUT.txt
+            ${{ runner.temp }}/W86_AFTER_W86_DRIFT_REPAIR_PGTAP_OUTPUT.txt
             ${{ runner.temp }}/W66_AFTER_W86_REAPPLY_PGTAP_OUTPUT.txt
             ${{ runner.temp }}/W86_AFTER_REAPPLY_PGTAP_OUTPUT.txt
             ${{ runner.temp }}/W86_MIGRATION_REAPPLY.txt
