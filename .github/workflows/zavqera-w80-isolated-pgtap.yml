@@ -5,10 +5,13 @@ on:
   push:
     branches:
       - codex/mission-action-runtime-seam-test-20261014
+      - codex/w80-forward-correction-20261015
     paths:
       - .github/workflows/zavqera-w80-isolated-pgtap.yml
+      - supabase/tests/w44_workspace_invitations.sql
       - supabase/tests/w80_invitation_helper_privileges.sql
       - supabase/migrations/20261013100000_w80_fail_closed_workspace_role_checks.sql
+      - supabase/migrations/20261015100000_w83_workspace_invitation_privilege_correction.sql
 
 permissions:
   contents: read
@@ -129,15 +132,17 @@ jobs:
           for migration in "${migration_source}"/*.sql; do
             name="$(basename "${migration}")"
             cp "${migration}" "${workdir}/supabase/migrations/${name}"
-            if [ "${name}" = "20261013100000_w80_fail_closed_workspace_role_checks.sql" ]; then
+            if [ "${name}" = "20261015100000_w83_workspace_invitation_privilege_correction.sql" ]; then
               break
             fi
           done
-          if [ ! -f "${workdir}/supabase/migrations/20261013100000_w80_fail_closed_workspace_role_checks.sql" ]; then
-            echo "::error::W80 migration was not found in the checked-in migration chain."
+          if [ ! -f "${workdir}/supabase/migrations/20261015100000_w83_workspace_invitation_privilege_correction.sql" ]; then
+            echo "::error::W83 invitation privilege correction was not found in the checked-in migration chain."
             exit 1
           fi
           mkdir -p "${workdir}/supabase/tests"
+          cp "${GITHUB_WORKSPACE}/supabase/tests/w44_workspace_invitations.sql" \
+            "${workdir}/supabase/tests/w44_workspace_invitations.sql"
           cp "${GITHUB_WORKSPACE}/supabase/tests/w80_invitation_helper_privileges.sql" \
             "${workdir}/supabase/tests/w80_invitation_helper_privileges.sql"
           printf '%s\n' 'zavqera-w80-local' > "${workdir}/ZAVQERA_W80_DISPOSABLE"
@@ -148,8 +153,11 @@ jobs:
             echo "migration_file_count=$(find "${GITHUB_WORKSPACE}/supabase/migrations" -maxdepth 1 -type f -name '*.sql' | wc -l | tr -d ' ')"
             echo "verification_source_commit=$(git -C "${GITHUB_WORKSPACE}" rev-parse HEAD)"
             echo "w80_migration_blob=$(git -C "${GITHUB_WORKSPACE}" rev-parse HEAD:supabase/migrations/20261013100000_w80_fail_closed_workspace_role_checks.sql)"
+            echo "w83_migration_blob=$(git -C "${GITHUB_WORKSPACE}" rev-parse HEAD:supabase/migrations/20261015100000_w83_workspace_invitation_privilege_correction.sql)"
             echo "w80_test_blob=$(git -C "${GITHUB_WORKSPACE}" rev-parse HEAD:supabase/tests/w80_invitation_helper_privileges.sql)"
+            echo "w44_test_blob=$(git -C "${GITHUB_WORKSPACE}" rev-parse HEAD:supabase/tests/w44_workspace_invitations.sql)"
             echo "expected_w80_pgtap_assertions=49"
+            echo "expected_w44_pgtap_assertions=17"
             echo "verification_source_branch=${GITHUB_REF_NAME}"
             echo "verification_source_ref=${GITHUB_REF}"
             echo "migration_manifest_sha256=${migration_manifest_sha256}"
@@ -158,7 +166,7 @@ jobs:
             echo "database_source=brand-new local Supabase stack"
           } > "${RUNNER_TEMP}/W80_EVIDENCE.txt"
 
-      - name: Replay checked-in migrations plus recorded local compatibility fixture through W80
+      - name: Replay checked-in migrations plus recorded local compatibility fixture through W83
         id: replay
         shell: bash
         run: |
@@ -171,7 +179,7 @@ jobs:
             --workdir "${workdir}" 2>&1 | tee "${log}"
           status="${PIPESTATUS[0]}"
           set -e
-          echo "migration_replay_through_w80_exit_code=${status}" >> "${RUNNER_TEMP}/W80_EVIDENCE.txt"
+          echo "migration_replay_through_w83_exit_code=${status}" >> "${RUNNER_TEMP}/W80_EVIDENCE.txt"
           echo "migration_replay_order=Supabase CLI timestamp order; checked-in migrations plus documented local-only historical compatibility fixture" >> "${RUNNER_TEMP}/W80_EVIDENCE.txt"
           if [ "${status}" -eq 0 ]; then
             db_container="$(docker ps --filter name=supabase_db_zavqera-w80-local --format "{{.ID}}" | head -n 1)"
@@ -196,56 +204,81 @@ jobs:
           fi
           exit "${status}"
 
-      - name: Run W80 pgTAP at its dependency point and replay later migrations
+      - name: Run W44 and W80 pgTAP after W83 and replay any later migrations
         id: test_and_remainder
         shell: bash
         run: |
           set -uo pipefail
           workdir="$(cat "${RUNNER_TEMP}/w80-workdir")"
-          log="${RUNNER_TEMP}/W80_PGTAP_OUTPUT.txt"
+          db_container="$(docker ps --filter name=supabase_db_zavqera-w80-local --format "{{.ID}}" | head -n 1)"
+          if [ -z "${db_container}" ]; then
+            echo "::error::Disposable PostgreSQL container was not found for W83 idempotency verification."
+            exit 1
+          fi
+          docker cp "${GITHUB_WORKSPACE}/supabase/migrations/20261015100000_w83_workspace_invitation_privilege_correction.sql" \
+            "${db_container}:/tmp/w83_workspace_invitation_privilege_correction.sql"
           set +e
-          (cd "${workdir}" && timeout 10m supabase test db --local \
-            supabase/tests/w80_invitation_helper_privileges.sql) 2>&1 | tee "${log}"
-          status="${PIPESTATUS[0]}"
+          docker exec "${db_container}" psql -U postgres -d postgres -v ON_ERROR_STOP=1 \
+            -f /tmp/w83_workspace_invitation_privilege_correction.sql 2>&1 | tee -a "${RUNNER_TEMP}/W80_MIGRATION_REPLAY.txt"
+          reapply_status="${PIPESTATUS[0]}"
           set -e
-          planned="$(sed -n 's/^1\.\.\([0-9][0-9]*\)$/\1/p' "${log}" | tail -n 1)"
-          tap_assertions="$(grep -Ec '^(ok|not ok) [0-9]+' "${log}" || true)"
-          summary_tests="$(sed -nE 's/.*Tests=([0-9]+).*/\1/p' "${log}" | tail -n 1)"
-          if [ -z "${planned}" ]; then planned="${summary_tests}"; fi
-          failed_subtests="$(sed -nE 's/^Failed ([0-9]+)\/[0-9]+ subtests.*/\1/p' "${log}" | tail -n 1)"
-          if [ -z "${failed_subtests}" ]; then
-            failed_subtests="$(sed -nE 's/^Looks like you failed ([0-9]+) tests of [0-9]+.*/\1/p' "${log}" | tail -n 1)"
-          fi
-          failed_names="$(sed -nE 's/^# Failed test [0-9]+: "(.*)"$/\1/p' "${log}" | paste -sd ';' -)"
-          if [ "${tap_assertions}" -gt 0 ]; then
-            reported="${tap_assertions}"
-            failed="$(grep -Ec '^not ok [0-9]+' "${log}" || true)"
-          elif [ -n "${summary_tests}" ] && [ "${status}" -eq 0 ] \
-            && grep -Eq '^(Result: PASS|All tests successful\.)' "${log}"; then
-            reported="${summary_tests}"
-            failed=0
-          elif [ -n "${summary_tests}" ] && [ -n "${failed_subtests}" ]; then
-            reported="${summary_tests}"
-            failed="${failed_subtests}"
-          else
-            reported="${summary_tests:-0}"
-            failed=not-reported
-          fi
-          {
-            echo "w80_pg_tap_exit_code=${status}"
-            echo "w80_assertions_planned=${planned:-not-reported}"
-            echo "w80_assertions_reported=${reported}"
-            echo "w80_assertions_failed=${failed}"
-            echo "w80_failed_test_names=${failed_names:-none}"
-          } >> "${RUNNER_TEMP}/W80_EVIDENCE.txt"
-
-          test_status="${status}"
-          if [ "${planned}" != 49 ] || [ "${reported}" != 49 ] || [ "${failed}" != 0 ]; then
-            echo "::error::W80 TAP output did not report exactly 49 passing assertions."
-            test_status=1
+          echo "w83_idempotent_reapply_exit_code=${reapply_status}" >> "${RUNNER_TEMP}/W80_EVIDENCE.txt"
+          if [ "${reapply_status}" -ne 0 ]; then
+            echo "::error::Reapplying the W83 correction on the disposable database failed."
+            exit "${reapply_status}"
           fi
 
-          # Apply every later checked-in migration only after W80 has been tested.
+          run_pgtap() {
+            label="$1"
+            test_file="$2"
+            expected="$3"
+            log="${RUNNER_TEMP}/${label}_PGTAP_OUTPUT.txt"
+            set +e
+            (cd "${workdir}" && timeout 10m supabase test db --local "${test_file}") 2>&1 | tee "${log}"
+            status="${PIPESTATUS[0]}"
+            set -e
+            planned="$(sed -n 's/^1\.\.\([0-9][0-9]*\)$/\1/p' "${log}" | tail -n 1)"
+            tap_assertions="$(grep -Ec '^(ok|not ok) [0-9]+' "${log}" || true)"
+            summary_tests="$(sed -nE 's/.*Tests=([0-9]+).*/\1/p' "${log}" | tail -n 1)"
+            if [ -z "${planned}" ]; then planned="${summary_tests}"; fi
+            failed_subtests="$(sed -nE 's/^Failed ([0-9]+)\/[0-9]+ subtests.*/\1/p' "${log}" | tail -n 1)"
+            if [ -z "${failed_subtests}" ]; then
+              failed_subtests="$(sed -nE 's/^Looks like you failed ([0-9]+) tests of [0-9]+.*/\1/p' "${log}" | tail -n 1)"
+            fi
+            failed_names="$(sed -nE 's/^# Failed test [0-9]+: "(.*)"$/\1/p' "${log}" | paste -sd ';' -)"
+            if [ "${tap_assertions}" -gt 0 ]; then
+              reported="${tap_assertions}"
+              failed="$(grep -Ec '^not ok [0-9]+' "${log}" || true)"
+            elif [ -n "${summary_tests}" ] && [ "${status}" -eq 0 ] \
+              && grep -Eq '^(Result: PASS|All tests successful\.)' "${log}"; then
+              reported="${summary_tests}"
+              failed=0
+            elif [ -n "${summary_tests}" ] && [ -n "${failed_subtests}" ]; then
+              reported="${summary_tests}"
+              failed="${failed_subtests}"
+            else
+              reported="${summary_tests:-0}"
+              failed=not-reported
+            fi
+            {
+              echo "${label,,}_pg_tap_exit_code=${status}"
+              echo "${label,,}_assertions_planned=${planned:-not-reported}"
+              echo "${label,,}_assertions_reported=${reported}"
+              echo "${label,,}_assertions_failed=${failed}"
+              echo "${label,,}_failed_test_names=${failed_names:-none}"
+            } >> "${RUNNER_TEMP}/W80_EVIDENCE.txt"
+            [ "${status}" -eq 0 ] && [ "${planned}" = "${expected}" ] \
+              && [ "${reported}" = "${expected}" ] && [ "${failed}" = 0 ]
+          }
+
+          regression_status=0
+          run_pgtap W44 supabase/tests/w44_workspace_invitations.sql 17 || regression_status=1
+          run_pgtap W80 supabase/tests/w80_invitation_helper_privileges.sql 49 || regression_status=1
+          if [ "${regression_status}" -ne 0 ]; then
+            echo "::error::One or more invitation pgTAP regressions failed."
+          fi
+
+          # Apply every later checked-in migration only after the W83 dependency point.
           # This preserves the tested dependency point and still reports full-chain drift.
           cp -R "${RUNNER_TEMP}/w80-all-migrations/." "${workdir}/supabase/migrations/"
           replay_log="${RUNNER_TEMP}/W80_MIGRATION_REPLAY.txt"
@@ -253,11 +286,11 @@ jobs:
           supabase migration up --local --workdir "${workdir}" 2>&1 | tee -a "${replay_log}"
           later_status="${PIPESTATUS[0]}"
           set -e
-          echo "migration_replay_after_w80_exit_code=${later_status}" >> "${RUNNER_TEMP}/W80_EVIDENCE.txt"
+          echo "migration_replay_after_w83_exit_code=${later_status}" >> "${RUNNER_TEMP}/W80_EVIDENCE.txt"
           if [ "${later_status}" -ne 0 ]; then
-            echo "::error::The remaining checked-in migration chain failed after W80."
+            echo "::error::The remaining checked-in migration chain failed after W83."
           fi
-          if [ "${test_status}" -ne 0 ] || [ "${later_status}" -ne 0 ]; then exit 1; fi
+          if [ "${regression_status}" -ne 0 ] || [ "${later_status}" -ne 0 ]; then exit 1; fi
 
       - name: Stop and prove disposable resource cleanup
         if: always()
@@ -325,6 +358,7 @@ jobs:
           path: |
             ${{ runner.temp }}/W80_EVIDENCE.txt
             ${{ runner.temp }}/W80_MIGRATION_REPLAY.txt
+            ${{ runner.temp }}/W44_PGTAP_OUTPUT.txt
             ${{ runner.temp }}/W80_PGTAP_OUTPUT.txt
             ${{ runner.temp }}/W80_CLEANUP_PROOF.txt
             ${{ runner.temp }}/W80_MIGRATION_MANIFEST.sha256

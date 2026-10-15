@@ -32,7 +32,7 @@ select ok(
 
 select ok(
   not (select prosecdef from pg_proc where oid = 'public.create_workspace_invitation(uuid,text,text,text,timestamptz)'::regprocedure)
-  and not (select prosecdef from pg_proc where oid = 'public.get_workspace_invitation(text)'::regprocedure)
+  and (select prosecdef from pg_proc where oid = 'public.get_workspace_invitation(text)'::regprocedure)
   and not (select prosecdef from pg_proc where oid = 'public.accept_workspace_invitation(text)'::regprocedure)
   and not (select prosecdef from pg_proc where oid = 'public.revoke_workspace_invitation(uuid)'::regprocedure)
   and has_function_privilege('authenticated', 'private.create_workspace_invitation(uuid,text,text,text,timestamptz)', 'EXECUTE')
@@ -47,7 +47,7 @@ select ok(
          from pg_proc p join pg_namespace n on n.oid=p.pronamespace
         where n.nspname='private'
           and p.proname in ('create_workspace_invitation','get_workspace_invitation','accept_workspace_invitation','revoke_workspace_invitation')),
-  'invitation wrappers stay SECURITY INVOKER and private helper grants match each wrapper role with pinned SECURITY DEFINER implementations');
+  'mutation wrappers stay SECURITY INVOKER; token lookup is the only SECURITY DEFINER bridge, and private helper grants remain role-scoped with pinned paths');
 
 create temporary table w44_cross_workspace_results (
   create_denied boolean not null,
