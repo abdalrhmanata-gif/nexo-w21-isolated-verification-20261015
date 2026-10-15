@@ -524,3 +524,12 @@ Windows commands and cleanup instructions are documented in the [hosted read-onl
 - Detailed reconciliation findings and exact pair lists: [ZAVQERA_HOSTED_MIGRATION_HISTORY_RECONCILIATION_2026-10-15.md](https://github.com/abdalrhmanata-gif/nexo-w21-isolated-verification-20261015/blob/codex/w80-forward-correction-20261015/docs/ZAVQERA_HOSTED_MIGRATION_HISTORY_RECONCILIATION_2026-10-15.md).
 - Next work is an offline historical source/content-hash manifest and effect matrix, then disposable PostgreSQL 17 replay and W21/W80/W82/W83/W84 tests. Do not run hosted `db push`, `migration repair`, manually edit the ledger, or reapply migrations until deployed SQL sources are recovered and effects reconciled. No database changes were performed by this audit.
 - Keep launch **NO-GO**, do not merge PR #39, keep Issue #23 open, keep `TRUSTED_DISPATCH_ADAPTERS` empty/fail-closed, and leave original Nexo plus hosted Development/Main untouched.
+
+
+## Hosted candidate migration effect matrix — 2026-10-15
+
+- Added [ZAVQERA_HOSTED_CANDIDATE_EFFECT_MATRIX_2026-10-15.md](https://github.com/abdalrhmanata-gif/nexo-w21-isolated-verification-20261015/blob/codex/w80-forward-correction-20261015/docs/ZAVQERA_HOSTED_CANDIDATE_EFFECT_MATRIX_2026-10-15.md) on the temporary verification branch. It maps W66–W84 candidate SQL to captured catalog evidence and labels every unqueried effect as unknown.
+- Current capture confirms signature/ACL drift for W67, W79, W80, W81, W82 and W83; expected W68–W70/W74 claim/budget function signatures are absent from the captured routine inventory. W71/W73/W75–W78 have partial results where function bodies or trigger/table catalogs were not queried. W66 relation ACL remains explicitly unverified.
+- Next self-contained engineering step: design and locally test a second pinned SELECT-only catalog pack that covers relation/table ACLs, migration-effect columns/constraints, expected signature existence, private schema USAGE, trigger definitions and targeted function definitions. It must use only the explicit read-only API endpoint, verify project identity/effective role/read-only transaction, and fail closed. Do not broaden the existing tested eight-query pack silently.
+- Historical SQL content recovery for 22 same-name timestamp conflicts and six host-only ledger names remains pending. Name-only mappings are not accepted as SQL equivalence proof.
+- No hosted change. No original Nexo change. PR #39 remains open/Draft/unmerged; Issue #23 remains open; provider registry remains empty/fail-closed; launch remains NO-GO.
