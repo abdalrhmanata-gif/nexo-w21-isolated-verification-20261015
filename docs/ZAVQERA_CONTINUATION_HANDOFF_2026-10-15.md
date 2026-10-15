@@ -433,3 +433,15 @@ Exact tested source/test SHA: `eb723c68ef73f54758ddb37d34ec713ba9e9d4d5`.
 
 **Next safe operational step:** separately authorized, read-only hosted catalog reconciliation (project identity, migration ledger, function owner/security/search_path/ACL, default ACLs and role-membership paths), with stop-on-mismatch. This does not authorize hosted mutation.
 
+
+
+## Read-only hosted catalog reconciliation — 2026-10-15
+
+**Current disposition: PREPARED / HOSTED QUERY BLOCKED BY CONNECTION CONFIGURATION.**
+
+- Runbook with individually runnable SELECT-only catalog queries: [ZAVQERA_HOSTED_READONLY_CATALOG_RECONCILIATION_2026-10-15.md](https://github.com/abdalrhmanata-gif/nexo-w21-isolated-verification-20261015/blob/codex/w80-forward-correction-20261015/docs/ZAVQERA_HOSTED_READONLY_CATALOG_RECONCILIATION_2026-10-15.md).
+- Current Supabase guidance documents a project-scoped MCP endpoint using `project_ref=<verified-development-project-ref>&read_only=true`, which runs queries as a read-only PostgreSQL user and disables mutation tools: [Supabase MCP configuration](https://supabase.com/docs/guides/ai-tools/mcp).
+- Supabase also documents the experimental read-only Management API endpoint `POST /v1/projects/{ref}/database/query/read-only` running as `supabase_read_only_user`; it is not exposed as an action in the current connected Supabase tool surface: [Read-only query API](https://supabase.com/docs/reference/api/v1-read-only-query).
+- The current connected tool surface does not expose the active server URL/read-only configuration or a way to reconfigure it in-session. Therefore, do **not** call generic `execute_sql` against hosted Development as a substitute. No hosted SQL was executed, and no hosted database, migration, ACL, secrets, deployment, billing or DNS was changed.
+- Next operational step: activate an independently verifiable, project-scoped `read_only=true` connection for the exact Development project; run Query 1 in the runbook first; continue only after the read-only role identity/capability gate passes. Stop on any ambiguity, catalog/ledger mismatch, or permission denial.
+- Existing W85/W21 artifacts remain disposable-local evidence only; hosted parity is still unverified. Do not create a forward migration from local defaults alone. Keep `TRUSTED_DISPATCH_ADAPTERS` empty/fail-closed, PR #39 OPEN/Draft/unmerged, Issue #23 OPEN and release **NO-GO**.
