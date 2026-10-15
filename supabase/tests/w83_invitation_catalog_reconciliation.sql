@@ -125,6 +125,12 @@ select rolname,
     or (rolcanlogin and rolname not like 'pg_%')
  order by rolname;
 
+\echo '=== Role attributes for API roles and function owners ==='
+select rolname, rolsuper, rolinherit, rolcreaterole, rolcreatedb, rolcanlogin, rolbypassrls
+  from pg_roles
+ where rolname in ('anon','authenticated','service_role','postgres','supabase_admin')
+ order by rolname;
+
 \echo '=== Role membership paths relevant to invitation privilege inheritance ==='
 select member_role.rolname as member,
        granted_role.rolname as granted_role,
@@ -134,11 +140,24 @@ select member_role.rolname as member,
   from pg_auth_members m
   join pg_roles member_role on member_role.oid = m.member
   join pg_roles granted_role on granted_role.oid = m.roleid
- where member_role.rolname in ('anon','authenticated','service_role')
-    or granted_role.rolname in ('anon','authenticated','service_role')
+ where member_role.rolname in ('anon','authenticated','service_role','postgres','supabase_admin')
+    or granted_role.rolname in ('anon','authenticated','service_role','postgres','supabase_admin')
  order by member, granted_role;
 
-\echo '=== Default ACLs that can affect future functions in public/private ==='
+\echo '=== Built-in function EXECUTE default ACL baseline (used when no global function default override exists) ==='
+\echo 'Per-schema default ACL entries are added to the global/built-in baseline; a schema-level REVOKE cannot remove a global grant.'
+select owner_role.rolname as object_creator,
+       case when a.grantee = 0 then 'PUBLIC' else grantee_role.rolname end as grantee,
+       a.privilege_type,
+       a.is_grantable
+  from pg_roles owner_role
+  cross join lateral aclexplode(acldefault('f', owner_role.oid)) a
+  left join pg_roles grantee_role on grantee_role.oid = a.grantee
+ where owner_role.rolname in ('postgres','supabase_admin')
+   and a.privilege_type = 'EXECUTE'
+ order by owner_role.rolname, grantee;
+
+\echo '=== Default ACL overrides that can affect future functions in public/private ==='
 select owner_role.rolname as object_creator,
        case when d.defaclnamespace = 0 then '(global)' else ns.nspname end as schema_name,
        case d.defaclobjtype when 'f' then 'function' else d.defaclobjtype::text end as object_type,
