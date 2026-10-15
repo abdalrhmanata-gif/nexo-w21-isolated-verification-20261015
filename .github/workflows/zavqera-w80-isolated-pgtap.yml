@@ -468,3 +468,4 @@ jobs:
             ${{ runner.temp }}/W80_CLEANUP_PROOF.txt
             ${{ runner.temp }}/W80_MIGRATION_MANIFEST.sha256
             ${{ runner.temp }}/W85_SUPABASE_ADMIN_AUDIT_PGTAP_OUTPUT.txt
+            ${{ runner.temp }}/W85_READONLY_CATALOG_QUERY_PACK.txt
