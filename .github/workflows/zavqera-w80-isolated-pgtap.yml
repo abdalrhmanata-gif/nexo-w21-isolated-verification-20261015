@@ -13,6 +13,7 @@ on:
       - supabase/tests/w80_invitation_helper_privileges.sql
       - supabase/tests/w83_invitation_catalog_reconciliation.sql
       - supabase/tests/w85_supabase_admin_default_acl_audit.sql
+      - supabase/tests/hosted_readonly_catalog_audit_queries.sql
       - supabase/migrations/20261013100000_w80_fail_closed_workspace_role_checks.sql
       - supabase/migrations/20261015100000_w83_workspace_invitation_privilege_correction.sql
 
@@ -364,7 +365,31 @@ jobs:
           fi
           echo "w84_idempotency_and_pg_tap_status=${w84_status}" >> "${RUNNER_TEMP}/W80_EVIDENCE.txt"
           echo "w85_supabase_admin_audit_status=${w85_status}" >> "${RUNNER_TEMP}/W80_EVIDENCE.txt"
-          if [ "${regression_status}" -ne 0 ] || [ "${later_status}" -ne 0 ] || [ "${w84_status}" -ne 0 ] || [ "${w85_status}" -ne 0 ]; then exit 1; fi
+
+          # Execute only SELECT statements from the prepared query pack against this disposable PG17 stack.
+          # This proves local SQL/catalog compatibility, not hosted read-only connection identity or parity.
+          query_pack="${GITHUB_WORKSPACE}/supabase/tests/hosted_readonly_catalog_audit_queries.sql"
+          query_log="${RUNNER_TEMP}/W85_READONLY_CATALOG_QUERY_PACK.txt"
+          query_pack_status=0
+          echo "hosted_readonly_query_pack_sha256=$(sha256sum "${query_pack}" | awk '{print $1}')" >> "${RUNNER_TEMP}/W80_EVIDENCE.txt"
+          if grep -Eiq '^[[:space:]]*(CREATE|ALTER|DROP|INSERT|UPDATE|DELETE|TRUNCATE|GRANT|REVOKE|SET|BEGIN|COMMIT|DO|CALL)([[:space:]]|$)' "${query_pack}"; then
+            echo "::error::Hosted catalog query pack contains a non-SELECT statement."
+            query_pack_status=1
+          else
+            docker cp "${query_pack}" "${db_container}:/tmp/hosted_readonly_catalog_audit_queries.sql"
+            set +e
+            docker exec "${db_container}" psql -U postgres -d postgres -X -qAt -v ON_ERROR_STOP=1 \
+              -f /tmp/hosted_readonly_catalog_audit_queries.sql 2>&1 | tee "${query_log}"
+            query_status="${PIPESTATUS[0]}"
+            set -e
+            echo "hosted_readonly_query_pack_local_smoke_exit_code=${query_status}" >> "${RUNNER_TEMP}/W80_EVIDENCE.txt"
+            if [ "${query_status}" -ne 0 ] || [ ! -s "${query_log}" ]; then
+              query_pack_status=1
+            fi
+          fi
+          echo "hosted_readonly_query_pack_local_smoke_status=${query_pack_status}" >> "${RUNNER_TEMP}/W80_EVIDENCE.txt"
+
+          if [ "${regression_status}" -ne 0 ] || [ "${later_status}" -ne 0 ] || [ "${w84_status}" -ne 0 ] || [ "${w85_status}" -ne 0 ] || [ "${query_pack_status}" -ne 0 ]; then exit 1; fi
 
       - name: Stop and prove disposable resource cleanup
         if: always()
