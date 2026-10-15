@@ -11,6 +11,7 @@ import hashlib
 import json
 from pathlib import Path
 import re
+import subprocess
 import sys
 
 PROJECT_REF = "mrwmmbytcymqgwvcoywd"
@@ -107,6 +108,56 @@ def source_migrations(repo_root):
     return rows
 
 
+def source_provenance(repo_root, source_rows):
+    """Return deterministic local source identities without network access.
+
+    The migration manifest hashes sorted filename/file-SHA pairs, so it remains
+    informative even when the checkout is dirty or Git metadata is unavailable.
+    """
+    manifest_text = "".join(
+        f"{row['file']}\t{row['sha256']}\n"
+        for row in sorted(source_rows, key=lambda row: row["file"])
+    )
+    manifest_sha256 = hashlib.sha256(manifest_text.encode("utf-8")).hexdigest()
+
+    head = None
+    worktree_clean = None
+    try:
+        head_result = subprocess.run(
+            ["git", "rev-parse", "--verify", "HEAD"],
+            cwd=repo_root,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            timeout=5,
+            check=False,
+        )
+        candidate = head_result.stdout.strip()
+        if head_result.returncode == 0 and re.fullmatch(r"[0-9a-fA-F]{40,64}", candidate):
+            head = candidate.lower()
+            status_result = subprocess.run(
+                ["git", "status", "--porcelain=v1", "--untracked-files=all", "--", "supabase/migrations"],
+                cwd=repo_root,
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                timeout=5,
+                check=False,
+            )
+            if status_result.returncode == 0:
+                worktree_clean = not status_result.stdout.strip()
+    except (OSError, subprocess.SubprocessError):
+        # A source directory can intentionally be supplied without a .git checkout.
+        # Do not fail the evidence analysis; retain the content manifest.
+        pass
+
+    return {
+        "source_checkout_head_sha": head,
+        "source_migration_manifest_sha256": manifest_sha256,
+        "source_migrations_worktree_clean": worktree_clean,
+    }
+
+
 def reconcile(directory, repo_root):
     summary, metadata, identity = verify_evidence(directory)
     ledger = rows_from(read_json(directory / "query_11.json").get("response"))
@@ -127,6 +178,7 @@ def reconcile(directory, repo_root):
     hosted.sort(key=lambda row: (row["version"], row["name"]))
 
     source = source_migrations(repo_root)
+    source_identity = source_provenance(repo_root, source)
     source_by_pair = {(row["version"], row["name"]): row for row in source}
     hosted_by_pair = {(row["version"], row["name"]): row for row in hosted}
     source_pairs, hosted_pairs = set(source_by_pair), set(hosted_by_pair)
@@ -168,6 +220,9 @@ def reconcile(directory, repo_root):
         "captured_at_utc": metadata.get("observed_at_utc"),
         "project": identity,
         "query_pack_sha256": summary["query_pack_sha256"],
+        "source_checkout_head_sha": source_identity["source_checkout_head_sha"],
+        "source_migration_manifest_sha256": source_identity["source_migration_manifest_sha256"],
+        "source_migrations_worktree_clean": source_identity["source_migrations_worktree_clean"],
         "source_migration_count": len(source),
         "hosted_ledger_row_count": len(hosted),
         "exact_version_name_matches": len(source_pairs & hosted_pairs),
@@ -183,6 +238,8 @@ def reconcile(directory, repo_root):
         "interpretation": [
             "Same-name/different-version is not proof that deployed SQL matches checked-in SQL.",
             "The migration ledger records version/name metadata, not historical SQL bytes.",
+            "The source migration manifest SHA-256 covers sorted filename/file-SHA pairs and identifies migration contents even if Git metadata is unavailable.",
+            "The source checkout HEAD and dirty flag are local Git metadata; the manifest is required to identify the actual source bytes.",
             "Effective ACLs are a signal, not complete proof of reachability; review RLS, memberships, function ownership and trusted writers separately.",
             "The observed role has rolbypassrls=true; do not use this evidence credential for application-row reads.",
             "This is offline analysis only; it performs no SQL, hosted writes, migration repair, or deployment.",
@@ -198,6 +255,9 @@ def render_markdown(result):
         "",
         f"- Captured UTC: {result['captured_at_utc']}",
         f"- Project: {result['project'].get('name')} ({result['project'].get('id')}), region {result['project'].get('region')}",
+        f"- Source checkout HEAD: `{result['source_checkout_head_sha'] or 'UNAVAILABLE'}`",
+        f"- Source migration manifest SHA-256: `{result['source_migration_manifest_sha256']}`",
+        f"- Migration files clean in Git worktree: **{result['source_migrations_worktree_clean'] if result['source_migrations_worktree_clean'] is not None else 'UNKNOWN'}**",
         f"- Source files: **{result['source_migration_count']}**; hosted ledger rows: **{result['hosted_ledger_row_count']}**",
         f"- Exact version/name matches: **{result['exact_version_name_matches']}**",
         f"- Same-name/different-version candidates: **{len(result['same_name_different_version'])}**",
@@ -248,6 +308,9 @@ def main(argv=None):
         "same_name_different_version_count": len(result["same_name_different_version"]),
         "source_tuples_missing_from_hosted_ledger": len(result["source_tuples_missing_from_hosted_ledger"]),
         "hosted_tuples_missing_from_source": len(result["hosted_tuples_missing_from_source"]),
+        "source_checkout_head_sha": result["source_checkout_head_sha"],
+        "source_migration_manifest_sha256": result["source_migration_manifest_sha256"],
+        "source_migrations_worktree_clean": result["source_migrations_worktree_clean"],
         "effective_nonowner_write_grants": len(result["effective_nonowner_write_grants"]),
         "output_json": str(out_json), "output_markdown": str(out_md),
     }, indent=2))
