@@ -395,6 +395,23 @@ jobs:
             run_pgtap W85_SUPABASE_ADMIN_AUDIT supabase/tests/w85_supabase_admin_default_acl_audit.sql 12 || w85_status=1
             run_pgtap W66_AFTER_W86_FORWARD_CORRECTION supabase/tests/w66_service_role_table_privilege_hardening.sql 11 || w86_status=1
             run_pgtap W86_AGENT_EXECUTIONS_ACL_CORRECTION supabase/tests/w86_agent_executions_acl_correction.sql 20 || w86_status=1
+
+            # Reapply W86 on the disposable database to prove the forward ACL
+            # correction is idempotent, then rerun the complete W66/W86 checks.
+            docker cp "${GITHUB_WORKSPACE}/supabase/migrations/20261015120000_w86_agent_executions_acl_correction.sql" \
+              "${db_container}:/tmp/w86_agent_executions_acl_correction.sql"
+            set +e
+            docker exec "${db_container}" psql -U postgres -d postgres -v ON_ERROR_STOP=1 \
+              -f /tmp/w86_agent_executions_acl_correction.sql 2>&1 | tee "${RUNNER_TEMP}/W86_MIGRATION_REAPPLY.txt"
+            w86_reapply_status="${PIPESTATUS[0]}"
+            set -e
+            echo "w86_idempotent_reapply_exit_code=${w86_reapply_status}" >> "${RUNNER_TEMP}/W80_EVIDENCE.txt"
+            if [ "${w86_reapply_status}" -ne 0 ]; then
+              echo "::error::Reapplying W86 on the disposable database failed."
+              w86_status=1
+            fi
+            run_pgtap W66_AFTER_W86_REAPPLY supabase/tests/w66_service_role_table_privilege_hardening.sql 11 || w86_status=1
+            run_pgtap W86_AFTER_REAPPLY supabase/tests/w86_agent_executions_acl_correction.sql 20 || w86_status=1
           fi
           echo "w84_idempotency_and_pg_tap_status=${w84_status}" >> "${RUNNER_TEMP}/W80_EVIDENCE.txt"
           echo "w85_supabase_admin_audit_status=${w85_status}" >> "${RUNNER_TEMP}/W80_EVIDENCE.txt"
@@ -520,5 +537,8 @@ jobs:
             ${{ runner.temp }}/W85_SUPABASE_ADMIN_AUDIT_PGTAP_OUTPUT.txt
             ${{ runner.temp }}/W66_AFTER_W86_FORWARD_CORRECTION_PGTAP_OUTPUT.txt
             ${{ runner.temp }}/W86_AGENT_EXECUTIONS_ACL_CORRECTION_PGTAP_OUTPUT.txt
+            ${{ runner.temp }}/W66_AFTER_W86_REAPPLY_PGTAP_OUTPUT.txt
+            ${{ runner.temp }}/W86_AFTER_REAPPLY_PGTAP_OUTPUT.txt
+            ${{ runner.temp }}/W86_MIGRATION_REAPPLY.txt
             ${{ runner.temp }}/W85_READONLY_CATALOG_QUERY_PACK.txt
             ${{ runner.temp }}/MIGRATION_EFFECT_READONLY_QUERY_PACK.txt
