@@ -149,6 +149,7 @@ jobs:
           cp "$GITHUB_WORKSPACE/supabase/tests/w80_invitation_helper_privileges.sql" "$workdir/supabase/tests/w80_invitation_helper_privileges.sql"
           cp "$GITHUB_WORKSPACE/supabase/tests/w81_read_only_research_jit_claim.sql" "$workdir/supabase/tests/w81_read_only_research_jit_claim.sql"
           cp "$GITHUB_WORKSPACE/supabase/tests/w82_ai_generation_reservation_identity.sql" "$workdir/supabase/tests/w82_ai_generation_reservation_identity.sql"
+          cp "$GITHUB_WORKSPACE/supabase/tests/w83_invitation_catalog_reconciliation.sql" "$workdir/supabase/tests/w83_invitation_catalog_reconciliation.sql"
           cat > "$workdir/supabase/migrations/20260921180005_e2e_historical_auth_compat.sql" <<'SQL'
           create schema if not exists private;
           create or replace function private.handle_new_user_profile()
@@ -201,6 +202,23 @@ jobs:
             cd "$ZAVQERA_E2E_SUPABASE_WORKDIR"
             timeout 30m supabase test db supabase/tests/w30_launch_gate_pgtap.sql
           )
+
+      - name: Run W83 read-only catalog reconciliation on disposable PG17
+        run: |
+          set -euo pipefail
+          workdir="$ZAVQERA_E2E_SUPABASE_WORKDIR"
+          report="$workdir/supabase/tests/w83_invitation_catalog_reconciliation.sql"
+          test -f "$report"
+          db_container="$(docker ps --filter "label=com.supabase.cli.project=zavqera-e2e-local" --format '{{.ID}} {{.Names}} {{.Image}}' | awk '$2 ~ /_db_/ && $3 ~ /postgres/ { print $1; exit }')"
+          if [ -z "$db_container" ]; then
+            echo "Could not identify the disposable PG17 database container; refusing any fallback connection." >&2
+            exit 1
+          fi
+          docker cp "$report" "$db_container:/tmp/w83_invitation_catalog_reconciliation.sql"
+          docker exec -u postgres "$db_container" psql -X -v ON_ERROR_STOP=1 -d postgres -f /tmp/w83_invitation_catalog_reconciliation.sql 2>&1 | tee "$RUNNER_TEMP/W83_LOCAL_CATALOG_RECONCILIATION.txt"
+          grep -Fq 'READ_ONLY_GUARD=CONFIRMED' "$RUNNER_TEMP/W83_LOCAL_CATALOG_RECONCILIATION.txt"
+          grep -Fq '20261015100000' "$RUNNER_TEMP/W83_LOCAL_CATALOG_RECONCILIATION.txt"
+          grep -Fq 'Default ACLs' "$RUNNER_TEMP/W83_LOCAL_CATALOG_RECONCILIATION.txt"
 
       - name: Run Mission Authority execution security regressions
         run: |
@@ -356,6 +374,12 @@ jobs:
               echo "cleanup_proof=missing"
             fi
           } > "$RUNNER_TEMP/W21_EVIDENCE.txt"
+          if [ -f "$RUNNER_TEMP/W83_LOCAL_CATALOG_RECONCILIATION.txt" ]; then
+            echo "=== W83 read-only disposable-catalog reconciliation ===" >> "$RUNNER_TEMP/W21_EVIDENCE.txt"
+            cat "$RUNNER_TEMP/W83_LOCAL_CATALOG_RECONCILIATION.txt" >> "$RUNNER_TEMP/W21_EVIDENCE.txt"
+          else
+            echo "w83_local_catalog_reconciliation=missing" >> "$RUNNER_TEMP/W21_EVIDENCE.txt"
+          fi
           if [ ! -f "$RUNNER_TEMP/W21_CLEANUP_PROOF.txt" ] || ! grep -q '^cleanup_verified=true$' "$RUNNER_TEMP/W21_CLEANUP_PROOF.txt"; then
             echo "Cleanup proof missing or not verified; see W21 evidence artifact." >&2
             exit 1
