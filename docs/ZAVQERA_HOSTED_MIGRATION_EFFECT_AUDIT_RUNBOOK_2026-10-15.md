@@ -92,3 +92,15 @@ Next, run the updated pack after CI/local PostgreSQL 17 syntax validation, then 
 No hosted remediation is authorized by this runbook. Do not run `supabase db push`, `migration repair`, manually edit `supabase_migrations.schema_migrations`, replay migrations against hosted Development, or change Supabase Main/Production. Any future hosted migration requires a separate reviewed plan and explicit owner authorization.
 
 **Release remains NO-GO.** Keep PR #39 open/Draft/unmerged, Issue #23 open, and `TRUSTED_DISPATCH_ADAPTERS` empty/fail-closed.
+
+
+## Offline comparison after the updated 12-query capture
+
+After the updated audit completes and the evidence folder contains query_11.json and query_12.json, run this from the repository root in PowerShell:
+
+```powershell
+$auditDir = "C:\Users\oem\nexo-w21-isolated-verification-20261015\zavqera-readonly-effect-audit-output\<new-UTC-folder>"
+py -3 tools/review_hosted_migration_ledger.py --evidence-dir $auditDir
+```
+
+This offline comparator verifies the project/query-pack evidence identity, compares every hosted ledger (version,name) tuple to checked-in migration filenames, records same-name/different-version candidates and inspects the captured W66 ACL matrix. It writes ledger_acl_review.json and ledger_acl_review.md inside that evidence folder. Its status is always REVIEW REQUIRED / NO-GO; it cannot certify historical SQL equality and it never connects to Supabase.

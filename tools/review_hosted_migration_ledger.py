@@ -1,0 +1,258 @@
+#!/usr/bin/env python3
+"""Offline reconciliation of query 11/12 evidence against local migration filenames.
+
+Reads evidence JSON and checked-in migration filenames only. No network client,
+SQL execution, migration repair, deployment, or hosted mutation exists in this tool.
+"""
+from __future__ import annotations
+
+import argparse
+import hashlib
+import json
+from pathlib import Path
+import re
+import sys
+
+PROJECT_REF = "mrwmmbytcymqgwvcoywd"
+PROJECT_NAME = "ZAVQERA Development"
+PROJECT_REGION = "eu-west-1"
+QUERY_COUNT = 12
+PACK_SHA256 = "a7aba3461786dbb5854f71dc4f87b7e0498d12509add535ab3df4a7ec231a284"
+MIGRATION = re.compile(r"^(?P<version>[0-9]+)_(?P<name>.+)\.sql$")
+ROLES = ("anon", "authenticated", "service_role", "postgres")
+PRIVILEGES = ("SELECT", "INSERT", "UPDATE", "DELETE", "TRUNCATE", "REFERENCES", "TRIGGER", "MAINTAIN")
+WRITE_PRIVILEGES = {"INSERT", "UPDATE", "DELETE", "TRUNCATE"}
+
+
+class EvidenceError(ValueError):
+    pass
+
+
+def read_json(path):
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise EvidenceError(f"cannot read {path.name}: {exc}") from None
+
+
+def rows_from(payload):
+    candidates = [payload]
+    if isinstance(payload, dict):
+        candidates = [payload[key] for key in ("result", "data", "rows") if key in payload] + candidates
+    for obj in candidates:
+        if isinstance(obj, list) and all(isinstance(row, dict) for row in obj):
+            return obj
+        if isinstance(obj, dict) and isinstance(obj.get("rows"), list):
+            columns = obj.get("columns")
+            if isinstance(columns, list):
+                names = [item if isinstance(item, str) else item.get("name") for item in columns]
+                if names and all(isinstance(name, str) for name in names) and all(
+                    isinstance(row, (list, tuple)) and len(row) == len(names) for row in obj["rows"]
+                ):
+                    return [dict(zip(names, row)) for row in obj["rows"]]
+            if all(isinstance(row, dict) for row in obj["rows"]):
+                return obj["rows"]
+    raise EvidenceError("unrecognized response shape")
+
+
+def truthy_db(value):
+    return value is True or (isinstance(value, str) and value.strip().lower() in {"true", "t", "on", "1"})
+
+
+def verify_evidence(directory):
+    summary = read_json(directory / "summary.json")
+    metadata = read_json(directory / "run_metadata.json")
+    identity = read_json(directory / "project_identity.json")
+    gate = read_json(directory / "read_only_role_gate.json").get("observed", {})
+    if summary.get("status") != "CAPTURED_FOR_MANUAL_REVIEW" or summary.get("queries_completed") != QUERY_COUNT:
+        raise EvidenceError("requires a completed 12-query CAPTURED_FOR_MANUAL_REVIEW run")
+    if summary.get("query_pack_sha256") != PACK_SHA256:
+        raise EvidenceError("query pack SHA-256 mismatch")
+    if summary.get("access_token_saved") is not False or metadata.get("token_saved") is not False:
+        raise EvidenceError("token-safety metadata missing or unexpected")
+    if metadata.get("project_ref") != PROJECT_REF:
+        raise EvidenceError("evidence is not scoped to the pinned Development project")
+    if (identity.get("id"), identity.get("name"), identity.get("region")) != (PROJECT_REF, PROJECT_NAME, PROJECT_REGION):
+        raise EvidenceError("project identity/region mismatch")
+    if gate.get("current_user") != "supabase_read_only_user" or not truthy_db(gate.get("transaction_read_only")):
+        raise EvidenceError("read-only role gate absent or failed")
+    if gate.get("migration_ledger_relation") != "supabase_migrations.schema_migrations":
+        raise EvidenceError("expected migration ledger relation not verified")
+    return summary, metadata, identity
+
+
+def source_migrations(repo_root):
+    directory = repo_root / "supabase" / "migrations"
+    if not directory.is_dir():
+        raise EvidenceError(f"migration directory not found: {directory}")
+    rows = []
+    seen = set()
+    bad_names = []
+    for path in sorted(directory.glob("*.sql")):
+        match = MIGRATION.fullmatch(path.name)
+        if not match:
+            bad_names.append(path.name)
+            continue
+        version, name = match.group("version"), match.group("name")
+        pair = (version, name)
+        if pair in seen:
+            raise EvidenceError(f"duplicate source tuple: {version} / {name}")
+        seen.add(pair)
+        rows.append({"version": version, "name": name, "file": path.name,
+                     "sha256": hashlib.sha256(path.read_bytes()).hexdigest()})
+    if bad_names:
+        raise EvidenceError("unrecognized migration filenames: " + ", ".join(bad_names))
+    if not rows:
+        raise EvidenceError("no checked-in migration files found")
+    return rows
+
+
+def reconcile(directory, repo_root):
+    summary, metadata, identity = verify_evidence(directory)
+    ledger = rows_from(read_json(directory / "query_11.json").get("response"))
+    acl_rows = rows_from(read_json(directory / "query_12.json").get("response"))
+    if not ledger:
+        raise EvidenceError("hosted migration ledger returned zero rows")
+    hosted = []
+    seen = set()
+    for row in ledger:
+        version, name = row.get("version"), row.get("name")
+        if not isinstance(version, str) or not version or not isinstance(name, str) or not name:
+            raise EvidenceError("ledger row missing string version/name")
+        pair = (version, name)
+        if pair in seen:
+            raise EvidenceError(f"duplicate hosted tuple: {version} / {name}")
+        seen.add(pair)
+        hosted.append({"version": version, "name": name})
+    hosted.sort(key=lambda row: (row["version"], row["name"]))
+
+    source = source_migrations(repo_root)
+    source_by_pair = {(row["version"], row["name"]): row for row in source}
+    hosted_by_pair = {(row["version"], row["name"]): row for row in hosted}
+    source_pairs, hosted_pairs = set(source_by_pair), set(hosted_by_pair)
+    source_names = {row["name"] for row in source}
+    hosted_names = {row["name"] for row in hosted}
+    conflicts = []
+    for name in sorted(source_names & hosted_names):
+        lv = sorted({row["version"] for row in source if row["name"] == name})
+        hv = sorted({row["version"] for row in hosted if row["name"] == name})
+        if set(lv) != set(hv):
+            conflicts.append({"name": name, "local_versions": lv, "hosted_versions": hv,
+                              "classification": "NOT_PROOF_OF_EQUAL_SQL"})
+
+    effective = [row for row in acl_rows if row.get("evidence_kind") == "EFFECTIVE_PRIVILEGE"]
+    stored = [row for row in acl_rows if row.get("evidence_kind") == "STORED_ACL"]
+    actual_matrix = {(row.get("grantee"), row.get("privilege_type")) for row in effective}
+    expected_matrix = {(role, privilege) for role in ROLES for privilege in PRIVILEGES}
+    if len(effective) != len(expected_matrix) or actual_matrix != expected_matrix:
+        raise EvidenceError("effective table ACL matrix incomplete or unexpected")
+    if any(row.get("schema_name") != "public" or row.get("relation_name") != "agent_executions" for row in effective):
+        raise EvidenceError("effective ACL rows refer to an unexpected relation")
+
+    effective_write = [
+        {key: row.get(key) for key in ("grantee", "privilege_type", "effective_privilege", "owner_role",
+                                       "row_level_security_enabled", "row_level_security_forced")}
+        for row in effective
+        if row.get("grantee") != row.get("owner_role")
+        and row.get("privilege_type") in WRITE_PRIVILEGES
+        and truthy_db(row.get("effective_privilege"))
+    ]
+    stored_write = [
+        {key: row.get(key) for key in ("grantee", "privilege_type", "is_grantable", "grantor")}
+        for row in stored if row.get("grantee") in {"PUBLIC", "anon", "authenticated", "service_role"}
+        and row.get("privilege_type") in WRITE_PRIVILEGES
+    ]
+    return {
+        "status": "REQUIRES_MANUAL_REVIEW",
+        "release_decision": "NO-GO",
+        "captured_at_utc": metadata.get("observed_at_utc"),
+        "project": identity,
+        "query_pack_sha256": summary["query_pack_sha256"],
+        "source_migration_count": len(source),
+        "hosted_ledger_row_count": len(hosted),
+        "exact_version_name_matches": len(source_pairs & hosted_pairs),
+        "same_name_different_version": conflicts,
+        "source_tuples_missing_from_hosted_ledger": [source_by_pair[p] for p in sorted(source_pairs - hosted_pairs)],
+        "hosted_tuples_missing_from_source": [hosted_by_pair[p] for p in sorted(hosted_pairs - source_pairs)],
+        "source_names_absent_from_hosted_ledger": sorted(source_names - hosted_names),
+        "hosted_names_absent_from_source": sorted(hosted_names - source_names),
+        "effective_table_privilege_rows": len(effective),
+        "stored_table_acl_rows": len(stored),
+        "effective_nonowner_write_grants": effective_write,
+        "stored_nonowner_write_acl_rows": stored_write,
+        "interpretation": [
+            "Same-name/different-version is not proof that deployed SQL matches checked-in SQL.",
+            "The migration ledger records version/name metadata, not historical SQL bytes.",
+            "Effective ACLs are a signal, not complete proof of reachability; review RLS, memberships, function ownership and trusted writers separately.",
+            "The observed role has rolbypassrls=true; do not use this evidence credential for application-row reads.",
+            "This is offline analysis only; it performs no SQL, hosted writes, migration repair, or deployment.",
+        ],
+    }
+
+
+def render_markdown(result):
+    lines = [
+        "# ZAVQERA — Offline Hosted Migration Ledger and W66 ACL Review",
+        "",
+        "Disposition: **REVIEW REQUIRED / RELEASE NO-GO**. This report compares query 11/12 evidence with source filenames and hashes; it does not approve migrations or certify security.",
+        "",
+        f"- Captured UTC: {result['captured_at_utc']}",
+        f"- Project: {result['project'].get('name')} ({result['project'].get('id')}), region {result['project'].get('region')}",
+        f"- Source files: **{result['source_migration_count']}**; hosted ledger rows: **{result['hosted_ledger_row_count']}**",
+        f"- Exact version/name matches: **{result['exact_version_name_matches']}**",
+        f"- Same-name/different-version candidates: **{len(result['same_name_different_version'])}**",
+        f"- Effective ACL rows on public.agent_executions: **{result['effective_table_privilege_rows']}**",
+        f"- Stored ACL rows: **{result['stored_table_acl_rows']}**",
+        "",
+        "## Same-name/different-version candidates",
+        "",
+    ]
+    for row in result["same_name_different_version"]:
+        lines.append(f"- {row['name']}: source={','.join(row['local_versions'])}; hosted={','.join(row['hosted_versions'])}")
+    if not result["same_name_different_version"]:
+        lines.append("None detected.")
+    lines.extend(["", "## Hosted names absent from source", ""])
+    lines.extend([f"- {name}" for name in result["hosted_names_absent_from_source"]] or ["None."])
+    lines.extend(["", "## Effective non-owner write grants", ""])
+    lines.extend([f"- {row['grantee']} {row['privilege_type']} effective={row['effective_privilege']}; owner={row['owner_role']}; RLS enabled={row['row_level_security_enabled']}; forced={row['row_level_security_forced']}" for row in result["effective_nonowner_write_grants"]] or ["None in the selected matrix; this is not a full authorization proof."])
+    lines.extend(["", "## Stored non-owner write ACL entries", ""])
+    lines.extend([f"- {row['grantee']} {row['privilege_type']} grantable={row['is_grantable']} grantor={row['grantor']}" for row in result["stored_nonowner_write_acl_rows"]] or ["None."])
+    lines.extend(["", "## Source tuples absent from hosted ledger", ""])
+    lines.extend([f"- {row['version']} {row['name']} (file SHA-256 {row['sha256']})" for row in result["source_tuples_missing_from_hosted_ledger"]] or ["None."])
+    lines.extend(["", "## Hosted tuples absent from source", ""])
+    lines.extend([f"- {row['version']} {row['name']}" for row in result["hosted_tuples_missing_from_source"]] or ["None."])
+    lines.extend(["", "## Interpretation limits", ""])
+    lines.extend([f"- {item}" for item in result["interpretation"]])
+    return "\n".join(lines) + "\n"
+
+
+def main(argv=None):
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--evidence-dir", type=Path, required=True, help="12-query audit output folder")
+    parser.add_argument("--repo-root", type=Path, default=Path(__file__).resolve().parents[1], help="checkout containing supabase/migrations")
+    args = parser.parse_args(argv)
+    try:
+        result = reconcile(args.evidence_dir.resolve(), args.repo_root.resolve())
+    except EvidenceError as exc:
+        print(f"BLOCKED: {exc}", file=sys.stderr)
+        return 2
+    out_json = args.evidence_dir.resolve() / "ledger_acl_review.json"
+    out_md = args.evidence_dir.resolve() / "ledger_acl_review.md"
+    out_json.write_text(json.dumps(result, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    out_md.write_text(render_markdown(result), encoding="utf-8")
+    print(json.dumps({
+        "status": result["status"], "release_decision": result["release_decision"],
+        "source_migration_count": result["source_migration_count"],
+        "hosted_ledger_row_count": result["hosted_ledger_row_count"],
+        "exact_version_name_matches": result["exact_version_name_matches"],
+        "same_name_different_version_count": len(result["same_name_different_version"]),
+        "source_tuples_missing_from_hosted_ledger": len(result["source_tuples_missing_from_hosted_ledger"]),
+        "hosted_tuples_missing_from_source": len(result["hosted_tuples_missing_from_source"]),
+        "effective_nonowner_write_grants": len(result["effective_nonowner_write_grants"]),
+        "output_json": str(out_json), "output_markdown": str(out_md),
+    }, indent=2))
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

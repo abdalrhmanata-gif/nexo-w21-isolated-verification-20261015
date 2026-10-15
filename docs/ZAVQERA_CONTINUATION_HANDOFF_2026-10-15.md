@@ -557,3 +557,10 @@ Windows commands and cleanup instructions are documented in the [hosted read-onl
 - The observed read-only role reports `rolbypassrls=true`; keep the runner restricted to its fixed metadata queries. No application rows, token persistence, hosted writes, migrations, deployment, or secret changes.
 - The updated 12-query pack is **not yet run against hosted Development**. First verify the new runner guards/unit tests and disposable PostgreSQL 17 syntax smoke. Then capture once, review ledger row/name mismatches against source; never repair the ledger by name alone.
 - PR #39 remains OPEN/Draft/unmerged; Issue #23 remains OPEN; `TRUSTED_DISPATCH_ADAPTERS = Object.freeze({})` remains empty/fail-closed; release remains NO-GO.
+
+
+## Offline evidence comparator — prepared on 2026-10-15
+
+- Added tools/review_hosted_migration_ledger.py and test_review_hosted_migration_ledger.py to turn the next 12-query read-only capture into a row-by-row version/name comparison plus W66 table ACL review.
+- This comparator is fully offline, verifies the pinned Development identity and query-pack digest, refuses old 10-query evidence/empty ledger/incomplete ACL matrix, and writes JSON/Markdown within the evidence folder.
+- Use it only after the updated 12-query audit capture completes. It does not prove deployed SQL equality, make database changes, or lift release NO-GO.

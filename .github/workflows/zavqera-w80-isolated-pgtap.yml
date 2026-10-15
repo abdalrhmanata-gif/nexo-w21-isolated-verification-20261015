@@ -19,6 +19,8 @@ on:
       - supabase/tests/hosted_readonly_migration_effect_audit_queries.sql
       - tools/supabase_readonly_migration_effect_audit.py
       - tests/test_supabase_readonly_migration_effect_audit.py
+      - tools/review_hosted_migration_ledger.py
+      - tests/test_review_hosted_migration_ledger.py
       - supabase/migrations/20261013100000_w80_fail_closed_workspace_role_checks.sql
       - supabase/migrations/20261015100000_w83_workspace_invitation_privilege_correction.sql
 
@@ -48,6 +50,7 @@ jobs:
           python3 tools/supabase_readonly_catalog_audit.py --self-test
           python3 -m unittest discover -s tests -p 'test_supabase_readonly_migration_effect_audit.py' -v
           python3 tools/supabase_readonly_migration_effect_audit.py --self-test
+          python3 -m unittest discover -s tests -p 'test_review_hosted_migration_ledger.py' -v
 
       - name: Set up Supabase CLI
         uses: supabase/setup-cli@v3
