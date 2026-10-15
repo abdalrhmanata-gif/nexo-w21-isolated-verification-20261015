@@ -199,3 +199,15 @@ Otherwise report **BLOCKED / PARTIAL**, record the missing evidence, and stop. D
 - This validates query execution on the **disposable local** PG17 stack only. It does not prove current hosted Development role identity, read-only transport, migration ledger, ACLs, function ownership or schema parity.
 
 The hosted step is still **BLOCKED** until a separately verifiable connection is configured with the exact Development project ref and `read_only=true`. No hosted SQL was executed. Do not use generic `execute_sql` as a substitute; do not change hosted grants/migrations; do not create W86 from local-only results.
+
+
+## Full W21 local launch gate — 2026-10-15
+
+- Exact source/workflow SHA: `6c88b3683fc4f32bea611fafa6e226fc878af5e0`.
+- [W21 Local Launch Gate run 38758953821 — SUCCESS](https://github.com/abdalrhmanata-gif/nexo-w21-isolated-verification-20261015/actions/runs/38758953821).
+- [W21 evidence artifact 11984937895](https://github.com/abdalrhmanata-gif/nexo-w21-isolated-verification-20261015/actions/runs/38758953821/artifacts/11984937895), digest `sha256:ae51b190a638c4455918afebae6ac1b156b6a43a8b7b408b61beb4f730962daf`.
+- [Browser diagnostics artifact 11985057666](https://github.com/abdalrhmanata-gif/nexo-w21-isolated-verification-20261015/actions/runs/38758953821/artifacts/11985057666), digest `sha256:64c7b86f5d614eecbbef92a28713a57c4996dbec93cbfc3d90936551dd67e307`; inspected log reports **2 passed (2.6m)**.
+- The run checked PostgreSQL 17, W83 read-only catalog report (`READ_ONLY_GUARD=CONFIRMED` in the disposable test session), Mission Authority security regressions, W85 as actual `supabase_admin`, quota/workspace checks, four actual-ledger concurrency races, fake-provider gateway integration, browser E2E, and teardown. Evidence records `supabase_stop_exit_code=0`, no remaining containers or volumes, and `cleanup_verified=true`.
+- This W21 source predates only the W80 workflow artifact-list fix at `1ada382e4c320d6b7f7815a30238fe99b1519305`. The separate W80 run on SHA `1ada382e...` completed the query-pack smoke and retained its raw output artifact. These remain disposable-local results; neither run queried hosted Development.
+
+**Still blocked:** hosted catalog reconciliation has not been run. Proceed only through an independently verified connection configured `project_ref=<verified-development-ref>&read_only=true`; do not substitute unrestricted `execute_sql`. Keep launch **NO-GO** until hosted ledger/catalog and production enforcement/provider gates are independently proven.
