@@ -521,21 +521,145 @@ jobs:
             fi
             pack_sha="$(sha256sum "${query_pack}" | awk '{print $1}')"
             echo "${label}_readonly_query_pack_sha256=${pack_sha}" >> "${RUNNER_TEMP}/W80_EVIDENCE.txt"
+            pack_status=0
+            provenance_fixture_seeded=0
             if grep -Eiq '^[[:space:]]*(CREATE|ALTER|DROP|INSERT|UPDATE|DELETE|TRUNCATE|GRANT|REVOKE|SET|BEGIN|COMMIT|DO|CALL)([[:space:]]|$)' "${query_pack}"; then
               echo "::error::${filename} contains a non-SELECT statement."
               pack_status=1
             else
-              docker cp "${query_pack}" "${db_container}:/tmp/${filename}"
-              set +e
-              docker exec "${db_container}" psql -U postgres -d postgres -X -qAt -v ON_ERROR_STOP=1 \
-                -f "/tmp/${filename}" 2>&1 | tee "${query_log}"
-              pack_status="${PIPESTATUS[0]}"
-              set -e
-              echo "${label}_readonly_query_pack_local_smoke_exit_code=${pack_status}" >> "${RUNNER_TEMP}/W80_EVIDENCE.txt"
-              if [ "${pack_status}" -eq 0 ] && [ -s "${query_log}" ]; then
-                pack_status=0
-              else
-                pack_status=1
+              # This privilege fixture runs only on the disposable database. It
+              # proves the catalog probe detects inherited table and column ACLs.
+              if [ "${label}" = "w86_acl_provenance" ]; then
+                cat > "${RUNNER_TEMP}/W86_ACL_PROVENANCE_ROLE_FIXTURE.sql" <<'SQL'
+            CREATE ROLE w86_acl_probe_parent NOLOGIN;
+            GRANT w86_acl_probe_parent TO service_role WITH INHERIT TRUE;
+            GRANT UPDATE ON TABLE public.agent_executions TO w86_acl_probe_parent;
+            DO $fixture$
+            DECLARE first_column text;
+            BEGIN
+              SELECT a.attname INTO first_column
+                FROM pg_attribute a
+               WHERE a.attrelid = 'public.agent_executions'::regclass
+                 AND a.attnum > 0 AND NOT a.attisdropped
+               ORDER BY a.attnum
+               LIMIT 1;
+              IF first_column IS NULL THEN
+                RAISE EXCEPTION 'W86 ACL fixture could not locate an agent_executions column';
+              END IF;
+              EXECUTE format(
+                'GRANT SELECT (%I) ON TABLE public.agent_executions TO w86_acl_probe_parent',
+                first_column
+              );
+            END
+            $fixture$;
+            SQL
+                docker cp "${RUNNER_TEMP}/W86_ACL_PROVENANCE_ROLE_FIXTURE.sql" "${db_container}:/tmp/W86_ACL_PROVENANCE_ROLE_FIXTURE.sql"
+                set +e
+                docker exec "${db_container}" psql -U postgres -d postgres -X -v ON_ERROR_STOP=1 \
+                  -f /tmp/W86_ACL_PROVENANCE_ROLE_FIXTURE.sql 2>&1 | tee "${RUNNER_TEMP}/W86_ACL_PROVENANCE_ROLE_FIXTURE_OUTPUT.txt"
+                fixture_status="${PIPESTATUS[0]}"
+                set -e
+                echo "w86_acl_provenance_role_fixture_exit_code=${fixture_status}" >> "${RUNNER_TEMP}/W80_EVIDENCE.txt"
+                if [ "${fixture_status}" -eq 0 ]; then
+                  provenance_fixture_seeded=1
+                else
+                  pack_status=1
+                fi
+              fi
+
+              if [ "${pack_status}" -eq 0 ]; then
+                docker cp "${query_pack}" "${db_container}:/tmp/${filename}"
+                set +e
+                docker exec "${db_container}" psql -U postgres -d postgres -X -qAt -v ON_ERROR_STOP=1 \
+                  -f "/tmp/${filename}" 2>&1 | tee "${query_log}"
+                pack_status="${PIPESTATUS[0]}"
+                set -e
+                echo "${label}_readonly_query_pack_local_smoke_exit_code=${pack_status}" >> "${RUNNER_TEMP}/W80_EVIDENCE.txt"
+                if [ "${pack_status}" -eq 0 ] && [ -s "${query_log}" ]; then
+                  pack_status=0
+                else
+                  pack_status=1
+                fi
+              fi
+
+              if [ "${label}" = "w86_acl_provenance" ] && [ "${pack_status}" -eq 0 ]; then
+                set +e
+                python3 - "${query_log}" <<'PY' > "${RUNNER_TEMP}/W86_ACL_PROVENANCE_JSON_ASSERTION.txt" 2>&1
+            import json
+            import sys
+            from pathlib import Path
+
+            payload = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8").strip())
+            assert payload.get("probe_name") == "w86_acl_provenance_v1"
+            required = {
+                "current_user", "session_user", "transaction_read_only", "relation",
+                "service_role_effective_privileges", "service_role_membership_paths",
+                "table_acl_entries", "column_acl_entries",
+                "service_role_inherited_table_acl_entries",
+                "service_role_inherited_column_acl_entries",
+            }
+            assert required <= payload.keys(), f"missing result keys: {sorted(required - payload.keys())}"
+            assert payload["service_role_effective_privileges"].get("UPDATE") is True, "inherited UPDATE privilege not visible"
+            assert any(
+                item.get("role_name") == "w86_acl_probe_parent"
+                and item.get("depth") == 1
+                and item.get("all_edges_inherit") is True
+                for item in payload["service_role_membership_paths"]
+            ), "inherited role membership path not visible"
+            assert any(
+                item.get("grantee_role") == "w86_acl_probe_parent"
+                and item.get("privilege_type") == "UPDATE"
+                for item in payload["service_role_inherited_table_acl_entries"]
+            ), "inherited table ACL entry not visible"
+            assert any(
+                item.get("grantee_role") == "w86_acl_probe_parent"
+                and item.get("privilege_type") == "SELECT"
+                for item in payload["service_role_inherited_column_acl_entries"]
+            ), "inherited column ACL entry not visible"
+            print("W86_ACL_PROVENANCE_INHERITED_ACL_PASS")
+            PY
+                assertion_status=$?
+                set -e
+                cat "${RUNNER_TEMP}/W86_ACL_PROVENANCE_JSON_ASSERTION.txt"
+                cat "${RUNNER_TEMP}/W86_ACL_PROVENANCE_JSON_ASSERTION.txt" >> "${RUNNER_TEMP}/W80_EVIDENCE.txt"
+                echo "w86_acl_provenance_json_assertion_exit_code=${assertion_status}" >> "${RUNNER_TEMP}/W80_EVIDENCE.txt"
+                if [ "${assertion_status}" -ne 0 ] || ! grep -q '^W86_ACL_PROVENANCE_INHERITED_ACL_PASS$' "${RUNNER_TEMP}/W86_ACL_PROVENANCE_JSON_ASSERTION.txt"; then
+                  pack_status=1
+                fi
+              fi
+
+              if [ "${label}" = "w86_acl_provenance" ] && [ "${provenance_fixture_seeded}" -eq 1 ]; then
+                cat > "${RUNNER_TEMP}/W86_ACL_PROVENANCE_ROLE_CLEANUP.sql" <<'SQL'
+            REVOKE ALL PRIVILEGES ON TABLE public.agent_executions FROM w86_acl_probe_parent;
+            DO $cleanup$
+            DECLARE column_names text;
+            BEGIN
+              SELECT string_agg(format('%I', a.attname), ', ' ORDER BY a.attnum)
+                INTO column_names
+                FROM pg_attribute a
+               WHERE a.attrelid = 'public.agent_executions'::regclass
+                 AND a.attnum > 0 AND NOT a.attisdropped;
+              IF column_names IS NOT NULL THEN
+                EXECUTE format(
+                  'REVOKE ALL PRIVILEGES (%s) ON TABLE public.agent_executions FROM w86_acl_probe_parent',
+                  column_names
+                );
+              END IF;
+            END
+            $cleanup$;
+            REVOKE w86_acl_probe_parent FROM service_role;
+            DROP ROLE w86_acl_probe_parent;
+            SQL
+                docker cp "${RUNNER_TEMP}/W86_ACL_PROVENANCE_ROLE_CLEANUP.sql" "${db_container}:/tmp/W86_ACL_PROVENANCE_ROLE_CLEANUP.sql"
+                set +e
+                docker exec "${db_container}" psql -U postgres -d postgres -X -v ON_ERROR_STOP=1 \
+                  -f /tmp/W86_ACL_PROVENANCE_ROLE_CLEANUP.sql 2>&1 | tee "${RUNNER_TEMP}/W86_ACL_PROVENANCE_ROLE_CLEANUP_OUTPUT.txt"
+                cleanup_fixture_status="${PIPESTATUS[0]}"
+                set -e
+                echo "w86_acl_provenance_role_cleanup_exit_code=${cleanup_fixture_status}" >> "${RUNNER_TEMP}/W80_EVIDENCE.txt"
+                if [ "${cleanup_fixture_status}" -ne 0 ]; then
+                  pack_status=1
+                fi
               fi
             fi
             echo "${label}_readonly_query_pack_local_smoke_status=${pack_status}" >> "${RUNNER_TEMP}/W80_EVIDENCE.txt"
@@ -635,3 +759,8 @@ jobs:
             ${{ runner.temp }}/W85_READONLY_CATALOG_QUERY_PACK.txt
             ${{ runner.temp }}/MIGRATION_EFFECT_READONLY_QUERY_PACK.txt
             ${{ runner.temp }}/W86_ACL_PROVENANCE_READONLY_QUERY_PACK.txt
+            ${{ runner.temp }}/W86_ACL_PROVENANCE_ROLE_FIXTURE.sql
+            ${{ runner.temp }}/W86_ACL_PROVENANCE_ROLE_FIXTURE_OUTPUT.txt
+            ${{ runner.temp }}/W86_ACL_PROVENANCE_JSON_ASSERTION.txt
+            ${{ runner.temp }}/W86_ACL_PROVENANCE_ROLE_CLEANUP.sql
+            ${{ runner.temp }}/W86_ACL_PROVENANCE_ROLE_CLEANUP_OUTPUT.txt
