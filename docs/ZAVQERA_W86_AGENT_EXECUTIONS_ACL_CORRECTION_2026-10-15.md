@@ -89,7 +89,7 @@ The workflow seeded deliberately permissive table privileges and a stored column
 
 Other gates on the same execution also passed: W84 21/21 before and after reapply, W85 12/12, W44 17/17 twice, W46 8/8 twice, W80 49/49 twice, migration replay through all checked-in SQL, and disposable-stack cleanup (`cleanup=VERIFIED`). PostgreSQL reported `server_version_num=170011` (17.11).
 
-A later workflow-only commit `24af5583113e606bf8ec80f179cca0854073abac` adds the raw W66/W86 drift-repair test-output files to the artifact list. Its rerun is separately tracked; it does not change the W86 SQL or the test assertions. Do not state that the later artifact-packaging rerun passed until its own action run completes.
+The artifact-packaging run also passed on workflow/source SHA `24af5583113e606bf8ec80f179cca0854073abac`: https://github.com/abdalrhmanata-gif/nexo-w21-isolated-verification-20261015/actions/runs/38793792365. It includes the raw W66/W86 drift-repair test-output files. Final artifact ID `12000309494`; ZIP SHA-256 `669bc1f5e29424c00736cb1c24b257c638abc45d238bd7331b4096316746a2d2`. The evidence file records `W86_DRIFT_FIXTURE_PASS`, repair and reapply exit code 0, W66 11/11 and W86 20/20 after both repair and reapply, full-chain migration replay, other regression counts, and cleanup `VERIFIED`.
 
 **Scope limit:** This evidence proves the correction against a deliberately seeded ACL drift in disposable PostgreSQL only. It does not prove hosted Development has been changed or reconciled, and it does not resolve the historic migration-ledger conflicts or other missing hosted schema/function contracts.
 
