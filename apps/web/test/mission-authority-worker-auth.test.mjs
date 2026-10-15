@@ -57,16 +57,36 @@ async function resolveLocalSourceImport(specifier, importer) {
 
 function readStaticLocalImportSpecifiers(source) {
   const specifiers = new Set();
-  const patterns = [
-    /^\s*(?:import|export)\s+(?!\s*\()(?:(?!;)[\s\S])*?\sfrom\s*["']([^"']+)["']/gm,
-    /^\s*import\s*["']([^"']+)["']/gm,
-    /\bimport\(\s*["']([^"']+)["']\s*\)/g,
-    /\brequire\(\s*["']([^"']+)["']\s*\)/g,
-  ];
+  const sourceFile = ts.createSourceFile(
+    "source.ts",
+    source,
+    ts.ScriptTarget.Latest,
+    true,
+    ts.ScriptKind.TS,
+  );
 
-  for (const pattern of patterns) {
-    for (const match of source.matchAll(pattern)) specifiers.add(match[1]);
+  function visit(node) {
+    if ((ts.isImportDeclaration(node) || ts.isExportDeclaration(node))
+        && node.moduleSpecifier && ts.isStringLiteral(node.moduleSpecifier)) {
+      specifiers.add(node.moduleSpecifier.text);
+    }
+    if (ts.isImportEqualsDeclaration(node)
+        && ts.isExternalModuleReference(node.moduleReference)
+        && node.moduleReference.expression && ts.isStringLiteral(node.moduleReference.expression)) {
+      specifiers.add(node.moduleReference.expression.text);
+    }
+    if (ts.isCallExpression(node)) {
+      const isDynamicImport = node.expression.kind === ts.SyntaxKind.ImportKeyword;
+      const isRequire = ts.isIdentifier(node.expression) && node.expression.text === "require";
+      const argument = node.arguments[0];
+      if ((isDynamicImport || isRequire) && argument && ts.isStringLiteral(argument)) {
+        specifiers.add(argument.text);
+      }
+    }
+    ts.forEachChild(node, visit);
   }
+
+  visit(sourceFile);
   return [...specifiers];
 }
 
@@ -892,6 +912,26 @@ test("outbound-source detectors recognize representative transport and dynamic-l
   assert.deepEqual(specifiers.sort(), ["openai", "resend"]);
   assert.equal(specifiers.every((specifier) => EXPLICIT_PROVIDER_SDK_IMPORTS.has(specifier)), true,
     "known provider SDKs are recognized as outbound-capable dependencies");
+});
+
+test("static dependency graph extracts TypeScript AST import forms without reading comments or strings", () => {
+  const specifiers = readStaticLocalImportSpecifiers(`
+    import type { Mission } from "../domain/mission";
+    export { dispatch } from "@/lib/mission-authority/dispatch";
+    import legacy = require("./legacy-worker");
+    const loaded = await import("./runtime-worker.mjs");
+    const cjs = require("./runtime-worker.cjs");
+    // require("./comment-only")
+    const example = 'import("./string-only")';
+  `);
+
+  assert.deepEqual(specifiers.sort(), [
+    "../domain/mission",
+    "./legacy-worker",
+    "./runtime-worker.cjs",
+    "./runtime-worker.mjs",
+    "@/lib/mission-authority/dispatch",
+  ].sort());
 });
 
 test("AST outbound analysis rejects sensitive transport references passed through helpers", () => {

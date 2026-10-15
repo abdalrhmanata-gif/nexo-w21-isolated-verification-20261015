@@ -206,6 +206,12 @@ W21 [run 38708716869](https://github.com/abdalrhmanata-gif/Nexo/actions/runs/387
 
 Static source reachability remains a regression detector, not universal runtime egress proof. Production network enforcement, native/transitive runtime coverage, deployed credential separation, real-provider contract evidence, and hosted Development schema parity remain open. Release stays **NO-GO**.
 
+## Static dependency-edge parser hardening — 2026-10-15
+
+The source-graph regression now extracts module edges with the TypeScript AST rather than regular expressions. It covers import/export declarations, TypeScript `import name = require("...")`, literal dynamic imports, and literal CommonJS `require`, while ignoring import-shaped strings and comments. This closes a parser omission in the static graph guard; it remains static evidence and does not establish runtime or production egress enforcement.
+
+Local verification on the working change: focused worker-boundary test **27/27 PASS**; Web Unit **368 passed, 0 failed, 1 skipped**; `git diff --check` PASS. Exact-SHA CI/W21 is pending. Provider registry remains empty; launch **NO-GO**.
+
 
 ## Completed W21 checkpoint — production-entrypoint graph guard — 2026-10-15
 
