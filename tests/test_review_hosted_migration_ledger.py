@@ -1,6 +1,8 @@
 import importlib.util
 import json
 from pathlib import Path
+import shutil
+import subprocess
 import tempfile
 import unittest
 
@@ -78,6 +80,52 @@ class HostedLedgerReviewTests(unittest.TestCase):
         self.assertEqual(result["effective_table_privilege_rows"], 32)
         self.assertEqual(len(result["effective_nonowner_write_grants"]), 0)
         self.assertEqual(len(result["stored_nonowner_write_acl_rows"]), 1)
+        self.assertIsNone(result["source_checkout_head_sha"])
+        self.assertIsNone(result["source_migrations_worktree_clean"])
+        self.assertRegex(result["source_migration_manifest_sha256"], r"^[0-9a-f]{64}$")
+
+    def test_source_migration_manifest_is_deterministic_and_content_sensitive(self):
+        first = review.reconcile(self.evidence, self.repo)
+        second = review.reconcile(self.evidence, self.repo)
+        self.assertEqual(
+            first["source_migration_manifest_sha256"],
+            second["source_migration_manifest_sha256"],
+        )
+        migration = self.repo / "supabase" / "migrations" / "20261013100000_w80_example.sql"
+        migration.write_text("select 999;\\n", encoding="utf-8")
+        changed = review.reconcile(self.evidence, self.repo)
+        self.assertNotEqual(
+            first["source_migration_manifest_sha256"],
+            changed["source_migration_manifest_sha256"],
+        )
+
+    def test_git_checkout_head_and_dirty_migration_tree_are_reported(self):
+        if shutil.which("git") is None:
+            self.skipTest("git is unavailable")
+
+        def git(*args):
+            return subprocess.run(
+                ["git", *args], cwd=self.repo, check=True, capture_output=True,
+                text=True, encoding="utf-8", timeout=10,
+            )
+
+        git("init", "-q")
+        git("config", "user.name", "ZAVQERA offline test")
+        git("config", "user.email", "zavqera-test@example.invalid")
+        git("add", "supabase/migrations")
+        git("commit", "-qm", "test-only migration fixture")
+        clean = review.reconcile(self.evidence, self.repo)
+        self.assertRegex(clean["source_checkout_head_sha"], r"^[0-9a-f]{40,64}$")
+        self.assertIs(clean["source_migrations_worktree_clean"], True)
+        migration = self.repo / "supabase" / "migrations" / "20261013100000_w80_example.sql"
+        migration.write_text("select 88;\\n", encoding="utf-8")
+        dirty = review.reconcile(self.evidence, self.repo)
+        self.assertEqual(dirty["source_checkout_head_sha"], clean["source_checkout_head_sha"])
+        self.assertIs(dirty["source_migrations_worktree_clean"], False)
+        self.assertNotEqual(
+            dirty["source_migration_manifest_sha256"],
+            clean["source_migration_manifest_sha256"],
+        )
 
     def test_effective_service_role_write_is_reported(self):
         payload = json.loads((self.evidence / "query_12.json").read_text())
@@ -119,6 +167,8 @@ class HostedLedgerReviewTests(unittest.TestCase):
         rendered = review.render_markdown(result)
         self.assertIn("REVIEW REQUIRED / RELEASE NO-GO", rendered)
         self.assertIn("Same-name/different-version", rendered)
+        self.assertIn("Source checkout HEAD", rendered)
+        self.assertIn("Source migration manifest SHA-256", rendered)
         self.assertIn("not a full authorization proof", rendered)
 
 
