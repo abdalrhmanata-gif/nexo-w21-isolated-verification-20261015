@@ -259,7 +259,7 @@ def main() -> int:
         print(f"BLOCKED: input validation failed: {exc}", file=sys.stderr)
         return 2
 
-    stamp = dt.datetime.now(dt.timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    stamp = dt.datetime.now(dt.timezone.utc).strftime("%Y%m%dT%H%M%S%fZ")
     out = root / "zavqera-readonly-audit-output" / stamp
     out.mkdir(parents=True, exist_ok=False)
     write_json(out / "run_metadata.json", {
