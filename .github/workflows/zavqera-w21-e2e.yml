@@ -150,6 +150,7 @@ jobs:
           cp "$GITHUB_WORKSPACE/supabase/tests/w81_read_only_research_jit_claim.sql" "$workdir/supabase/tests/w81_read_only_research_jit_claim.sql"
           cp "$GITHUB_WORKSPACE/supabase/tests/w82_ai_generation_reservation_identity.sql" "$workdir/supabase/tests/w82_ai_generation_reservation_identity.sql"
           cp "$GITHUB_WORKSPACE/supabase/tests/w84_postgres_function_default_acl_hardening.sql" "$workdir/supabase/tests/w84_postgres_function_default_acl_hardening.sql"
+          cp "$GITHUB_WORKSPACE/supabase/tests/w85_supabase_admin_default_acl_audit.sql" "$workdir/supabase/tests/w85_supabase_admin_default_acl_audit.sql"
           cp "$GITHUB_WORKSPACE/supabase/tests/w83_invitation_catalog_reconciliation.sql" "$workdir/supabase/tests/w83_invitation_catalog_reconciliation.sql"
           cat > "$workdir/supabase/migrations/20260921180005_e2e_historical_auth_compat.sql" <<'SQL'
           create schema if not exists private;
@@ -246,7 +247,8 @@ jobs:
             supabase/tests/w79_trusted_research_completion.sql \
             supabase/tests/w80_invitation_helper_privileges.sql \
             supabase/tests/w81_read_only_research_jit_claim.sql \
-            supabase/tests/w84_postgres_function_default_acl_hardening.sql
+            supabase/tests/w84_postgres_function_default_acl_hardening.sql \
+            supabase/tests/w85_supabase_admin_default_acl_audit.sql
           do
             echo "Running Mission Authority regression: $test_file"
             timeout 10m supabase test db "$test_file"

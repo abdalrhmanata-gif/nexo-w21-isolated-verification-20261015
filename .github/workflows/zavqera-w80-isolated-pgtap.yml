@@ -12,6 +12,7 @@ on:
       - supabase/tests/w46_workspace_activity.sql
       - supabase/tests/w80_invitation_helper_privileges.sql
       - supabase/tests/w83_invitation_catalog_reconciliation.sql
+      - supabase/tests/w85_supabase_admin_default_acl_audit.sql
       - supabase/migrations/20261013100000_w80_fail_closed_workspace_role_checks.sql
       - supabase/migrations/20261015100000_w83_workspace_invitation_privilege_correction.sql
 
@@ -151,6 +152,8 @@ jobs:
             "${workdir}/supabase/tests/w80_invitation_helper_privileges.sql"
           cp "${GITHUB_WORKSPACE}/supabase/tests/w84_postgres_function_default_acl_hardening.sql" \
             "${workdir}/supabase/tests/w84_postgres_function_default_acl_hardening.sql"
+          cp "${GITHUB_WORKSPACE}/supabase/tests/w85_supabase_admin_default_acl_audit.sql" \
+            "${workdir}/supabase/tests/w85_supabase_admin_default_acl_audit.sql"
           printf '%s\n' 'zavqera-w80-local' > "${workdir}/ZAVQERA_W80_DISPOSABLE"
           printf '%s\n' "${workdir}" > "${RUNNER_TEMP}/w80-workdir"
           {
@@ -334,6 +337,7 @@ jobs:
           # W84 guards the future-function defaults set by role postgres. Reapply it
           # in the disposable PG17 stack and rerun all assertions to establish idempotency.
           w84_status=0
+          w85_status=0
           if [ "${later_status}" -eq 0 ]; then
             run_pgtap W84_AFTER_CHAIN supabase/tests/w84_postgres_function_default_acl_hardening.sql 21 || w84_status=1
             docker cp "${GITHUB_WORKSPACE}/supabase/migrations/20261015110000_w84_postgres_function_default_acl_hardening.sql" \
@@ -349,9 +353,11 @@ jobs:
               w84_status=1
             fi
             run_pgtap W84_AFTER_REAPPLY supabase/tests/w84_postgres_function_default_acl_hardening.sql 21 || w84_status=1
+            run_pgtap W85_SUPABASE_ADMIN_AUDIT supabase/tests/w85_supabase_admin_default_acl_audit.sql 11 || w85_status=1
           fi
           echo "w84_idempotency_and_pg_tap_status=${w84_status}" >> "${RUNNER_TEMP}/W80_EVIDENCE.txt"
-          if [ "${regression_status}" -ne 0 ] || [ "${later_status}" -ne 0 ] || [ "${w84_status}" -ne 0 ]; then exit 1; fi
+          echo "w85_supabase_admin_audit_status=${w85_status}" >> "${RUNNER_TEMP}/W80_EVIDENCE.txt"
+          if [ "${regression_status}" -ne 0 ] || [ "${later_status}" -ne 0 ] || [ "${w84_status}" -ne 0 ] || [ "${w85_status}" -ne 0 ]; then exit 1; fi
 
       - name: Stop and prove disposable resource cleanup
         if: always()
@@ -400,7 +406,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          for artifact in "${RUNNER_TEMP}"/W80_*.txt; do
+          for artifact in "${RUNNER_TEMP}"/W80_*.txt "${RUNNER_TEMP}"/W85_*.txt; do
             [ -f "${artifact}" ] || continue
             sed -E -i \
               -e 's/sb_(publishable|secret)_[A-Za-z0-9_-]+/sb_\1_[REDACTED_LOCAL_KEY]/g' \
@@ -429,3 +435,4 @@ jobs:
             ${{ runner.temp }}/W83_CATALOG_AFTER_REAPPLY.txt
             ${{ runner.temp }}/W80_CLEANUP_PROOF.txt
             ${{ runner.temp }}/W80_MIGRATION_MANIFEST.sha256
+            ${{ runner.temp }}/W85_SUPABASE_ADMIN_AUDIT_PGTAP_OUTPUT.txt
