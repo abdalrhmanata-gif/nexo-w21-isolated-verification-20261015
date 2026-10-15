@@ -75,3 +75,21 @@ Verified from the uploaded evidence artifact (artifact ID `11999338335`, ZIP SHA
 The isolated verification PR is [#1 — W86 ACL boundary candidate](https://github.com/abdalrhmanata-gif/nexo-w21-isolated-verification-20261015/pull/1), OPEN / DRAFT / UNMERGED. A later documentation-only commit may change the branch head; the exact tested code/workflow SHA remains the one above.
 
 **Disposition unchanged:** these are disposable-environment results, not proof of hosted Development parity. No hosted write was made. Do not apply W86 until migration-history/source provenance is reconciled and separate owner approval is recorded. Original repository PR #39 stays OPEN/DRAFT/UNMERGED; Issue #23 stays OPEN; `TRUSTED_DISPATCH_ADAPTERS` remains empty/fail-closed; release remains NO-GO.
+
+## 6. Verified isolated regression execution — 2026-10-15
+
+**Tested workflow/source SHA:** `6a0795b0635a1063900192d92abca22580891199`  
+**Migration blob:** `f870dd83a82c27057bf24390c254713d3fe29182`  
+**W66 test blob:** `8a5c06feedc672f65ef26b9bf33461607d5b74c3`  
+**W86 test blob:** `20cc2999f4e0a849e44d7ce977ceb9aee0b636d6`  
+**W80 run:** https://github.com/abdalrhmanata-gif/nexo-w21-isolated-verification-20261015/actions/runs/38793355077 — SUCCESS.  
+**Evidence artifact:** `12000544561`, `zavqera-w80-isolated-pgtap-6a0795b0635a1063900192d92abca22580891199`.
+
+The workflow seeded deliberately permissive table privileges and a stored column-level ACL for `service_role` in the disposable PostgreSQL 17.11 database. Its fixture check returned `W86_DRIFT_FIXTURE_PASS`; then the W86 migration ran successfully (`REVOKE / DO / GRANT`). After repair, W66 passed 11/11 and W86 passed 20/20. W86 was reapplied again; W66 passed 11/11 and W86 passed 20/20 a second time.
+
+Other gates on the same execution also passed: W84 21/21 before and after reapply, W85 12/12, W44 17/17 twice, W46 8/8 twice, W80 49/49 twice, migration replay through all checked-in SQL, and disposable-stack cleanup (`cleanup=VERIFIED`). PostgreSQL reported `server_version_num=170011` (17.11).
+
+A later workflow-only commit `24af5583113e606bf8ec80f179cca0854073abac` adds the raw W66/W86 drift-repair test-output files to the artifact list. Its rerun is separately tracked; it does not change the W86 SQL or the test assertions. Do not state that the later artifact-packaging rerun passed until its own action run completes.
+
+**Scope limit:** This evidence proves the correction against a deliberately seeded ACL drift in disposable PostgreSQL only. It does not prove hosted Development has been changed or reconciled, and it does not resolve the historic migration-ledger conflicts or other missing hosted schema/function contracts.
+
