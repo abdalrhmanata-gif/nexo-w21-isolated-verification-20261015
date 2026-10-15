@@ -19,3 +19,6 @@ artifacts/nexo-first-test.apk
 
 # Local report output from the read-only Development catalog audit (never commit results)
 zavqera-readonly-audit-output/
+
+# Local supplemental read-only migration-effect audit output (never commit results)
+zavqera-readonly-effect-audit-output/
