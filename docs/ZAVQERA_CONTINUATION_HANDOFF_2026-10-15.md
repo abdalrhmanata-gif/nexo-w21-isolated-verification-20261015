@@ -466,3 +466,10 @@ Exact tested source/test SHA: `eb723c68ef73f54758ddb37d34ec713ba9e9d4d5`.
 - This W21 source predates only the W80 workflow artifact-list fix at `1ada382e4c320d6b7f7815a30238fe99b1519305`. The separate W80 run on SHA `1ada382e...` completed the query-pack smoke and retained its raw output artifact. These remain disposable-local results; neither run queried hosted Development.
 
 **Still blocked:** hosted catalog reconciliation has not been run. Proceed only through an independently verified connection configured `project_ref=<verified-development-ref>&read_only=true`; do not substitute unrestricted `execute_sql`. Keep launch **NO-GO** until hosted ledger/catalog and production enforcement/provider gates are independently proven.
+
+
+## Read-only audit gate review — 2026-10-15
+
+Reviewed the prepared runbook against the actual isolated PG17 evidence. The local Supabase image reports `rolbypassrls=true` for `supabase_read_only_user`; the runbook was corrected in commit `0a8c19006e01b41180da7446ef57fd33c441654c` to record this role attribute rather than automatically disqualifying the documented role as write-capable. If the exact official read-only role is used, the audit remains restricted to the eight reviewed catalog/migration-ledger SELECT statements; no application-row queries. A project-scoped `read_only=true` connection must still be independently verified. Do not run generic `execute_sql` against hosted Development.
+
+Latest runbook link: [ZAVQERA_HOSTED_READONLY_CATALOG_RECONCILIATION_2026-10-15.md](https://github.com/abdalrhmanata-gif/nexo-w21-isolated-verification-20261015/blob/codex/w80-forward-correction-20261015/docs/ZAVQERA_HOSTED_READONLY_CATALOG_RECONCILIATION_2026-10-15.md). Hosted database state is still unverified; release **NO-GO**.
