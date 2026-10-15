@@ -75,10 +75,10 @@ class ReadOnlyEffectAuditTests(unittest.TestCase):
         self._capture_evidence_path(output)
         return code, output
 
-    def test_checked_in_pack_is_pinned_to_ten_selects(self):
+    def test_checked_in_pack_is_pinned_to_twelve_selects(self):
         root = Path(__file__).resolve().parents[1]
         statements, digest = audit.load_pack(root)
-        self.assertEqual(len(statements), 10)
+        self.assertEqual(len(statements), 12)
         self.assertEqual(digest, audit.PACK_SHA256)
         self.assertTrue(all(re.match(r"(?is)^\s*SELECT\b", audit.no_comments(s).strip()) for s in statements))
 
@@ -142,12 +142,36 @@ class ReadOnlyEffectAuditTests(unittest.TestCase):
             number = sum(1 for _, verb, _, _ in calls if verb == "POST")
             if number == 1:
                 return {"result": [valid_role_row()]}
+            if number == 11:
+                return {"result": [
+                    {"version": "20261013100000", "name": "w80_fail_closed_workspace_role_checks"},
+                    {"version": "20261015100000", "name": "w83_workspace_invitation_privilege_correction"},
+                ]}
+            if number == 12:
+                rows = []
+                for role in ("anon", "authenticated", "service_role", "postgres"):
+                    for privilege in ("SELECT", "INSERT", "UPDATE", "DELETE", "TRUNCATE", "REFERENCES", "TRIGGER", "MAINTAIN"):
+                        rows.append({
+                            "evidence_kind": "EFFECTIVE_PRIVILEGE", "schema_name": "public",
+                            "relation_name": "agent_executions", "owner_role": "postgres",
+                            "row_level_security_enabled": True, "row_level_security_forced": False,
+                            "grantee": role, "privilege_type": privilege,
+                            "effective_privilege": role == "postgres", "is_grantable": None, "grantor": None,
+                        })
+                rows.append({
+                    "evidence_kind": "STORED_ACL", "schema_name": "public",
+                    "relation_name": "agent_executions", "owner_role": "postgres",
+                    "row_level_security_enabled": True, "row_level_security_forced": False,
+                    "grantee": "postgres", "privilege_type": "SELECT", "effective_privilege": None,
+                    "is_grantable": False, "grantor": "postgres",
+                })
+                return {"result": rows}
             return {"result": [{"query_number": number, "ok": True}]}
         code, output = self._run_with_fake_api(fake_api)
         self.assertEqual(code, 0)
         self.assertIn('"status": "CAPTURED_FOR_MANUAL_REVIEW"', output)
         posts = [call for call in calls if call[1] == "POST"]
-        self.assertEqual(len(posts), 10)
+        self.assertEqual(len(posts), 12)
         self.assertTrue(all(call[2].endswith("/database/query/read-only") for call in posts))
         self.assertFalse(any(call[2].endswith("/database/query") for call in posts))
         self.assertTrue(all(call[0] == TOKEN for call in calls))  # token is passed to the API client only
@@ -172,6 +196,43 @@ class ReadOnlyEffectAuditTests(unittest.TestCase):
         self.assertEqual(len([call for call in calls if call[0] == "POST"]), 2)
         self.assertIn("query_02", output)
 
+
+    def test_empty_migration_ledger_fails_closed_before_table_acl_query(self):
+        calls = []
+        def fake_api(token, method, path, body=None):
+            calls.append((method, path, body))
+            if method == "GET":
+                return valid_project()
+            number = sum(1 for verb, _, _ in calls if verb == "POST")
+            if number == 1:
+                return {"result": [valid_role_row()]}
+            if number == 11:
+                return {"result": []}
+            return {"result": [{"should_not_execute": True}]}
+        code, output = self._run_with_fake_api(fake_api)
+        self.assertEqual(code, 5)
+        self.assertIn("ledger query returned zero rows", output)
+        self.assertEqual(len([call for call in calls if call[0] == "POST"]), 11)
+
+    def test_incomplete_w66_acl_matrix_fails_closed(self):
+        calls = []
+        def fake_api(token, method, path, body=None):
+            calls.append((method, path, body))
+            if method == "GET":
+                return valid_project()
+            number = sum(1 for verb, _, _ in calls if verb == "POST")
+            if number == 1:
+                return {"result": [valid_role_row()]}
+            if number == 11:
+                return {"result": [{"version": "20261015100000", "name": "w83_workspace_invitation_privilege_correction"}]}
+            if number == 12:
+                return {"result": [{"evidence_kind": "EFFECTIVE_PRIVILEGE", "relation_name": "agent_executions",
+                                    "grantee": "service_role", "privilege_type": "INSERT"}]}
+            return {"result": []}
+        code, output = self._run_with_fake_api(fake_api)
+        self.assertEqual(code, 5)
+        self.assertIn("effective ACL result set incomplete", output)
+        self.assertEqual(len([call for call in calls if call[0] == "POST"]), 12)
 
 if __name__ == "__main__":
     unittest.main()

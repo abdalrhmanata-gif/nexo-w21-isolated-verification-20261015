@@ -548,3 +548,12 @@ Windows commands and cleanup instructions are documented in the [hosted read-onl
 - **Scope gaps:** this pack does not enumerate migration-ledger rows and does not query effective table ACLs on `public.agent_executions`; W66 direct table hardening remains unverified by this ZIP. Continue using the historical migration reconciliation report for ledger provenance.
 - Detailed review: `docs/ZAVQERA_HOSTED_READONLY_EFFECT_AUDIT_REVIEW_2026-10-15.md`.
 - No hosted migration, data write, deployment, secret change, or source-code change was performed. Keep `TRUSTED_DISPATCH_ADAPTERS = Object.freeze({})` empty/fail-closed and do not apply repair SQL until historical provenance is reconciled and a forward-only plan passes disposable PG17 verification.
+
+
+## Next hosted audit extension — 2026-10-15
+
+- The completed 10-query capture is documented in `docs/ZAVQERA_HOSTED_READONLY_EFFECT_AUDIT_REVIEW_2026-10-15.md` (evidence ZIP SHA-256 `5294a52f2695a938a291f3317c379aadf060d9f0aa6c07f7a029ff7865035384`). It confirms selected schema/function/default ACL gaps; release remains NO-GO.
+- The pinned SELECT-only pack is extended to 12 queries: query 11 captures migration ledger `version,name` pairs only; query 12 inspects effective table privileges and expanded stored ACL for `public.agent_executions` (W66). Updated query-pack SHA-256: `a7aba3461786dbb5854f71dc4f87b7e0498d12509add535ab3df4a7ec231a284`.
+- The observed read-only role reports `rolbypassrls=true`; keep the runner restricted to its fixed metadata queries. No application rows, token persistence, hosted writes, migrations, deployment, or secret changes.
+- The updated 12-query pack is **not yet run against hosted Development**. First verify the new runner guards/unit tests and disposable PostgreSQL 17 syntax smoke. Then capture once, review ledger row/name mismatches against source; never repair the ledger by name alone.
+- PR #39 remains OPEN/Draft/unmerged; Issue #23 remains OPEN; `TRUSTED_DISPATCH_ADAPTERS = Object.freeze({})` remains empty/fail-closed; release remains NO-GO.

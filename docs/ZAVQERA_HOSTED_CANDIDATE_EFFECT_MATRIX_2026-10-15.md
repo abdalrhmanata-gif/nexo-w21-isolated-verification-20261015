@@ -45,3 +45,14 @@ Evidence: project ZAVQERA Development, observed at 2026-10-15T17:18:09Z, Postgre
 ## Guardrails
 
 No hosted database was changed by this work. Original abdalrhmanata-gif/Nexo was not modified. Keep PR #39 open/Draft/unmerged, Issue #23 open, TRUSTED_DISPATCH_ADAPTERS empty/fail-closed, and release NO-GO.
+
+
+## Addendum — 10-query evidence and 12-query follow-up — 2026-10-15
+
+The original row statuses above were based on the earlier eight-query capture. They are superseded where the 10-query read-only capture supplies newer evidence (captured 2026-10-15 17:58:32.963985+00:00 UTC).
+
+That capture confirms: both authority budget tables are absent; all 26 selected expected columns are absent; the named 11-constraint comparison has no exact candidate match (10 absent, one existing state check with a different definition); all eight selected indexes are absent; the W75/W76 receipt trigger is absent; the selected function-signature matrix has 23 mismatches of 40; W80 `private.can_edit_workspace(uuid,uuid)` keeps the old search path/body; W82 old one-argument AI reservation functions remain while the bound signatures/columns are absent; W83 invitation wrapper mode and service_role privileges differ; W84 public-schema default EXECUTE ACLs remain for API roles; and effective `private` schema USAGE was observed.
+
+The 10-query capture did **not** enumerate the migration ledger rows and did **not** directly inventory effective/stored relation ACLs for `public.agent_executions`. Those are the remaining read-only gaps addressed by query 11 (ledger `version,name` pairs) and query 12 (W66 table ACL matrix). Updated pack SHA-256: `a7aba3461786dbb5854f71dc4f87b7e0498d12509add535ab3df4a7ec231a284`. The 12-query version is prepared but has not yet been run against hosted Development.
+
+No hosted database was changed. Release remains NO-GO; keep PR #39 OPEN/Draft/unmerged, Issue #23 OPEN and `TRUSTED_DISPATCH_ADAPTERS` empty/fail-closed.

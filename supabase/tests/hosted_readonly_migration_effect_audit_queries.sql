@@ -290,3 +290,56 @@ FROM (
     AND (d.defaclnamespace = 0 OR ns.nspname = 'public')
 ) AS acl_rows
 ORDER BY creator_role, source_kind, schema_name, grantee, privilege_type;
+
+-- Query 11: enumerate version/name pairs only; no SQL bodies or application rows.
+SELECT
+  version::text AS version,
+  name::text AS name
+FROM supabase_migrations.schema_migrations
+ORDER BY version::text, name::text;
+
+-- Query 12: W66 relation ACL, including effective grants and expanded stored ACL.
+-- This is catalog metadata only; do not broaden this role into application-row reads.
+SELECT
+  'EFFECTIVE_PRIVILEGE'::text AS evidence_kind,
+  t.schema_name,
+  t.relation_name,
+  t.owner_role,
+  t.row_level_security_enabled,
+  t.row_level_security_forced,
+  roles.rolname AS grantee,
+  privileges.privilege_type,
+  pg_catalog.has_table_privilege(roles.oid, t.relation_oid, privileges.privilege_type) AS effective_privilege,
+  NULL::boolean AS is_grantable,
+  NULL::text AS grantor
+FROM (
+  SELECT c.oid AS relation_oid, n.nspname AS schema_name, c.relname AS relation_name,
+    pg_catalog.pg_get_userbyid(c.relowner) AS owner_role, c.relowner AS owner_oid,
+    c.relacl AS relation_acl, c.relrowsecurity AS row_level_security_enabled,
+    c.relforcerowsecurity AS row_level_security_forced
+  FROM pg_catalog.pg_class AS c
+  JOIN pg_catalog.pg_namespace AS n ON n.oid = c.relnamespace
+  WHERE n.nspname = 'public' AND c.relname = 'agent_executions' AND c.relkind IN ('r', 'p')
+) AS t
+CROSS JOIN pg_catalog.pg_roles AS roles
+CROSS JOIN (VALUES ('SELECT'), ('INSERT'), ('UPDATE'), ('DELETE'), ('TRUNCATE'), ('REFERENCES'), ('TRIGGER'), ('MAINTAIN')) AS privileges(privilege_type)
+WHERE roles.rolname IN ('anon', 'authenticated', 'service_role', 'postgres')
+UNION ALL
+SELECT
+  'STORED_ACL'::text AS evidence_kind, t.schema_name, t.relation_name, t.owner_role,
+  t.row_level_security_enabled, t.row_level_security_forced,
+  CASE WHEN a.grantee = 0 THEN 'PUBLIC' ELSE grantee_role.rolname END AS grantee,
+  a.privilege_type, NULL::boolean AS effective_privilege, a.is_grantable,
+  pg_catalog.pg_get_userbyid(a.grantor) AS grantor
+FROM (
+  SELECT c.oid AS relation_oid, n.nspname AS schema_name, c.relname AS relation_name,
+    pg_catalog.pg_get_userbyid(c.relowner) AS owner_role, c.relowner AS owner_oid,
+    c.relacl AS relation_acl, c.relrowsecurity AS row_level_security_enabled,
+    c.relforcerowsecurity AS row_level_security_forced
+  FROM pg_catalog.pg_class AS c
+  JOIN pg_catalog.pg_namespace AS n ON n.oid = c.relnamespace
+  WHERE n.nspname = 'public' AND c.relname = 'agent_executions' AND c.relkind IN ('r', 'p')
+) AS t
+CROSS JOIN LATERAL pg_catalog.aclexplode(COALESCE(t.relation_acl, pg_catalog.acldefault('r', t.owner_oid))) AS a
+LEFT JOIN pg_catalog.pg_roles AS grantee_role ON grantee_role.oid = a.grantee
+ORDER BY evidence_kind, grantee, privilege_type;

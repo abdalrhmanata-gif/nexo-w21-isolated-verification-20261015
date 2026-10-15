@@ -121,3 +121,10 @@ The queries surfaced 87 non-system routines, several role-membership paths and 2
 Original abdalrhmanata-gif/Nexo was not changed. Do not merge PR #39; keep it open/Draft. Keep Issue #23 open. Keep TRUSTED_DISPATCH_ADAPTERS empty/fail-closed. Hosted Development and Main/Production remain unmodified by this reconciliation.
 
 **Final disposition: BLOCKED / NO-GO.** The next deliverable is a source-backed historical migration manifest and effect matrix. Ledger repair before that would risk marking security changes applied without evidence or replaying DDL against live state.
+
+
+## Follow-up pack extension — 2026-10-15 (not yet executed)
+
+The historical mapping above remains tied to the earlier captured 74-row ledger. The later 10-query effect capture identified selected schema and routine gaps but did not enumerate current ledger version/name pairs or directly inspect effective/stored ACLs on `public.agent_executions`. The updated pinned pack adds query 11 (ledger version/name only) and query 12 (effective table privileges plus expanded stored ACL). New pack SHA-256: `a7aba3461786dbb5854f71dc4f87b7e0498d12509add535ab3df4a7ec231a284`.
+
+This 12-query version awaits isolated CI/disposable PostgreSQL 17 verification and a fresh user-executed read-only capture. Do not reuse the prior 74-row count as an assumption; compare the new ledger response with the checked-in files row-by-row. No ledger repair or hosted migration is authorized.

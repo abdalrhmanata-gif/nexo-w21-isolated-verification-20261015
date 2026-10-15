@@ -1,6 +1,6 @@
 # ZAVQERA — Supplemental Hosted Migration-Effect Audit Runbook (2026-10-15)
 
-**Status: prepared; not executed against hosted Development.** The first 8-query audit has already completed and identified catalog/history mismatches. This supplemental 10-query pack expands metadata coverage. It is read-only only, does not change hosted state, and cannot approve a rollout.
+**Status: the original 10-query version was executed; updated 12-query version is prepared but not yet executed against hosted Development.** Captured evidence identified catalog/history mismatches. Queries 11–12 now add the hosted migration ledger version/name pairs and the W66 table ACL inventory. This remains read-only and cannot approve a rollout.
 
 ## Repository and safety scope
 
@@ -10,9 +10,10 @@
 - Pack: `supabase/tests/hosted_readonly_migration_effect_audit_queries.sql`
 - Runner: `tools/supabase_readonly_migration_effect_audit.py`
 - Tests: `tests/test_supabase_readonly_migration_effect_audit.py`
-- Pack SHA-256 (LF-normalized): `7fbe8b65aeb75c446ca942277d0541de27de905e9b2172f304924e9029de6c62`
-- All 10 fixed statements must begin with SELECT. The runner pins the digest, verifies the project identity before SQL and checks effective role/transaction guard before query 2.
+- Pack SHA-256 (LF-normalized, updated 12-query version): `a7aba3461786dbb5854f71dc4f87b7e0498d12509add535ab3df4a7ec231a284`
+- All 12 fixed statements must begin with SELECT. The runner pins the digest, verifies the project identity before SQL and checks effective role/transaction guard before query 2.
 - Only `POST /v1/projects/{ref}/database/query/read-only` is allowed for SQL. The normal SQL endpoint is never used.
+- The observed read-only role has `rolbypassrls=true`; the pack is limited to catalog/ledger metadata. Do not add application-row queries.
 - Never set the query target to Main/Production; never send a PAT through ChatGPT, GitHub, a file, command-line argument, or shell history.
 
 ## Windows PowerShell procedure
@@ -81,10 +82,12 @@ The secure prompt normally displays masking characters rather than the token. Do
 8. W75/W76 provider-receipt trigger and trigger-function identity.
 9. Definitions of relevant public/private routines, to distinguish catalog existence from implementation body.
 10. Built-in and explicit function-default ACLs for `postgres` and `supabase_admin`.
+11. Migration ledger `version,name` pairs only; SQL bodies are not returned.
+12. Effective and expanded stored ACL rows for `public.agent_executions` (W66).
 
 ## After collection
 
-The next step is to merge the supplemental output with the first audit capture and source hashes into an effect matrix marked MATCH / DIFFERENT / NOT OBSERVED / UNKNOWN. A database/platform owner must independently review all unexpected privilege paths, function owners/modes, search paths, relation ACLs and default ACL policy.
+Next, run the updated pack after CI/local PostgreSQL 17 syntax validation, then manually match ledger tuples to source files and classify the W66 effective/stored ACLs. Do not assume the ledger row count until the new capture is reviewed. A database/platform owner must independently review all unexpected privilege paths, function owners/modes, search paths, relation ACLs and default ACL policy.
 
 No hosted remediation is authorized by this runbook. Do not run `supabase db push`, `migration repair`, manually edit `supabase_migrations.schema_migrations`, replay migrations against hosted Development, or change Supabase Main/Production. Any future hosted migration requires a separate reviewed plan and explicit owner authorization.
 

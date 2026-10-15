@@ -22,7 +22,7 @@ API = "https://api.supabase.com"
 EXPECTED_PROJECT = "ZAVQERA Development"
 EXPECTED_REGION = "eu-west-1"
 READ_ONLY_ROLE = "supabase_read_only_user"
-PACK_SHA256 = "7fbe8b65aeb75c446ca942277d0541de27de905e9b2172f304924e9029de6c62"
+PACK_SHA256 = "a7aba3461786dbb5854f71dc4f87b7e0498d12509add535ab3df4a7ec231a284"
 PACK_RELATIVE = Path("supabase/tests/hosted_readonly_migration_effect_audit_queries.sql")
 OUTPUT_RELATIVE = Path("zavqera-readonly-effect-audit-output")
 REF_RE = re.compile(r"^[a-z0-9]{20}$")
@@ -139,8 +139,8 @@ def load_pack(root: Path) -> tuple[list[str], str]:
     if digest != PACK_SHA256:
         raise ValueError(f"approved query-pack hash mismatch ({digest}); stop for review")
     statements = split_statements(raw.decode("utf-8"))
-    if len(statements) != 10:
-        raise ValueError(f"expected exactly 10 supplemental audit queries, found {len(statements)}")
+    if len(statements) != 12:
+        raise ValueError(f"expected exactly 12 supplemental audit queries, found {len(statements)}")
     for number, statement in enumerate(statements, 1):
         if not re.match(r"(?is)^\s*SELECT\b", no_comments(statement).strip()):
             raise ValueError(f"query {number} is not a SELECT; refusing to run")
@@ -257,7 +257,7 @@ def main() -> int:
         "query_pack_sha256": pack_hash,
         "query_count": len(queries),
         "token_saved": False,
-        "scope": "catalog/migration-effect metadata; no application rows",
+        "scope": "catalog/migration-effect metadata plus migration ledger version/name pairs and public.agent_executions ACL; no application rows",
     })
 
     def stop(stage: str, reason: str, code: int, completed: int) -> int:
@@ -320,10 +320,30 @@ def main() -> int:
             })
             if not all(gate.values()):
                 return stop("read_only_role_gate", "role, read-only transaction, or ledger gate failed", 5, index)
+        elif index == 11:
+            if not rows:
+                return stop("migration_ledger", "ledger query returned zero rows; do not infer an empty ledger", 5, index)
+            if any(not isinstance(row.get("version"), str) or not row["version"]
+                   or not isinstance(row.get("name"), str) or not row["name"] for row in rows):
+                return stop("migration_ledger", "ledger response lacks nonempty version/name strings", 5, index)
+        elif index == 12:
+            effective = [row for row in rows if row.get("evidence_kind") == "EFFECTIVE_PRIVILEGE"]
+            actual = {(row.get("grantee"), row.get("privilege_type")) for row in effective}
+            roles = ("anon", "authenticated", "service_role", "postgres")
+            privileges = ("SELECT", "INSERT", "UPDATE", "DELETE", "TRUNCATE", "REFERENCES", "TRIGGER", "MAINTAIN")
+            expected = {(role, privilege) for role in roles for privilege in privileges}
+            if actual != expected or any(row.get("relation_name") != "agent_executions" for row in effective):
+                return stop("w66_table_acl", "effective ACL result set incomplete or unrecognized", 5, index)
 
+    ledger_rows = rows_from(json.loads((out / "query_11.json").read_text(encoding="utf-8"))["response"])
+    acl_rows = rows_from(json.loads((out / "query_12.json").read_text(encoding="utf-8"))["response"])
+    effective_acl_rows = [row for row in acl_rows if row.get("evidence_kind") == "EFFECTIVE_PRIVILEGE"]
     summary = {
         "status": "CAPTURED_FOR_MANUAL_REVIEW",
         "queries_completed": len(queries),
+        "migration_ledger_rows": len(ledger_rows),
+        "effective_table_privilege_rows": len(effective_acl_rows),
+        "stored_table_acl_rows": len(acl_rows) - len(effective_acl_rows),
         "read_only_role_gate": "PASS",
         "project": EXPECTED_PROJECT,
         "region": EXPECTED_REGION,
