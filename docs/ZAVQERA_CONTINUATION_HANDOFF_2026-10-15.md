@@ -632,3 +632,21 @@ A second read-only check queried the original repository's exact commit history 
 Do not reconstruct old SQL from similar names, adjust timestamps, or modify the migration ledger. Next provenance sources to inspect are an authoritative local clone/reflog, deleted/private branch backups, CI artifacts, deployment bundle, release archive, or migration-directory backup. Hash any recovered SQL and compare the entire file/effects against current source before marking a historical mapping exact/equivalent. Until evidence is recovered, classify these paths as `UNRESOLVED`.
 
 The hosted effect map still independently confirms the W66 ACL drift and other catalog gaps; W86 is verified as an isolated forward-only candidate, not an applied hosted correction. The original repo remains untouched; PR #39 must stay OPEN/Draft/unmerged and Issue #23 OPEN. Keep `TRUSTED_DISPATCH_ADAPTERS` empty/fail-closed and launch **NO-GO**.
+
+
+## 15. Final W86 negative-control proof and expanded history search — 2026-10-15
+
+**W86 latest full isolated DB test:** [W80 workflow run 38793792365](https://github.com/abdalrhmanata-gif/nexo-w21-isolated-verification-20261015/actions/runs/38793792365) — SUCCESS on workflow/source SHA `24af5583113e606bf8ec80f179cca0854073abac`.  
+**Evidence artifact:** ID `12000309494`, digest `sha256:669bc1f5e29424c00736cb1c24b257c638abc45d238bd7331b4096316746a2d2`.
+
+This workflow now includes a **negative control** on a newly created local Supabase/PostgreSQL 17 stack: it deliberately recreates the hosted-like direct grants on `service_role` and grants column privileges on one actual `agent_executions` column. The fixture check passes only if the expected table and column ACL drift is really present. W86 is then applied to the disposable database; W66 passes 11/11 and W86 20/20. W86 is applied once more, and both suites pass a second time. Exact evidence shows:
+- `w86_drift_fixture_check_exit_code=0`, output `W86_DRIFT_FIXTURE_PASS`;
+- W86 repair and idempotent reapply exit codes both 0;
+- W66 11/11 and W86 20/20 after drift repair and again after reapply;
+- W84 21/21 both before/after reapply; W85 `supabase_admin` diagnostic 12/12; W44 17/17, W46 8/8 and W80 49/49 before/after W83 reapply;
+- disposable cleanup `cleanup=VERIFIED`, no remaining project containers or volumes.
+The two drift-repair pgTAP output logs are included in the latest artifact. Flutter CI also passed on documentation checkpoint `ff1e07bf6de55d42733df6de0e6ba9be4e2f6180`: [run 38793883372](https://github.com/abdalrhmanata-gif/nexo-w21-isolated-verification-20261015/actions/runs/38793883372) and [run 38793889309](https://github.com/abdalrhmanata-gif/nexo-w21-isolated-verification-20261015/actions/runs/38793889309).
+
+**Historical path-recovery check widened:** 28 exact hosted historical filenames (22 timestamp-conflict versions plus six hosted-only ledger names) returned zero commits when checked against the default `main` history, the `codex/w66-w82-dev-audit-refresh-20261014` history, and the active PR #39 branch `codex/mission-action-runtime-seam-test-20261014`. In addition, the 22 timestamp-conflict filenames are absent from all 23 current branch-tip trees; prior six-file checks also found all six hosted-only names absent from those 23 tips. This does not rule out files in another branch's deleted history, local reflog/object database, backup or deployment artifact. Read the exact scope/limit in [the recovery report](https://github.com/abdalrhmanata-gif/nexo-w21-isolated-verification-20261015/blob/codex/w86-agent-executions-acl-correction-20261015/docs/ZAVQERA_HISTORICAL_MIGRATION_PATH_RECOVERY_CHECK_2026-10-15.md). Historical SQL provenance remains unresolved.
+
+The W86 code itself is unchanged from its successful PostgreSQL 17.11 test; workflow/doc refinements after the tested commit do not represent hosted schema verification. The W86 change and review PR remain in the isolated repository only: [Draft PR #1](https://github.com/abdalrhmanata-gif/nexo-w21-isolated-verification-20261015/pull/1), open/unmerged. No hosted schema or ledger mutation occurred. Original PR #39 remains open/Draft/unmerged; Issue #23 remains open; keep `TRUSTED_DISPATCH_ADAPTERS` empty/fail-closed and launch **NO-GO**.
