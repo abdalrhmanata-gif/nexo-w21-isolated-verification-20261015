@@ -211,3 +211,51 @@ The hosted step is still **BLOCKED** until a separately verifiable connection is
 - This W21 source predates only the W80 workflow artifact-list fix at `1ada382e4c320d6b7f7815a30238fe99b1519305`. The separate W80 run on SHA `1ada382e...` completed the query-pack smoke and retained its raw output artifact. These remain disposable-local results; neither run queried hosted Development.
 
 **Still blocked:** hosted catalog reconciliation has not been run. Proceed only through an independently verified connection configured `project_ref=<verified-development-ref>&read_only=true`; do not substitute unrestricted `execute_sql`. Keep launch **NO-GO** until hosted ledger/catalog and production enforcement/provider gates are independently proven.
+
+
+## Direct read-only Management API runner — 2026-10-15
+
+**Purpose:** Remove dependence on reconfiguring this ChatGPT session's existing Supabase connector. This remains **not executed against hosted Development yet**.
+
+### Official transport and permissions
+
+Supabase documents the beta endpoint **POST /v1/projects/{ref}/database/query/read-only**. It executes SQL as **supabase_read_only_user**, requires OAuth scope **database:read** and fine-grained token permission **database_read**, and requires schema-qualified object references. [Official endpoint reference](https://supabase.com/docs/reference/api/v1-read-only-query).
+
+The runner also performs a GET of **/v1/projects/{ref}** before sending any SQL to confirm the project's name and region. Supabase's scoped token documentation states that the project metadata endpoint is covered by **Project Settings (Read)**; use a token scoped to this project with only **Project Settings (Read)** and **Database (Read)**. [Scoped PAT guidance](https://supabase.com/docs/guides/platform/personal-access-tokens). Do not use a full-access token. Create/use the token locally; never paste it into chat, commit it, or add it to GitHub secrets.
+
+### Added runner and safety properties
+
+- Runner: [tools/supabase_readonly_catalog_audit.py](https://github.com/abdalrhmanata-gif/nexo-w21-isolated-verification-20261015/blob/codex/w80-forward-correction-20261015/tools/supabase_readonly_catalog_audit.py).
+- Tests: [tests/test_supabase_readonly_catalog_audit.py](https://github.com/abdalrhmanata-gif/nexo-w21-isolated-verification-20261015/blob/codex/w80-forward-correction-20261015/tests/test_supabase_readonly_catalog_audit.py).
+- Query pack: [supabase/tests/hosted_readonly_catalog_audit_queries.sql](https://github.com/abdalrhmanata-gif/nexo-w21-isolated-verification-20261015/blob/codex/w80-forward-correction-20261015/supabase/tests/hosted_readonly_catalog_audit_queries.sql), fixed SHA-256 **2462ff5f494b1acc6dd75e8290aa9eeb4fda4e4899a590e697d3c5a0be5790d2**.
+- The runner will not use the generic /database/query endpoint; it calls only /database/query/read-only. It checks the query pack's exact SHA-256 before any request and requires exactly eight SQL statements.
+- It confirms the referenced project's API response says exactly **ZAVQERA Development**, region **eu-west-1**, and active/healthy status before SQL. Mismatches stop before SQL.
+- It runs Query 1 first. It sends no further SQL unless current_user is **supabase_read_only_user**, and that role is not superuser and cannot create roles/databases. Unknown response shapes stop after Query 1.
+- It will not run Query 8 unless Query 7 proves the migration ledger relation exists. The token is not written to output. The generated report directory is gitignored.
+- It compares the returned migration ledger against the exact checked-in migration filenames. A mismatch remains a blocker. Even with a matching ledger, the report status is **CAPTURED_LEDGER_MATCH_REVIEW_REQUIRED**, not an overall security-audit PASS. Owner/security/path/ACL results need manual comparison with the reviewed expected-state matrix.
+- A CI self-test runs only parser/hash/response-shape tests and explicitly makes **no network request**. The actual hosted audit requires the operator's local environment variables, so it cannot run from this repository's public GitHub Actions.
+
+### Windows PowerShell execution
+
+Run from a local checkout of this verification branch, with Python 3.10+:
+
+~~~powershell
+$env:SUPABASE_PROJECT_REF = Read-Host "Verified ZAVQERA Development project ref"
+$secure = Read-Host "Scoped Supabase PAT (Project Settings Read + Database Read)" -AsSecureString
+$env:SUPABASE_ACCESS_TOKEN = [System.Net.NetworkCredential]::new("", $secure).Password
+$env:ZAVQERA_AUDIT_CONFIRMATION = "DEVELOPMENT_ONLY_READ_ONLY"
+
+py -3 tools/supabase_readonly_catalog_audit.py --self-test
+py -3 -m unittest discover -s tests -p "test_supabase_readonly_catalog_audit.py" -v
+py -3 tools/supabase_readonly_catalog_audit.py
+
+Remove-Item Env:SUPABASE_ACCESS_TOKEN, Env:SUPABASE_PROJECT_REF, Env:ZAVQERA_AUDIT_CONFIRMATION
+~~~
+
+Review that the project identity check passes before queries are sent. The script stores metadata/SQL responses only under zavqera-readonly-audit-output/<UTC timestamp>/; do not upload raw output anywhere until it has been reviewed and redacted. If the token lacks the required narrow permissions, if the API rejects the response format, or if any project/role/ledger gate fails, the script stops and records the blocker.
+
+### ChatGPT connector limitation
+
+OpenAI's current help article states custom MCP server connections are available on ChatGPT Business and Enterprise/Edu web workspaces, and not on mobile. This current session's already connected Supabase integration does not expose a read-only Management API action or its MCP URL configuration; therefore its generic execute_sql remains prohibited as a substitute. [OpenAI custom MCP availability](https://help.openai.com/en/articles/12584461-connecting-custom-mcp-servers-in-chatgpt).
+
+**Status:** runner prepared in the temporary verification repository; check the exact-SHA W80 CI run before relying on its self-test. Hosted query still **not executed**. Keep Main/Production untouched; do not apply migrations or alter ACLs; launch remains **NO-GO**.
