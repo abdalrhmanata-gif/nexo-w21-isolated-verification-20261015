@@ -237,7 +237,7 @@ jobs:
             set +e
             if [ "${label}" = "W85_SUPABASE_ADMIN_AUDIT" ]; then
               docker cp "${GITHUB_WORKSPACE}/${test_file}" "${db_container}:/tmp/w85_supabase_admin_default_acl_audit.sql"
-              docker exec "${db_container}" psql -U supabase_admin -d postgres -X -v ON_ERROR_STOP=1 \
+              docker exec "${db_container}" psql -U supabase_admin -d postgres -X -qAt -v ON_ERROR_STOP=1 \
                 -f /tmp/w85_supabase_admin_default_acl_audit.sql 2>&1 | tee "${log}"
               status="${PIPESTATUS[0]}"
             else

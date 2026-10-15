@@ -264,7 +264,7 @@ jobs:
           docker cp "$GITHUB_WORKSPACE/supabase/tests/w85_supabase_admin_default_acl_audit.sql" "$db_container:/tmp/w85_supabase_admin_default_acl_audit.sql"
           log="$RUNNER_TEMP/W85_SUPABASE_ADMIN_AUDIT_PGTAP_OUTPUT.txt"
           set +e
-          docker exec "$db_container" psql -U supabase_admin -d postgres -X -v ON_ERROR_STOP=1 -f /tmp/w85_supabase_admin_default_acl_audit.sql 2>&1 | tee "$log"
+          docker exec "$db_container" psql -U supabase_admin -d postgres -X -qAt -v ON_ERROR_STOP=1 -f /tmp/w85_supabase_admin_default_acl_audit.sql 2>&1 | tee "$log"
           status="${PIPESTATUS[0]}"
           set -e
           reported="$(grep -Ec "^(ok|not ok) [0-9]+" "$log" || true)"

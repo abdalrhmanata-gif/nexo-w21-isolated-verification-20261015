@@ -129,7 +129,7 @@ test("W85 audits supabase_admin defaults using an actual creator connection and 
   const auditSql = readFileSync(join(repoRoot, "supabase", "tests", "w85_supabase_admin_default_acl_audit.sql"), "utf8");
   assert.ok(workflow.includes('cp "$GITHUB_WORKSPACE/supabase/tests/w85_supabase_admin_default_acl_audit.sql"'));
   assert.ok(workflow.includes("Run W85 supabase_admin default ACL audit as creator on disposable PG17"));
-  assert.ok(workflow.includes("psql -U supabase_admin -d postgres -X -v ON_ERROR_STOP=1"));
+  assert.ok(workflow.includes("psql -U supabase_admin -d postgres -X -qAt -v ON_ERROR_STOP=1"));
   assert.ok(workflow.includes('cat "$RUNNER_TEMP/W85_SUPABASE_ADMIN_AUDIT_PGTAP_OUTPUT.txt" >> "$RUNNER_TEMP/W21_EVIDENCE.txt"'));
   assert.ok(w80Workflow.includes('if [ "${label}" = "W85_SUPABASE_ADMIN_AUDIT" ]; then'));
   assert.ok(w80Workflow.includes("run_pgtap W85_SUPABASE_ADMIN_AUDIT supabase/tests/w85_supabase_admin_default_acl_audit.sql 12"));
