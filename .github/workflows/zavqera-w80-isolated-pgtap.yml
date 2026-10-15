@@ -9,6 +9,7 @@ on:
     paths:
       - .github/workflows/zavqera-w80-isolated-pgtap.yml
       - supabase/tests/w44_workspace_invitations.sql
+      - supabase/tests/w46_workspace_activity.sql
       - supabase/tests/w80_invitation_helper_privileges.sql
       - supabase/tests/w83_invitation_catalog_reconciliation.sql
       - supabase/migrations/20261013100000_w80_fail_closed_workspace_role_checks.sql
@@ -144,6 +145,8 @@ jobs:
           mkdir -p "${workdir}/supabase/tests"
           cp "${GITHUB_WORKSPACE}/supabase/tests/w44_workspace_invitations.sql" \
             "${workdir}/supabase/tests/w44_workspace_invitations.sql"
+          cp "${GITHUB_WORKSPACE}/supabase/tests/w46_workspace_activity.sql" \
+            "${workdir}/supabase/tests/w46_workspace_activity.sql"
           cp "${GITHUB_WORKSPACE}/supabase/tests/w80_invitation_helper_privileges.sql" \
             "${workdir}/supabase/tests/w80_invitation_helper_privileges.sql"
           printf '%s\n' 'zavqera-w80-local' > "${workdir}/ZAVQERA_W80_DISPOSABLE"
@@ -159,6 +162,7 @@ jobs:
             echo "w44_test_blob=$(git -C "${GITHUB_WORKSPACE}" rev-parse HEAD:supabase/tests/w44_workspace_invitations.sql)"
             echo "expected_w80_pgtap_assertions=49"
             echo "expected_w44_pgtap_assertions=17"
+            echo "expected_w46_pgtap_assertions=8"
             echo "expected_catalog_snapshots=2 (post-clean-replay and post-idempotent-reapply)"
             echo "verification_source_branch=${GITHUB_REF_NAME}"
             echo "verification_source_ref=${GITHUB_REF}"
@@ -280,6 +284,7 @@ jobs:
           capture_catalog W83_CATALOG_BEFORE_REAPPLY || catalog_status=1
           baseline_status=0
           run_pgtap W44_BEFORE_REAPPLY supabase/tests/w44_workspace_invitations.sql 17 || baseline_status=1
+          run_pgtap W46_BEFORE_REAPPLY supabase/tests/w46_workspace_activity.sql 8 || baseline_status=1
           run_pgtap W80_BEFORE_REAPPLY supabase/tests/w80_invitation_helper_privileges.sql 49 || baseline_status=1
 
           docker cp "${GITHUB_WORKSPACE}/supabase/migrations/20261015100000_w83_workspace_invitation_privilege_correction.sql" \
@@ -298,6 +303,7 @@ jobs:
           regression_status=0
           capture_catalog W83_CATALOG_AFTER_REAPPLY || regression_status=1
           run_pgtap W44_AFTER_REAPPLY supabase/tests/w44_workspace_invitations.sql 17 || regression_status=1
+          run_pgtap W46_AFTER_REAPPLY supabase/tests/w46_workspace_activity.sql 8 || regression_status=1
           run_pgtap W80_AFTER_REAPPLY supabase/tests/w80_invitation_helper_privileges.sql 49 || regression_status=1
           if [ "${catalog_status}" -ne 0 ] || [ "${baseline_status}" -ne 0 ]; then
             echo "::error::The clean-replay catalog snapshot or pre-reapply pgTAP baseline failed."
@@ -388,8 +394,10 @@ jobs:
             ${{ runner.temp }}/W80_EVIDENCE.txt
             ${{ runner.temp }}/W80_MIGRATION_REPLAY.txt
             ${{ runner.temp }}/W44_BEFORE_REAPPLY_PGTAP_OUTPUT.txt
+            ${{ runner.temp }}/W46_BEFORE_REAPPLY_PGTAP_OUTPUT.txt
             ${{ runner.temp }}/W80_BEFORE_REAPPLY_PGTAP_OUTPUT.txt
             ${{ runner.temp }}/W44_AFTER_REAPPLY_PGTAP_OUTPUT.txt
+            ${{ runner.temp }}/W46_AFTER_REAPPLY_PGTAP_OUTPUT.txt
             ${{ runner.temp }}/W80_AFTER_REAPPLY_PGTAP_OUTPUT.txt
             ${{ runner.temp }}/W83_CATALOG_BEFORE_REAPPLY.txt
             ${{ runner.temp }}/W83_CATALOG_AFTER_REAPPLY.txt
