@@ -128,3 +128,11 @@ Original abdalrhmanata-gif/Nexo was not changed. Do not merge PR #39; keep it op
 The historical mapping above remains tied to the earlier captured 74-row ledger. The later 10-query effect capture identified selected schema and routine gaps but did not enumerate current ledger version/name pairs or directly inspect effective/stored ACLs on `public.agent_executions`. The updated pinned pack adds query 11 (ledger version/name only) and query 12 (effective table privileges plus expanded stored ACL). New pack SHA-256: `a7aba3461786dbb5854f71dc4f87b7e0498d12509add535ab3df4a7ec231a284`.
 
 This 12-query version awaits isolated CI/disposable PostgreSQL 17 verification and a fresh user-executed read-only capture. Do not reuse the prior 74-row count as an assumption; compare the new ledger response with the checked-in files row-by-row. No ledger repair or hosted migration is authorized.
+
+
+## Expanded source-recovery check — 2026-10-15
+
+The six hosted-only names listed above were checked against every current branch ref in abdalrhmanata-gif/Nexo (23 refs; duplicate head commits deduplicated for tree inspection). None appears in a current branch-tip migration tree. Exact-path GitHub commit-history queries also returned zero commits for those paths. This makes the recovery issue more concrete: the current visible branch tips do not contain those files, and the current path histories do not offer recoverable source.
+
+This is not proof the migrations never existed in a private/deleted/local commit or deployment artifact. Keep their effects UNKNOWN until exact historical SQL or equivalent trusted provenance is recovered. Do not recreate these migrations from their names.
+

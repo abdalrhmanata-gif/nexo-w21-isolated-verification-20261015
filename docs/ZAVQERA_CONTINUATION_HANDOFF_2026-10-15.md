@@ -564,3 +564,28 @@ Windows commands and cleanup instructions are documented in the [hosted read-onl
 - Added tools/review_hosted_migration_ledger.py and test_review_hosted_migration_ledger.py to turn the next 12-query read-only capture into a row-by-row version/name comparison plus W66 table ACL review.
 - This comparator is fully offline, verifies the pinned Development identity and query-pack digest, refuses old 10-query evidence/empty ledger/incomplete ACL matrix, and writes JSON/Markdown within the evidence folder.
 - Use it only after the updated 12-query audit capture completes. It does not prove deployed SQL equality, make database changes, or lift release NO-GO.
+
+
+## Verified dual-pack PostgreSQL 17 smoke and current gate status — 2026-10-15
+
+- **Current verification commit:** 9039d887550b8de8d7eebb61932116679a7294fc.
+- **W80 isolated PostgreSQL 17:** PASS — [run 38786902560](https://github.com/abdalrhmanata-gif/nexo-w21-isolated-verification-20261015/actions/runs/38786902560); evidence artifact 11997538732, digest SHA-256: 3847bca8e7eb28acd3fa0d54d6166b86b366ab6d1ae862a7b0449bcf17a67fc0.
+- Fresh disposable PostgreSQL replay used the 89 checked-in migration files plus the documented local-only historical compatibility fixture. Replay through W83 and remaining migrations succeeded; cleanup verified no project containers/volumes remain.
+- W80: 49/49 pgTAP assertions passed before and after idempotent reapply. W44: 17/17 before/after. W46: 8/8 before/after. W84: 21/21 after chain and after reapply. W85 supabase_admin ACL audit: 12/12.
+- Both read-only catalog packs passed local disposable PG17 smoke. Legacy pack SHA-256 2462ff5f494b1acc6dd75e8290aa9eeb4fda4e4899a590e697d3c5a0be5790d2; updated 12-query migration-effect pack SHA-256 a7aba3461786dbb5854f71dc4f87b7e0498d12509add535ab3df4a7ec231a284; both local smoke exit codes 0.
+- Offline reviewer tests: 7/7 PASS. Supplemental audit runner tests: 10/10 PASS; runner self-test reports 12 queries/no network requests. Flutter CI: [run 38786902611](https://github.com/abdalrhmanata-gif/nexo-w21-isolated-verification-20261015/actions/runs/38786902611) PASS.
+- W21 Local Launch Gate: [run 38785230311](https://github.com/abdalrhmanata-gif/nexo-w21-isolated-verification-20261015/actions/runs/38785230311) PASS on 17247b0ffce11576990f3858bee1950a8afe80fd. Commits after that W21 run only update offline review tooling/docs and the W80 workflow; no product migrations, web app, executor, or trusted adapter code changed.
+- **Not yet done:** the updated 12-query pack has NOT been run against hosted Development. The earlier 10-query hosted capture still defines the current observed mismatches. Hosted catalog/ledger parity and release remain NO-GO.
+
+## Hosted-only migration source search — 2026-10-15
+
+A read-only inventory covered all 23 current branch refs in the original abdalrhmanata-gif/Nexo repository (including duplicate commit heads). None of the six hosted-only migration names below appears as a file in any current branch-tip tree. GitHub path-history lookups for the exact named paths also returned no commits. This confirms the deployed source is not recoverable from those current branch heads; it does not prove the files never existed in any external artifact, local checkout or deleted ref.
+
+- 20261007105825_expose_anonymous_ai_guard_rpc
+- 20261005053351_w35_plan_ai_allowances_5_50_300
+- 20261008150359_w44_workspace_invitations_and_activity
+- 20261008161103_w46_invitation_activity_bindings
+- 20260921180227_w4_harden_profile_trigger_search_path
+- 20260924171437_w6_authoritative_mission_mutation_and_concurrency
+
+Do not reconstruct their SQL from names or neighboring versions. Historical provenance is still a blocker.

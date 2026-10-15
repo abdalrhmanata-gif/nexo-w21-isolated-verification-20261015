@@ -56,3 +56,10 @@ That capture confirms: both authority budget tables are absent; all 26 selected 
 The 10-query capture did **not** enumerate the migration ledger rows and did **not** directly inventory effective/stored relation ACLs for `public.agent_executions`. Those are the remaining read-only gaps addressed by query 11 (ledger `version,name` pairs) and query 12 (W66 table ACL matrix). Updated pack SHA-256: `a7aba3461786dbb5854f71dc4f87b7e0498d12509add535ab3df4a7ec231a284`. The 12-query version is prepared but has not yet been run against hosted Development.
 
 No hosted database was changed. Release remains NO-GO; keep PR #39 OPEN/Draft/unmerged, Issue #23 OPEN and `TRUSTED_DISPATCH_ADAPTERS` empty/fail-closed.
+
+
+## CI verification status addendum — 2026-10-15
+
+The updated 12-query effect pack and the earlier catalog pack both passed read-only SQL smoke on disposable PostgreSQL 17 in W80 run 38786902560. The current effect-pack hash is a7aba3461786dbb5854f71dc4f87b7e0498d12509add535ab3df4a7ec231a284. The offline ledger/ACL comparator's seven unit tests and the guarded runner's ten unit tests passed, with no hosted network requests during tests.
+
+These results validate tool/package behavior only; they do not change the 10-query hosted capture's findings. Current hosted 12-query capture, source-ledger reconciliation, and W66 ACL observation are still pending.

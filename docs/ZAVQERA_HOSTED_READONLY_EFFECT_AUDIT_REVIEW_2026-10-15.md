@@ -48,3 +48,10 @@
 - [W83](https://github.com/abdalrhmanata-gif/nexo-w21-isolated-verification-20261015/blob/51bc1a543a6c47267b9fc4e8fc0dbec3a8eef6f9/supabase/migrations/20261015100000_w83_workspace_invitation_privilege_correction.sql)
 - [W84](https://github.com/abdalrhmanata-gif/nexo-w21-isolated-verification-20261015/blob/51bc1a543a6c47267b9fc4e8fc0dbec3a8eef6f9/supabase/migrations/20261015110000_w84_postgres_function_default_acl_hardening.sql)
 - [W21 isolated launch-gate run](https://github.com/abdalrhmanata-gif/nexo-w21-isolated-verification-20261015/actions/runs/38779082395) and [W80 isolated PostgreSQL 17 pgTAP run](https://github.com/abdalrhmanata-gif/nexo-w21-isolated-verification-20261015/actions/runs/38779442480) are local/disposable evidence only, not hosted parity proof.
+
+
+## Post-capture tooling validation — 2026-10-15
+
+After this report's 10-query hosted evidence was captured, the pinned effect pack was extended to 12 queries and both packs passed disposable PostgreSQL 17 smoke in W80 run 38786902560. The new pack hash is a7aba3461786dbb5854f71dc4f87b7e0498d12509add535ab3df4a7ec231a284. The offline comparison tool and its seven tests also passed.
+
+This later local verification does not change the underlying hosted evidence above. Queries 11/12 still must be executed against Development via the explicit read-only endpoint before the current migration-ledger tuples and W66 ACL can be reviewed.
