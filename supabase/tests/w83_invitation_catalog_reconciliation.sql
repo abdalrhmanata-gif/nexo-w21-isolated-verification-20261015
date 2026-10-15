@@ -16,15 +16,15 @@ select current_database() as database_name,
        current_setting('server_version_num') as server_version_num,
        current_setting('transaction_read_only') as transaction_read_only;
 
-select current_setting('transaction_read_only') = 'on' as read_only_guard_confirmed \\gset
-\\if :read_only_guard_confirmed
-  \\echo 'READ_ONLY_GUARD=CONFIRMED'
-\\else
-  \\echo 'READ_ONLY_GUARD=FAILED'
-  \\quit 3
-\\endif
+select current_setting('transaction_read_only') = 'on' as read_only_guard_confirmed \gset
+\if :read_only_guard_confirmed
+  \echo 'READ_ONLY_GUARD=CONFIRMED'
+\else
+  \echo 'READ_ONLY_GUARD=FAILED'
+  \quit 3
+\endif
 
-\\echo '=== Supabase migration ledger availability ==='
+\echo '=== Supabase migration ledger availability ==='
 select to_regclass('supabase_migrations.schema_migrations') is not null as ledger_available \gset
 \if :ledger_available
   select exists (
