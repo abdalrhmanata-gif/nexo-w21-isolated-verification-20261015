@@ -71,4 +71,25 @@ test("W21 can only test a disposable repository-migration stack", () => {
     quotaRegressionStep.includes("supabase test db supabase/tests/w82_ai_generation_reservation_identity.sql"),
     "W21 must explicitly execute W82 AI generation reservation identity pgTAP",
   );
+
+  const catalogReport = "w83_invitation_catalog_reconciliation.sql";
+  assert.ok(
+    workflow.includes(`cp "$GITHUB_WORKSPACE/supabase/tests/${catalogReport}" "$workdir/supabase/tests/${catalogReport}"`),
+    "W21 must stage the read-only W83 catalog report",
+  );
+  const catalogStep = workflow.split("Run W83 read-only catalog reconciliation on disposable PG17")[1]?.split("Run Mission Authority execution security regressions")[0] ?? "";
+  for (const required of [
+    "docker exec -u postgres",
+    "psql -X -v ON_ERROR_STOP=1",
+    "READ_ONLY_GUARD=CONFIRMED",
+    "20261015100000",
+    "Default ACLs",
+  ]) {
+    assert.ok(catalogStep.includes(required), `W21 catalog reconciliation must include ${required}`);
+  }
+  assert.ok(
+    workflow.includes('cat "$RUNNER_TEMP/W83_LOCAL_CATALOG_RECONCILIATION.txt" >> "$RUNNER_TEMP/W21_EVIDENCE.txt"'),
+    "W21 must preserve the catalog snapshot in its evidence artifact",
+  );
+
 });
