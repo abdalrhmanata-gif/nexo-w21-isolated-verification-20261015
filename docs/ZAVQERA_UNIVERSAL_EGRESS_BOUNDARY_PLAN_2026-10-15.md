@@ -212,7 +212,6 @@ The source-graph regression now extracts module edges with the TypeScript AST ra
 
 Local verification on commit `9e71be9a90f572129411a585812860196d01e817`: focused worker-boundary test **27/27 PASS**; Web Unit **368 passed, 0 failed, 1 skipped**; `git diff --check` PASS. Exact-SHA CI/W21 is pending. The commit remains local because publishing this PR branch triggers automatic Vercel Preview deployments, which this continuation prohibits. Provider registry remains empty; launch **NO-GO**.
 
-
 ## Completed W21 checkpoint — production-entrypoint graph guard — 2026-10-15
 
 **Exact source/test SHA:** `c50b9db5610f483f63abdb1504465711c8e3b74e`.
@@ -228,3 +227,11 @@ W21 successfully completed browser E2E, disposable PostgreSQL 17/pgTAP, executio
 - [Browser diagnostics 11959932304](https://github.com/abdalrhmanata-gif/Nexo/actions/runs/38708716869/artifacts/11959932304)
 
 The expanded static entrypoint guard explicitly includes the root App Router page/layout. The guard is only source-reachability regression evidence; it does not establish universal runtime egress enforcement or production/provider certification. Production network policy, deployed credential separation, real-provider idempotency/receipt/reconciliation, and hosted Development parity remain unproven. Launch remains **NO-GO**.
+
+## Latest exact-source verification — `dad0734e1fbc76a31d40ac66b19dd7332963a78a`
+
+The AST graph parser includes constant no-substitution template literals in `import()`/`require()` dependency edges. Template literals with substitutions are not treated as resolved edges and remain flagged by the computed-loader guard. Coverage includes import/export/type declarations, TypeScript import-equals, quoted and constant-template dynamic imports/CommonJS loads, and misleading comment/string text.
+
+Exact-source local results: `node --test test/mission-authority-worker-auth.test.mjs` exit 0 (**27/27**); `npm test` from `apps/web` exit 0 (**368 passed, 0 failed, 1 skipped**, OS-level egress isolation skipped because Docker is unavailable); `git diff --check` exit 0. W21 has not run on this SHA: Docker, Supabase CLI and `psql` are unavailable. Its disposable PostgreSQL 17/pgTAP, database-backed race/security tests, fake-provider Docker integration and network isolation are unverified for this commit. The Web Unit's Node-only cases are not substitutes.
+
+No safe remote exact-commit run is available: workflow dispatch would resolve the remote branch, still at `9d752a59f0683ea7149633138dc85bb33cf9a41b`, and the new commits are not pushed. Pushing the PR branch triggers automatic Vercel Preview deployments, so no push or dispatch was made. Production-wide egress enforcement, production provider guarantees/recovery, and hosted schema parity remain blockers; release **NO-GO**.

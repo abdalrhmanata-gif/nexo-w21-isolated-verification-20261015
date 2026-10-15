@@ -245,3 +245,18 @@ Local validation on this code commit:
 - `TRUSTED_DISPATCH_ADAPTERS` remains an empty frozen object.
 
 This makes static edge parsing more complete; it does not cover computed/runtime loading, arbitrary transitive/native behavior, or prove production-wide egress enforcement. Local Web Unit passed on this source, but exact-SHA GitHub CI/W21 evidence is pending. The change is committed locally and not published: prior pushes to this PR branch caused automatic Vercel Preview deployments, and this continuation prohibits deployments. PR #39 remains Draft/open/unmerged, Issue #23 open, hosted Supabase untouched, and release **NO-GO**.
+
+## Exact-commit AST guard verification — 2026-10-15
+
+**Code/test SHA:** `dad0734e1fbc76a31d40ac66b19dd7332963a78a`. This commit is local; remote PR #39 still points to `9d752a59f0683ea7149633138dc85bb33cf9a41b`.
+
+Review found that no-substitution template literals in `import(`./module`)` and `require(`./module`)` were not recorded as statically known edges. Updated the AST parser to treat those as constant module specifiers and added coverage proving template literals with substitutions remain excluded from static edge resolution and are flagged as computed dynamic imports by the capability guard. Together with the prior tests, coverage now exercises import declarations/type imports, re-exports, TypeScript import-equals, quoted and constant-template dynamic imports/CommonJS loads, and comment/string decoys.
+
+Exact-source local checks on `dad0734e1fbc76a31d40ac66b19dd7332963a78a`:
+- From `apps/web`: `node --test test/mission-authority-worker-auth.test.mjs` — exit **0**, **27 passed, 0 failed**.
+- From `apps/web`: `npm test` — exit **0**, **368 passed, 0 failed, 1 skipped** (369 total). The skipped test is OS-level egress isolation, which requires Docker.
+- `git diff --check` — exit **0**.
+
+W21 was not run on this SHA locally or remotely. Docker, Supabase CLI and `psql` are unavailable, so disposable PostgreSQL 17/pgTAP, database-backed concurrency/security races, Docker fake-provider integration and network-isolation components could not run. Node-only tests in Web Unit passed but are not a substitute for those W21 components.
+
+No safe remote exact-commit path was found: `workflow_dispatch` is available in W21/Web Unit, but the remote branch does not contain this commit; using it would test the old remote SHA. Publishing this PR branch has previously triggered automatic Vercel Preview deployments, which this task forbids. No push or dispatch was made. Current PR #39 is still OPEN/DRAFT/UNMERGED at the recorded remote SHA; Issue #23 remains OPEN; provider registry remains empty; release **NO-GO**.
