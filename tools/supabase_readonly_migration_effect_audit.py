@@ -255,6 +255,39 @@ def membership_paths_form_valid_chain(paths):
             return False
     return True
 
+def acl_entries_have_valid_shape(entries, *, inherited=False, column=False):
+    """Validate explicit ACL projection fields before interpreting provenance."""
+    privileges = {"SELECT", "INSERT", "UPDATE", "DELETE", "TRUNCATE", "REFERENCES", "TRIGGER", "MAINTAIN"}
+    if not isinstance(entries, list):
+        return False
+    grantee_key = "grantee_role" if inherited else "grantee"
+    for item in entries:
+        if not isinstance(item, dict):
+            return False
+        grantee = item.get(grantee_key)
+        if not isinstance(grantee, str) or not grantee:
+            return False
+        if item.get("privilege_type") not in privileges:
+            return False
+        if type(item.get("is_grantable")) is not bool:
+            return False
+        grantor = item.get("grantor")
+        if not isinstance(grantor, str) or not grantor:
+            return False
+        if column:
+            column_name = item.get("column_name")
+            if not isinstance(column_name, str) or not column_name:
+                return False
+        if inherited:
+            if type(item.get("membership_depth")) is not int or item["membership_depth"] <= 0:
+                return False
+            if type(item.get("all_membership_edges_inherit")) is not bool:
+                return False
+            if type(item.get("all_membership_edges_set_role")) is not bool:
+                return False
+    return True
+
+
 def as_bool(value) -> bool | None:
     if value is True or (isinstance(value, str) and value.strip().lower() in {"true", "t", "on", "1"}):
         return True
