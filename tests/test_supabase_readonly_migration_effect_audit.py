@@ -307,6 +307,31 @@ class ReadOnlyEffectAuditTests(unittest.TestCase):
         self.assertEqual(code, 5)
         self.assertIn("ACL provenance result incomplete/unrecognized", output)
         self.assertEqual(len([call for call in calls if call[0] == "POST"]), 13)
+    def test_w86_provenance_missing_root_membership_path_fails_closed(self):
+        calls = []
+        def fake_api(token, method, path, body=None):
+            calls.append((method, path, body))
+            if method == "GET":
+                return valid_project()
+            number = sum(1 for verb, _, _ in calls if verb == "POST")
+            if number == 1:
+                return {"result": [valid_role_row()]}
+            if number == 11:
+                return {"result": [{"version": "20261015100000", "name": "w83_workspace_invitation_privilege_correction"}]}
+            if number == 12:
+                rows = []
+                for role in ("anon", "authenticated", "service_role", "postgres"):
+                    for privilege in ("SELECT", "INSERT", "UPDATE", "DELETE", "TRUNCATE", "REFERENCES", "TRIGGER", "MAINTAIN"):
+                        rows.append({"evidence_kind": "EFFECTIVE_PRIVILEGE", "relation_name": "agent_executions",
+                                     "grantee": role, "privilege_type": privilege})
+                return {"result": rows}
+            provenance = valid_provenance_payload(inherited=False)
+            provenance["service_role_membership_paths"] = []
+            return {"result": [{"w86_acl_provenance": provenance}]}
+        code, output = self._run_with_fake_api(fake_api)
+        self.assertEqual(code, 5)
+        self.assertIn("ACL provenance result incomplete/unrecognized", output)
+        self.assertEqual(len([call for call in calls if call[0] == "POST"]), 13)
     def test_api_query_error_stops_without_sending_later_queries(self):
         calls = []
         def fake_api(token, method, path, body=None):
