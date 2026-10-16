@@ -662,3 +662,15 @@ This section supersedes earlier W86 notes that covered only automatic INHERIT pa
 - Fresh hosted Development 13-query evidence is still outstanding. The supplied ZIP is the old 12-query capture. Do not infer hosted role-membership state from the disposable fixture or local smoke.
 
 **Next and only required external step:** run the secure wrapper from the isolated audit checkout root on Windows, using the hidden prompt for the scoped Development-only PAT, then upload only the resulting ZIP containing `query_13.json`. Never share the token. Any parent-role ACL reachable via INHERIT or SET ROLE blocks W86 as-is. Historical SQL provenance (22 timestamp conflicts and six hosted-only migration names) remains unresolved. No hosted write; release **NO-GO**.
+
+
+## 15. SET ROLE provenance test suite and 13-query smoke — PASS (2026-10-16)
+
+- W80 local PostgreSQL 17.11: [run 38866102409](https://github.com/abdalrhmanata-gif/nexo-w21-isolated-verification-20261015/actions/runs/38866102409) — **SUCCESS** on exact code/test SHA `9503a117890edd6597cf234c23f011f48ead9a56`.
+- Artifact [12030744508](https://github.com/abdalrhmanata-gif/nexo-w21-isolated-verification-20261015/actions/runs/38866102409/artifacts/12030744508), ZIP SHA-256 `df13702d2a28e09e3d0208919e70501ce666c07388385a1847f76cb5d8cef67f`.
+- Flutter CI: [run 38866102406](https://github.com/abdalrhmanata-gif/nexo-w21-isolated-verification-20261015/actions/runs/38866102406) — **SUCCESS** on the same SHA.
+- Runner tests: catalog 8/8; migration-effect/PowerShell wrapper 12/12; offline migration reviewer 11/11. Self-test: `queries=13`, base hash `a7aba3461786dbb5854f71dc4f87b7e0498d12509add535ab3df4a7ec231a284`, query 13 hash `700939087d9708fc3d6a72ebe10064b4c0db7f5d26b08556c7e641e1aa09a919`, no network requests.
+- Disposable PostgreSQL 17.11 full migration replay exit code 0; W44 17/17, W46 8/8, W80 49/49 before/after W83 reapply; W84 21/21 before/after reapply; W85 12/12; query 13 local smoke passed; cleanup `VERIFIED`.
+- This validates the updated query pack and offline review only against disposable/local evidence. It is **not** a hosted Development capture and does not clear the W86 gate.
+
+The only external dependency remains: run the secure PowerShell wrapper locally with the scoped Development-only token and upload the resulting fresh ZIP containing `query_13.json`. Do not share the token. Historical SQL provenance (22 timestamp conflicts and six hosted-only names) remains unresolved; no hosted write; release remains **NO-GO**.
