@@ -260,7 +260,7 @@ def membership_paths_form_valid_chain(paths):
             and item["all_edges_inherit"] == (parent["all_edges_inherit"] and item["edge_inherit_option"])
             and item["all_edges_set_role"] == (parent["all_edges_set_role"] and item["edge_set_option"])
             and item["reachable_via_membership_options"] == (
-                (parent["all_edges_inherit"] and item["edge_inherit_option"])
+                (parent["reachable_via_membership_options"] and item["edge_inherit_option"])
                 or (parent["all_edges_set_role"] and item["edge_set_option"])
             )
             for parent in paths
