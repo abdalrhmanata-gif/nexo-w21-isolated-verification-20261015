@@ -648,3 +648,17 @@ The wrapper runs the self-test before asking for the scoped Development-only PAT
 - No hosted database write, migration, ledger repair, deployment, secret, billing, or DNS change occurred.
 - Historical SQL provenance remains unresolved: 22 same-name timestamp conflicts and six hosted-only migration names remain blockers.
 - Release remains **NO-GO**.
+
+
+## 14. W86 SET ROLE-only guard verified — 2026-10-16
+
+This section supersedes earlier W86 notes that covered only automatic INHERIT paths.
+
+- Current W86 branch head: `aa034e47531da316e5f5c6e2d928f648c2d0a702`; W86 migration/workflow code was tested on `a5f899ffff202eb0eda7954cec9ad12d82d252dc`. Subsequent W86 branch commits were documentation-only.
+- W80 local PostgreSQL 17.11: [run 38865144782](https://github.com/abdalrhmanata-gif/nexo-w21-isolated-verification-20261015/actions/runs/38865144782) — SUCCESS. Evidence artifact [12031370300](https://github.com/abdalrhmanata-gif/nexo-w21-isolated-verification-20261015/actions/runs/38865144782/artifacts/12031370300), digest `8bccecd95878f0fa56309b01f0118d7f19fdc9eccbbdb5180ed5947f9775bc98`.
+- The disposable fixture grants a parent role to `service_role WITH INHERIT FALSE, SET TRUE`, then gives that parent table UPDATE and column SELECT. Query 13 proves `all_edges_inherit=false` and `all_edges_set_role=true`; W86 refuses before any ACL mutation with the expected fail-closed error. After fixture cleanup, W86 reapplies successfully and W66 11/11 plus W86 20/20 pass.
+- Full migration replay, W84 21/21 before/after reapply, W85 12/12, W44 17/17, W46 8/8, W80 49/49, local read-only query smoke and cleanup all pass. Flutter CI [run 38865152105](https://github.com/abdalrhmanata-gif/nexo-w21-isolated-verification-20261015/actions/runs/38865152105) also passed.
+- Query 13 now tracks both `INHERIT` and `SET ROLE` paths. Pinned query digest is `700939087d9708fc3d6a72ebe10064b4c0db7f5d26b08556c7e641e1aa09a919`; base query pack digest remains `a7aba3461786dbb5854f71dc4f87b7e0498d12509add535ab3df4a7ec231a284`.
+- Fresh hosted Development 13-query evidence is still outstanding. The supplied ZIP is the old 12-query capture. Do not infer hosted role-membership state from the disposable fixture or local smoke.
+
+**Next and only required external step:** run the secure wrapper from the isolated audit checkout root on Windows, using the hidden prompt for the scoped Development-only PAT, then upload only the resulting ZIP containing `query_13.json`. Never share the token. Any parent-role ACL reachable via INHERIT or SET ROLE blocks W86 as-is. Historical SQL provenance (22 timestamp conflicts and six hosted-only migration names) remains unresolved. No hosted write; release **NO-GO**.
