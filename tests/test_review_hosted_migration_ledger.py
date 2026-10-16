@@ -28,12 +28,15 @@ class HostedLedgerReviewTests(unittest.TestCase):
         (self.repo / "supabase" / "migrations" / "20261013100000_w80_example.sql").write_text("select 1;\n")
         (self.repo / "supabase" / "migrations" / "20261015100000_w83_example.sql").write_text("select 2;\n")
         save(self.evidence / "summary.json", {
-            "status": "CAPTURED_FOR_MANUAL_REVIEW", "queries_completed": 12,
-            "query_pack_sha256": review.PACK_SHA256, "access_token_saved": False
+            "status": "CAPTURED_FOR_MANUAL_REVIEW", "queries_completed": 13,
+            "query_pack_sha256": review.PACK_SHA256,
+            "acl_provenance_query_sha256": review.ACL_PROVENANCE_SHA256,
+            "access_token_saved": False
         })
         save(self.evidence / "run_metadata.json", {
             "observed_at_utc": "2026-10-15T18:00:00+00:00",
-            "project_ref": review.PROJECT_REF, "token_saved": False
+            "project_ref": review.PROJECT_REF, "token_saved": False,
+            "acl_provenance_query_sha256": review.ACL_PROVENANCE_SHA256
         })
         save(self.evidence / "project_identity.json", {
             "id": review.PROJECT_REF, "name": review.PROJECT_NAME, "region": review.PROJECT_REGION
@@ -64,6 +67,36 @@ class HostedLedgerReviewTests(unittest.TestCase):
             "is_grantable": False, "grantor": "postgres"
         })
         save(self.evidence / "query_12.json", {"response": rows})
+        provenance = {
+            "probe_name": "w86_acl_provenance_v1",
+            "current_user": "supabase_read_only_user",
+            "session_user": "supabase_read_only_user",
+            "transaction_read_only": "on",
+            "relation": {"exists": True, "schema_name": "public", "relation_name": "agent_executions",
+                         "owner_role": "postgres", "row_level_security_enabled": True,
+                         "row_level_security_forced": False, "stored_acl_is_null": False},
+            "service_role_effective_privileges": {
+                "SELECT": False, "INSERT": True, "UPDATE": True, "DELETE": True,
+                "TRUNCATE": True, "REFERENCES": False, "TRIGGER": False, "MAINTAIN": False
+            },
+            "service_role_membership_paths": [
+                {"role_name": "service_role", "depth": 0, "member_of_role": None, "all_edges_inherit": True},
+                {"role_name": "w86_acl_probe_parent", "depth": 1, "member_of_role": "service_role", "all_edges_inherit": True}
+            ],
+            "table_acl_entries": [],
+            "column_acl_entries": [],
+            "service_role_inherited_table_acl_entries": [
+                {"grantee_role": "w86_acl_probe_parent", "membership_depth": 1,
+                 "all_membership_edges_inherit": True, "privilege_type": "UPDATE",
+                 "is_grantable": False, "grantor": "postgres"}
+            ],
+            "service_role_inherited_column_acl_entries": [
+                {"column_name": "id", "grantee_role": "w86_acl_probe_parent", "membership_depth": 1,
+                 "all_membership_edges_inherit": True, "privilege_type": "SELECT",
+                 "is_grantable": False, "grantor": "postgres"}
+            ]
+        }
+        save(self.evidence / "query_13.json", {"response": [{"w86_acl_provenance": provenance}]})
 
     def tearDown(self):
         self.tmp.cleanup()
@@ -80,6 +113,9 @@ class HostedLedgerReviewTests(unittest.TestCase):
         self.assertEqual(result["effective_table_privilege_rows"], 32)
         self.assertEqual(len(result["effective_nonowner_write_grants"]), 0)
         self.assertEqual(len(result["stored_nonowner_write_acl_rows"]), 1)
+        self.assertEqual(result["service_role_inherited_table_acl_rows"], 1)
+        self.assertEqual(result["service_role_inherited_column_acl_rows"], 1)
+        self.assertIn("w86_acl_probe_parent", result["service_role_inherited_table_acl_entries"][0]["grantee_role"])
         self.assertIsNone(result["source_checkout_head_sha"])
         self.assertIsNone(result["source_migrations_worktree_clean"])
         self.assertRegex(result["source_migration_manifest_sha256"], r"^[0-9a-f]{64}$")
@@ -157,6 +193,13 @@ class HostedLedgerReviewTests(unittest.TestCase):
         with self.assertRaises(review.EvidenceError):
             review.reconcile(self.evidence, self.repo)
 
+    def test_rejects_wrong_read_only_identity_in_provenance(self):
+        payload = json.loads((self.evidence / "query_13.json").read_text())
+        payload["response"][0]["w86_acl_provenance"]["current_user"] = "postgres"
+        save(self.evidence / "query_13.json", payload)
+        with self.assertRaises(review.EvidenceError):
+            review.reconcile(self.evidence, self.repo)
+
     def test_rejects_empty_ledger(self):
         save(self.evidence / "query_11.json", {"response": []})
         with self.assertRaises(review.EvidenceError):
@@ -169,6 +212,8 @@ class HostedLedgerReviewTests(unittest.TestCase):
         self.assertIn("Same-name/different-version", rendered)
         self.assertIn("Source checkout HEAD", rendered)
         self.assertIn("Source migration manifest SHA-256", rendered)
+        self.assertIn("service_role inherited table ACL rows: **1**", rendered)
+        self.assertIn("inherited ACL row is a blocker", rendered)
         self.assertIn("not a full authorization proof", rendered)
 
 
