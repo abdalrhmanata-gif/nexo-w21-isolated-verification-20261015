@@ -212,7 +212,7 @@ The ZIP must contain `query_13.json` and metadata identifying both query-pack ha
 
 ### 5. Mandatory W86 interpretation
 
-- If query 13 reports any inherited table/column ACL path for `service_role`, **W86 must not be applied as-is**. Preserve the evidence and request an owner-reviewed least-privilege decision for that role path.
+- If query 13 reports any parent-role table/column ACL path reachable by `INHERIT` or `SET ROLE`, **W86 must not be applied as-is**. Preserve the evidence and request an owner-reviewed least-privilege decision for that role path.
 - If query 13 reports no inherited ACLs, that only removes this specific blocker. Direct/stored grants, owner/grantor context, historical migration provenance, and all previously recorded schema/function mismatches still require review.
 - The capture is read-only evidence, not permission to apply a migration. Do not perform hosted DDL, ACL changes, migration repair, deployment, or secret changes.
 
