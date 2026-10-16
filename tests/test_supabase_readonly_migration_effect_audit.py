@@ -137,6 +137,8 @@ class ReadOnlyEffectAuditTests(unittest.TestCase):
         self.assertIn("'table_acl_entries'", sql)
         self.assertIn("'service_role_inherited_table_acl_entries'", sql)
         self.assertIn("'service_role_inherited_column_acl_entries'", sql)
+        self.assertIn("(child.inherits_all AND membership.inherit_option)", sql)
+        self.assertNotIn("(child.reachable_via_membership_options AND membership.inherit_option)", sql)
         self.assertIn("child.reachable_via_membership_options AND membership.inherit_option", sql)
         self.assertIn("child.can_set_role AND membership.set_option", sql)
         self.assertIn("'reachable_via_membership_options'", sql)
@@ -330,6 +332,31 @@ class ReadOnlyEffectAuditTests(unittest.TestCase):
         self.assertEqual(code, 5, output)
         self.assertIn("query 12 and query 13 service_role effective privilege maps disagree", output)
         self.assertEqual(len([call for call in calls if call[0] == "POST"]), 13)
+
+    def test_membership_reachability_cannot_mix_edge_modes(self):
+        paths = [
+            {
+                "role_name": "service_role", "depth": 0, "member_of_role": None,
+                "all_edges_inherit": True, "all_edges_set_role": True,
+                "edge_inherit_option": None, "edge_set_option": None,
+                "reachable_via_membership_options": True,
+            },
+            {
+                "role_name": "set_only_parent", "depth": 1, "member_of_role": "service_role",
+                "all_edges_inherit": False, "all_edges_set_role": True,
+                "edge_inherit_option": False, "edge_set_option": True,
+                "reachable_via_membership_options": True,
+            },
+            {
+                "role_name": "inherit_only_grandparent", "depth": 2, "member_of_role": "set_only_parent",
+                "all_edges_inherit": False, "all_edges_set_role": False,
+                "edge_inherit_option": True, "edge_set_option": False,
+                "reachable_via_membership_options": False,
+            },
+        ]
+        self.assertTrue(audit.membership_paths_form_valid_chain(paths))
+        paths[2]["reachable_via_membership_options"] = True
+        self.assertFalse(audit.membership_paths_form_valid_chain(paths))
 
     def test_w86_provenance_malformed_membership_parent_fails_closed(self):
         calls = []
