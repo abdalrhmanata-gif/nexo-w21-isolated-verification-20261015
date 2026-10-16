@@ -245,12 +245,11 @@ class HostedLedgerReviewTests(unittest.TestCase):
         with self.assertRaises(review.EvidenceError):
             review.reconcile(self.evidence, self.repo)
 
-    def test_rejects_disconnected_or_duplicated_membership_paths(self):
+    def test_rejects_disconnected_or_impossible_membership_paths(self):
         original = json.loads((self.evidence / "query_13.json").read_text(encoding="utf-8"))
         mutations = (
             ("disconnected parent", lambda paths: paths[1].update(member_of_role="unobserved_parent")),
             ("root claims parent", lambda paths: paths[0].update(member_of_role="fabricated_parent")),
-            ("duplicate path", lambda paths: paths.append(dict(paths[1]))),
             ("non-string parent", lambda paths: paths[1].update(member_of_role=17)),
             ("missing parent field", lambda paths: paths[1].pop("member_of_role")),
             ("flags re-enabled after false edge", lambda paths: (
@@ -270,6 +269,16 @@ class HostedLedgerReviewTests(unittest.TestCase):
                 save(self.evidence / "query_13.json", payload)
                 with self.assertRaisesRegex(review.EvidenceError, "role/read-only/shape checks"):
                     review.reconcile(self.evidence, self.repo)
+
+    def test_duplicate_projected_membership_rows_are_tolerated_but_never_authorize_writes(self):
+        payload = json.loads((self.evidence / "query_13.json").read_text(encoding="utf-8"))
+        provenance = payload["response"][0]["w86_acl_provenance"]
+        provenance["service_role_membership_paths"].append(dict(provenance["service_role_membership_paths"][1]))
+        save(self.evidence / "query_13.json", payload)
+        result = review.reconcile(self.evidence, self.repo)
+        self.assertEqual(result["w86_candidate_parent_acl_gate"], "BLOCKED_PARENT_ROLE_ACL")
+        self.assertEqual(result["service_role_inherited_table_acl_rows"], 1)
+        self.assertIs(result["hosted_write_authorized"], False)
 
     def test_rejects_membership_path_without_valid_depth(self):
         payload = json.loads((self.evidence / "query_13.json").read_text(encoding="utf-8"))
