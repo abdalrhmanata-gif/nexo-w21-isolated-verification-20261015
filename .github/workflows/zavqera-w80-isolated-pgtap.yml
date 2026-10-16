@@ -537,6 +537,7 @@ jobs:
           CREATE ROLE w86_acl_probe_grandparent NOLOGIN;
           GRANT w86_acl_probe_parent TO service_role WITH INHERIT FALSE, SET TRUE;
           GRANT w86_acl_probe_grandparent TO w86_acl_probe_parent WITH INHERIT TRUE, SET FALSE;
+          GRANT DELETE ON TABLE public.agent_executions TO service_role;
           GRANT UPDATE ON TABLE public.agent_executions TO w86_acl_probe_grandparent;
           DO $fixture$
           DECLARE first_column text;
@@ -604,6 +605,7 @@ jobs:
           }
           assert required <= payload.keys(), f"missing result keys: {sorted(required - payload.keys())}"
           assert payload["service_role_effective_privileges"].get("UPDATE") is False, "mixed parent ACL must not look like automatic direct inheritance"
+          assert payload["service_role_effective_privileges"].get("DELETE") is True, "direct DELETE canary missing before the W86 guard"
           assert any(
               item.get("role_name") == "w86_acl_probe_parent"
               and item.get("depth") == 1
@@ -661,9 +663,23 @@ jobs:
                   pack_status=1
                 else
                   echo "W86_MIXED_PATH_GUARD_PASS" > "${RUNNER_TEMP}/W86_INHERITED_ACL_GUARD_ASSERTION.txt"
+                  set +e
+                  docker exec "${db_container}" psql -U postgres -d postgres -X -qAt -v ON_ERROR_STOP=1 \
+                    -c "SELECT CASE WHEN has_table_privilege('service_role', 'public.agent_executions', 'DELETE') AND has_table_privilege('w86_acl_probe_grandparent', 'public.agent_executions', 'UPDATE') AND has_any_column_privilege('w86_acl_probe_grandparent', 'public.agent_executions', 'SELECT') THEN 'W86_MIXED_PATH_NO_MUTATION_PASS' ELSE 'W86_MIXED_PATH_NO_MUTATION_FAIL' END" \
+                    2>&1 | tee "${RUNNER_TEMP}/W86_MIXED_PATH_NO_MUTATION_CHECK.txt"
+                  mixed_no_mutation_status="${PIPESTATUS[0]}"
+                  set -e
+                  echo "w86_mixed_path_no_mutation_exit_code=${mixed_no_mutation_status}" >> "${RUNNER_TEMP}/W80_EVIDENCE.txt"
+                  if [ "${mixed_no_mutation_status}" -ne 0 ] || ! grep -q '^W86_MIXED_PATH_NO_MUTATION_PASS$' "${RUNNER_TEMP}/W86_MIXED_PATH_NO_MUTATION_CHECK.txt"; then
+                    echo "::error::W86 changed the direct DELETE canary or inherited path ACL before refusing the mixed path."
+                    pack_status=1
+                  else
+                    echo "W86_MIXED_PATH_NO_MUTATION_PASS" >> "${RUNNER_TEMP}/W80_EVIDENCE.txt"
+                  fi
                 fi
 
                 cat > "${RUNNER_TEMP}/W86_ACL_PROVENANCE_ROLE_CLEANUP.sql" <<'SQL'
+          REVOKE DELETE ON TABLE public.agent_executions FROM service_role;
           REVOKE ALL PRIVILEGES ON TABLE public.agent_executions FROM w86_acl_probe_grandparent, w86_acl_probe_parent;
           DO $cleanup$
           DECLARE column_names text;
@@ -1055,6 +1071,7 @@ jobs:
             ${{ runner.temp }}/W86_ACL_PROVENANCE_ROLE_FIXTURE.sql
             ${{ runner.temp }}/W86_ACL_PROVENANCE_ROLE_FIXTURE_OUTPUT.txt
             ${{ runner.temp }}/W86_ACL_PROVENANCE_JSON_ASSERTION.txt
+            ${{ runner.temp }}/W86_MIXED_PATH_NO_MUTATION_CHECK.txt
             ${{ runner.temp }}/W86_ACL_PROVENANCE_ROLE_CLEANUP.sql
             ${{ runner.temp }}/W86_ACL_PROVENANCE_ROLE_CLEANUP_OUTPUT.txt
             ${{ runner.temp }}/W86_AUTHENTICATED_PARENT_GUARD_FIXTURE.sql
