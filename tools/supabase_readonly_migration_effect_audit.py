@@ -457,6 +457,8 @@ def main() -> int:
             relation = provenance.get("relation")
             memberships = provenance.get("service_role_membership_paths")
             effective = provenance.get("service_role_effective_privileges")
+            table_acl = provenance.get("table_acl_entries")
+            column_acl = provenance.get("column_acl_entries")
             inherited_table = provenance.get("service_role_inherited_table_acl_entries")
             inherited_column = provenance.get("service_role_inherited_column_acl_entries")
             if (
@@ -487,6 +489,10 @@ def main() -> int:
                 or not isinstance(effective, dict)
                 or set(effective) != {"SELECT", "INSERT", "UPDATE", "DELETE", "TRUNCATE", "REFERENCES", "TRIGGER", "MAINTAIN"}
                 or not all(type(value) is bool for value in effective.values())
+                or not acl_entries_have_valid_shape(table_acl, inherited=False, column=False)
+                or not acl_entries_have_valid_shape(column_acl, inherited=False, column=True)
+                or not acl_entries_have_valid_shape(inherited_table, inherited=True, column=False)
+                or not acl_entries_have_valid_shape(inherited_column, inherited=True, column=True)
                 or not isinstance(inherited_table, list)
                 or not isinstance(inherited_column, list)
                 or not all(
