@@ -204,6 +204,7 @@ def reconcile(directory, repo_root):
         )
         or not isinstance(effective_privileges, dict)
         or set(effective_privileges) != set(PRIVILEGES)
+        or not all(type(value) is bool for value in effective_privileges.values())
         or not isinstance(inherited_table, list)
         or not isinstance(inherited_column, list)
         or not all(

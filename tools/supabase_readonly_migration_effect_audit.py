@@ -379,6 +379,7 @@ def main() -> int:
                 )
                 or not isinstance(effective, dict)
                 or set(effective) != {"SELECT", "INSERT", "UPDATE", "DELETE", "TRUNCATE", "REFERENCES", "TRIGGER", "MAINTAIN"}
+                or not all(type(value) is bool for value in effective.values())
                 or not isinstance(inherited_table, list)
                 or not isinstance(inherited_column, list)
                 or not all(

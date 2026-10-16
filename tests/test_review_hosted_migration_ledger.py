@@ -126,6 +126,14 @@ class HostedLedgerReviewTests(unittest.TestCase):
         self.assertIsNone(result["source_migrations_worktree_clean"])
         self.assertRegex(result["source_migration_manifest_sha256"], r"^[0-9a-f]{64}$")
 
+    def test_rejects_non_boolean_effective_privilege_summary(self):
+        payload = json.loads((self.evidence / "query_13.json").read_text(encoding="utf-8"))
+        provenance = payload["response"][0]["w86_acl_provenance"]
+        provenance["service_role_effective_privileges"]["UPDATE"] = "false"
+        save(self.evidence / "query_13.json", payload)
+        with self.assertRaises(review.EvidenceError):
+            review.reconcile(self.evidence, self.repo)
+
     def test_set_role_only_parent_acl_path_is_reported(self):
         payload = json.loads((self.evidence / "query_13.json").read_text(encoding="utf-8"))
         provenance = payload["response"][0]["w86_acl_provenance"]
