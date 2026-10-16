@@ -331,6 +331,57 @@ class ReadOnlyEffectAuditTests(unittest.TestCase):
         self.assertIn("role gate or inherited ACL provenance result incomplete/unrecognized", output)
         self.assertEqual(len([call for call in calls if call[0] == "POST"]), 13)
 
+    def test_w86_provenance_malformed_acl_rows_fail_closed(self):
+        cases = (
+            ("direct table grantor", "table_acl_entries", {"grantee": "PUBLIC", "privilege_type": "SELECT", "is_grantable": False, "grantor": "postgres"}, "grantor", 17),
+            ("direct column name", "column_acl_entries", {"column_name": "id", "grantee": "PUBLIC", "privilege_type": "SELECT", "is_grantable": False, "grantor": "postgres"}, "column_name", ""),
+            ("inherited table privilege", "service_role_inherited_table_acl_entries", None, "privilege_type", "UNKNOWN"),
+            ("inherited column grantability", "service_role_inherited_column_acl_entries", None, "is_grantable", "false"),
+        )
+        for label, key, row, field, value in cases:
+            with self.subTest(label=label):
+                calls = []
+                def fake_api(token, method, path, body=None):
+                    calls.append((method, path, body))
+                    if method == "GET":
+                        return valid_project()
+                    number = sum(1 for verb, _, _ in calls if verb == "POST")
+                    if number == 1:
+                        return {"result": [valid_role_row()]}
+                    if number < 11:
+                        return {"result": [{"query_number": number, "ok": True}]}
+                    if number == 11:
+                        return {"result": [
+                            {"version": "20261013100000", "name": "w80_fail_closed_workspace_role_checks"},
+                            {"version": "20261015100000", "name": "w83_workspace_invitation_privilege_correction"},
+                        ]}
+                    if number == 12:
+                        rows = []
+                        for role in ("anon", "authenticated", "service_role", "postgres"):
+                            for privilege in ("SELECT", "INSERT", "UPDATE", "DELETE", "TRUNCATE", "REFERENCES", "TRIGGER", "MAINTAIN"):
+                                rows.append({
+                                    "evidence_kind": "EFFECTIVE_PRIVILEGE", "schema_name": "public",
+                                    "relation_name": "agent_executions", "owner_role": "postgres",
+                                    "row_level_security_enabled": True, "row_level_security_forced": False,
+                                    "grantee": role, "privilege_type": privilege,
+                                    "effective_privilege": role == "postgres" or (role == "service_role" and privilege == "UPDATE"),
+                                    "is_grantable": None, "grantor": None,
+                                })
+                        return {"result": rows}
+                    provenance = valid_provenance_payload(inherited=True)
+                    if row is not None:
+                        provenance[key].append(dict(row))
+                        target = provenance[key][-1]
+                    else:
+                        target = provenance[key][0]
+                    target[field] = value
+                    return {"result": [{"w86_acl_provenance": provenance}]}
+
+                code, output = self._run_with_fake_api(fake_api)
+                self.assertEqual(code, 5, output)
+                self.assertIn("role gate or inherited ACL provenance result incomplete/unrecognized", output)
+                self.assertEqual(len([call for call in calls if call[0] == "POST"]), 13)
+
     def test_w66_acl_metadata_must_match_query13_relation_identity(self):
         calls = []
         def fake_api(token, method, path, body=None):
