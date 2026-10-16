@@ -240,7 +240,12 @@ class ReadOnlyEffectAuditTests(unittest.TestCase):
                 })
                 return {"result": rows}
             if number == 13:
-                return {"result": [{"w86_acl_provenance": valid_provenance_payload(inherited=True)}]}
+                provenance = valid_provenance_payload(inherited=True)
+                provenance["table_acl_entries"] = [{
+                    "grantee": "postgres", "privilege_type": "SELECT",
+                    "is_grantable": False, "grantor": "postgres",
+                }]
+                return {"result": [{"w86_acl_provenance": provenance}]}
             return {"result": [{"query_number": number, "ok": True}]}
         code, output = self._run_with_fake_api(fake_api)
         self.assertEqual(code, 0)
@@ -381,6 +386,48 @@ class ReadOnlyEffectAuditTests(unittest.TestCase):
                 self.assertEqual(code, 5, output)
                 self.assertIn("role gate or inherited ACL provenance result incomplete/unrecognized", output)
                 self.assertEqual(len([call for call in calls if call[0] == "POST"]), 13)
+
+    def test_w66_w86_stored_acl_projection_must_match(self):
+        calls = []
+        def fake_api(token, method, path, body=None):
+            calls.append((method, path, body))
+            if method == "GET":
+                return valid_project()
+            number = sum(1 for verb, _, _ in calls if verb == "POST")
+            if number == 1:
+                return {"result": [valid_role_row()]}
+            if number < 11:
+                return {"result": [{"query_number": number, "ok": True}]}
+            if number == 11:
+                return {"result": [
+                    {"version": "20261013100000", "name": "w80_fail_closed_workspace_role_checks"},
+                    {"version": "20261015100000", "name": "w83_workspace_invitation_privilege_correction"},
+                ]}
+            if number == 12:
+                rows = []
+                for role in ("anon", "authenticated", "service_role", "postgres"):
+                    for privilege in ("SELECT", "INSERT", "UPDATE", "DELETE", "TRUNCATE", "REFERENCES", "TRIGGER", "MAINTAIN"):
+                        rows.append({
+                            "evidence_kind": "EFFECTIVE_PRIVILEGE", "schema_name": "public",
+                            "relation_name": "agent_executions", "owner_role": "postgres",
+                            "row_level_security_enabled": True, "row_level_security_forced": False,
+                            "grantee": role, "privilege_type": privilege,
+                            "effective_privilege": False, "is_grantable": None, "grantor": None,
+                        })
+                rows.append({
+                    "evidence_kind": "STORED_ACL", "schema_name": "public",
+                    "relation_name": "agent_executions", "owner_role": "postgres",
+                    "row_level_security_enabled": True, "row_level_security_forced": False,
+                    "grantee": "service_role", "privilege_type": "UPDATE",
+                    "effective_privilege": None, "is_grantable": False, "grantor": "postgres",
+                })
+                return {"result": rows}
+            return {"result": [{"w86_acl_provenance": valid_provenance_payload(inherited=False)}]}
+
+        code, output = self._run_with_fake_api(fake_api)
+        self.assertEqual(code, 5, output)
+        self.assertIn("query 12 stored table ACL and query 13 table ACL projections disagree", output)
+        self.assertEqual(len([call for call in calls if call[0] == "POST"]), 13)
 
     def test_w66_acl_metadata_must_match_query13_relation_identity(self):
         calls = []
@@ -713,6 +760,8 @@ class ReadOnlyEffectAuditTests(unittest.TestCase):
         self.assertIn("must equal the query-13 summary", runbook)
         self.assertIn("not a single atomic catalog snapshot", runbook)
         self.assertIn("Membership-path ancestry validation", runbook)
+        self.assertIn("direct `table_acl_entries` projection", runbook)
+        self.assertIn("preserves duplicate rows", runbook)
         self.assertIn("preceding depth", runbook)
         self.assertIn("Repeated projected tuples can occur", runbook)
         self.assertIn("ACL row field-shape validation", runbook)

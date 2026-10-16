@@ -556,6 +556,22 @@ def main() -> int:
             5,
             len(queries),
         )
+    query12_stored_acl = [row for row in acl_rows if row.get("evidence_kind") == "STORED_ACL"]
+    query12_stored_projection = sorted(
+        (row["grantee"], row["privilege_type"], row["is_grantable"], row["grantor"])
+        for row in query12_stored_acl
+    )
+    query13_stored_projection = sorted(
+        (row["grantee"], row["privilege_type"], row["is_grantable"], row["grantor"])
+        for row in provenance["table_acl_entries"]
+    )
+    if query12_stored_projection != query13_stored_projection:
+        return stop(
+            "w66_w86_stored_acl_consistency",
+            "query 12 stored table ACL and query 13 table ACL projections disagree",
+            5,
+            len(queries),
+        )
     summary = {
         "status": "CAPTURED_FOR_MANUAL_REVIEW",
         "queries_completed": len(queries),

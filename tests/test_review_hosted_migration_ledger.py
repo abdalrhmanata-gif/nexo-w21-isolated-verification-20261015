@@ -84,7 +84,10 @@ class HostedLedgerReviewTests(unittest.TestCase):
                 {"role_name": "service_role", "depth": 0, "member_of_role": None, "all_edges_inherit": True, "all_edges_set_role": True},
                 {"role_name": "w86_acl_probe_parent", "depth": 1, "member_of_role": "service_role", "all_edges_inherit": True, "all_edges_set_role": True}
             ],
-            "table_acl_entries": [],
+            "table_acl_entries": [
+                {"grantee": "service_role", "privilege_type": "UPDATE",
+                 "is_grantable": False, "grantor": "postgres"}
+            ],
             "column_acl_entries": [],
             "service_role_inherited_table_acl_entries": [
                 {"grantee_role": "w86_acl_probe_parent", "membership_depth": 1,
@@ -126,6 +129,23 @@ class HostedLedgerReviewTests(unittest.TestCase):
         self.assertIsNone(result["source_checkout_head_sha"])
         self.assertIsNone(result["source_migrations_worktree_clean"])
         self.assertRegex(result["source_migration_manifest_sha256"], r"^[0-9a-f]{64}$")
+
+    def test_rejects_query12_stored_acl_projection_mismatch(self):
+        original = json.loads((self.evidence / "query_12.json").read_text(encoding="utf-8"))
+        stored_row = next(row for row in original["response"] if row.get("evidence_kind") == "STORED_ACL")
+        cases = (
+            ("grantor mismatch", lambda payload: next(
+                row for row in payload["response"] if row.get("evidence_kind") == "STORED_ACL"
+            ).update(grantor="different_grantor")),
+            ("duplicate stored row", lambda payload: payload["response"].append(dict(stored_row))),
+        )
+        for label, mutate in cases:
+            with self.subTest(label=label):
+                payload = json.loads(json.dumps(original))
+                mutate(payload)
+                save(self.evidence / "query_12.json", payload)
+                with self.assertRaisesRegex(review.EvidenceError, "query 12 stored table ACL and query 13 table ACL projections disagree"):
+                    review.reconcile(self.evidence, self.repo)
 
     def test_rejects_query12_privilege_mismatch_against_query13(self):
         payload = json.loads((self.evidence / "query_12.json").read_text(encoding="utf-8"))

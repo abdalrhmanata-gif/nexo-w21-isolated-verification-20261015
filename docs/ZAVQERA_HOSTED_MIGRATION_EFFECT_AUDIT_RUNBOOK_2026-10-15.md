@@ -228,6 +228,8 @@ The current capture runner and offline reviewer cross-check the two pinned read-
 - The eight effective `service_role` privilege booleans in query 12 must equal the query-13 summary. Any disagreement blocks the capture/review; it is not safe to choose whichever query appears more plausible.
 - Every inherited table/column ACL row must also match a concrete membership-path tuple with role name, exact integer depth, `INHERIT`, and `SET ROLE` flags. Owner-authority paths and paths to `authenticated` remain independent W86 blockers.
 
+The expanded stored table ACL from query 12 must also match query 13's direct `table_acl_entries` projection on grantee, privilege, grantability, and grantor. The comparison preserves duplicate rows so inconsistent counts cannot be hidden by converting the ACL to a set.
+
 The two queries are separate read-only API requests, not a single atomic catalog snapshot. Consistency checks catch malformed or contradictory responses but do **not** prove transaction-level snapshot identity, deployed historical SQL equality, or authorize hosted changes. A fresh Development-only 13-query capture, manual migration-source reconciliation, independent database-owner review, and separate authorization remain mandatory. Release stays **NO-GO**.
 
 

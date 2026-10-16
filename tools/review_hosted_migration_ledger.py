@@ -438,6 +438,16 @@ def reconcile(directory, repo_root):
     }
     if query12_service_role_effective != effective_privileges:
         raise EvidenceError("query 12 and query 13 service_role effective privilege maps disagree")
+    query12_stored_projection = sorted(
+        (row["grantee"], row["privilege_type"], row["is_grantable"], row["grantor"])
+        for row in stored
+    )
+    query13_stored_projection = sorted(
+        (row["grantee"], row["privilege_type"], row["is_grantable"], row["grantor"])
+        for row in table_acl
+    )
+    if query12_stored_projection != query13_stored_projection:
+        raise EvidenceError("query 12 stored table ACL and query 13 table ACL projections disagree")
 
     effective_write = [
         {key: row.get(key) for key in ("grantee", "privilege_type", "effective_privilege", "owner_role",
