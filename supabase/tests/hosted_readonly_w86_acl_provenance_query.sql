@@ -109,7 +109,8 @@ SELECT jsonb_build_object(
       CROSS JOIN LATERAL aclexplode(COALESCE(c.relacl, acldefault('r', c.relowner))) acl
       LEFT JOIN pg_roles grantor_role ON grantor_role.oid = acl.grantor
      WHERE acl.grantee = rp.role_oid
-       AND (rp.depth = 0 OR rp.inherits_all OR rp.can_set_role)
+       AND rp.depth > 0
+       AND (rp.inherits_all OR rp.can_set_role)
   ),
   'service_role_inherited_column_acl_entries', (
     SELECT COALESCE(jsonb_agg(jsonb_build_object(
@@ -128,7 +129,8 @@ SELECT jsonb_build_object(
       LEFT JOIN pg_roles grantor_role ON grantor_role.oid = acl.grantor
      WHERE a.attnum > 0 AND NOT a.attisdropped
        AND acl.grantee = rp.role_oid
-       AND (rp.depth = 0 OR rp.inherits_all OR rp.can_set_role)
+       AND rp.depth > 0
+       AND (rp.inherits_all OR rp.can_set_role)
   )
 ) AS w86_acl_provenance
 ) AS provenance;
