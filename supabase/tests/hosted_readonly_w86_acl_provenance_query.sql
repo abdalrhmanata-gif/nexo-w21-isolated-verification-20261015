@@ -2,9 +2,9 @@
 -- Returns catalog metadata only; no writes, setting changes, or application rows.
 -- Run with a verified read-only session before any owner-reviewed hosted proposal.
 WITH RECURSIVE role_path (
-  role_oid, role_name, depth, oid_path, inherits_all, member_role_name
+  role_oid, role_name, depth, oid_path, inherits_all, can_set_role, member_role_name
 ) AS (
-  SELECT r.oid, r.rolname, 0, ARRAY[r.oid]::oid[], true, NULL::text COLLATE "C"
+  SELECT r.oid, r.rolname, 0, ARRAY[r.oid]::oid[], true, true, NULL::text COLLATE "C"
     FROM pg_roles r
    WHERE r.rolname = 'service_role'
   UNION ALL
@@ -13,6 +13,7 @@ WITH RECURSIVE role_path (
          child.depth + 1,
          child.oid_path || parent.oid,
          child.inherits_all AND membership.inherit_option,
+         child.can_set_role AND membership.set_option,
          child.role_name::text COLLATE "C"
     FROM role_path child
     JOIN pg_auth_members membership ON membership.member = child.role_oid
@@ -58,7 +59,8 @@ SELECT jsonb_build_object(
       'role_name', rp.role_name,
       'depth', rp.depth,
       'member_of_role', rp.member_role_name,
-      'all_edges_inherit', rp.inherits_all
+      'all_edges_inherit', rp.inherits_all,
+      'all_edges_set_role', rp.can_set_role
     ) ORDER BY rp.depth, rp.role_name), '[]'::jsonb)
       FROM role_path rp
   ),
@@ -105,7 +107,7 @@ SELECT jsonb_build_object(
       CROSS JOIN LATERAL aclexplode(COALESCE(c.relacl, acldefault('r', c.relowner))) acl
       LEFT JOIN pg_roles grantor_role ON grantor_role.oid = acl.grantor
      WHERE acl.grantee = rp.role_oid
-       AND (rp.depth = 0 OR rp.inherits_all)
+       AND (rp.depth = 0 OR rp.inherits_all OR rp.can_set_role)
   ),
   'service_role_inherited_column_acl_entries', (
     SELECT COALESCE(jsonb_agg(jsonb_build_object(
@@ -124,6 +126,6 @@ SELECT jsonb_build_object(
       LEFT JOIN pg_roles grantor_role ON grantor_role.oid = acl.grantor
      WHERE a.attnum > 0 AND NOT a.attisdropped
        AND acl.grantee = rp.role_oid
-       AND (rp.depth = 0 OR rp.inherits_all)
+       AND (rp.depth = 0 OR rp.inherits_all OR rp.can_set_role)
   )
 ) AS w86_acl_provenance;
