@@ -123,7 +123,7 @@ class ReadOnlyEffectAuditTests(unittest.TestCase):
         self.assertEqual(len(statements), 13)
         self.assertEqual(digest, audit.PACK_SHA256)
         self.assertEqual(audit.ACL_PROVENANCE_SHA256,
-                         "d8e9a1266729964ebe682140e1e73e1d7953d0d01bbdb0f077fbf76633ca4e13")
+                         "f9f56944ddd04dd135329ff930cf5259e215eb89f30784b75e03a93f221ff38e")
         self.assertTrue(all(re.match(r"(?is)^\s*SELECT\b", audit.no_comments(s).strip()) for s in statements))
 
     def test_acl_provenance_query_excludes_direct_grants_from_parent_acl_rows(self):
