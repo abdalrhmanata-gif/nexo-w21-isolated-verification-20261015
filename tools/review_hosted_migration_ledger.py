@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Offline reconciliation of query 11/12 evidence against local migrations.
+"""Offline reconciliation of query 11/12/13 evidence against local migrations.
 
 Reads evidence JSON, migration filenames/content hashes, and local Git metadata.
 No network client, SQL execution, migration repair, deployment, or hosted mutation.
@@ -67,7 +67,7 @@ def verify_evidence(directory):
     identity = read_json(directory / "project_identity.json")
     gate = read_json(directory / "read_only_role_gate.json").get("observed", {})
     if summary.get("status") != "CAPTURED_FOR_MANUAL_REVIEW" or summary.get("queries_completed") != QUERY_COUNT:
-        raise EvidenceError("requires a completed 12-query CAPTURED_FOR_MANUAL_REVIEW run")
+        raise EvidenceError("requires a completed 13-query CAPTURED_FOR_MANUAL_REVIEW run")
     if summary.get("query_pack_sha256") != PACK_SHA256:
         raise EvidenceError("query pack SHA-256 mismatch")
     if summary.get("acl_provenance_query_sha256") != ACL_PROVENANCE_SHA256:
