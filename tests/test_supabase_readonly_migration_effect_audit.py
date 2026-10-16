@@ -60,7 +60,7 @@ def valid_provenance_payload(inherited=True, **overrides):
         "service_role_effective_privileges": privileges,
         "service_role_membership_paths": [{"role_name": "service_role", "depth": 0,
                                             "member_of_role": None, "all_edges_inherit": True,
-                                            "all_edges_set_role": True}],
+                                            "all_edges_set_role": True, "edge_inherit_option": None, "edge_set_option": None, "reachable_via_membership_options": True}],
         "table_acl_entries": [],
         "column_acl_entries": [],
         "service_role_inherited_table_acl_entries": (
@@ -80,7 +80,7 @@ def valid_provenance_payload(inherited=True, **overrides):
         payload["service_role_membership_paths"].append({
             "role_name": "w86_acl_probe_parent", "depth": 1,
             "member_of_role": "service_role", "all_edges_inherit": True,
-            "all_edges_set_role": True,
+            "all_edges_set_role": True, "edge_inherit_option": True, "edge_set_option": True, "reachable_via_membership_options": True,
         })
     payload.update(overrides)
     return payload
