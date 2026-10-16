@@ -157,6 +157,44 @@ class HostedLedgerReviewTests(unittest.TestCase):
         with self.assertRaises(review.EvidenceError):
             review.reconcile(self.evidence, self.repo)
 
+    def test_relation_owner_set_role_path_blocks_even_without_acl_entries(self):
+        payload = json.loads((self.evidence / "query_13.json").read_text(encoding="utf-8"))
+        provenance = payload["response"][0]["w86_acl_provenance"]
+        provenance["relation"]["owner_role"] = "w86_acl_probe_parent"
+        provenance["service_role_membership_paths"] = [
+            {"role_name": "service_role", "depth": 0, "member_of_role": None,
+             "all_edges_inherit": True, "all_edges_set_role": True},
+            {"role_name": "w86_acl_probe_parent", "depth": 1, "member_of_role": "service_role",
+             "all_edges_inherit": False, "all_edges_set_role": True},
+        ]
+        provenance["service_role_inherited_table_acl_entries"] = []
+        provenance["service_role_inherited_column_acl_entries"] = []
+        save(self.evidence / "query_13.json", payload)
+
+        result = review.reconcile(self.evidence, self.repo)
+        self.assertEqual(result["relation_owner_role"], "w86_acl_probe_parent")
+        self.assertEqual(result["service_role_relation_owner_path_count"], 1)
+        self.assertEqual(result["w86_candidate_parent_acl_gate"], "BLOCKED_RELATION_OWNER_PATH")
+        self.assertIs(result["hosted_write_authorized"], False)
+        self.assertTrue(any("can set role to the owner" in item.lower() for item in result["hosted_write_blockers"]))
+
+    def test_service_role_as_relation_owner_blocks_at_root_path(self):
+        payload = json.loads((self.evidence / "query_13.json").read_text(encoding="utf-8"))
+        provenance = payload["response"][0]["w86_acl_provenance"]
+        provenance["relation"]["owner_role"] = "service_role"
+        provenance["service_role_membership_paths"] = [
+            {"role_name": "service_role", "depth": 0, "member_of_role": None,
+             "all_edges_inherit": True, "all_edges_set_role": True},
+        ]
+        provenance["service_role_inherited_table_acl_entries"] = []
+        provenance["service_role_inherited_column_acl_entries"] = []
+        save(self.evidence / "query_13.json", payload)
+
+        result = review.reconcile(self.evidence, self.repo)
+        self.assertEqual(result["relation_owner_role"], "service_role")
+        self.assertEqual(result["service_role_relation_owner_path_count"], 1)
+        self.assertEqual(result["w86_candidate_parent_acl_gate"], "BLOCKED_RELATION_OWNER_PATH")
+        self.assertIs(result["hosted_write_authorized"], False)
     def test_authenticated_parent_path_blocks_future_select_grant(self):
         payload = json.loads((self.evidence / "query_13.json").read_text(encoding="utf-8"))
         provenance = payload["response"][0]["w86_acl_provenance"]
