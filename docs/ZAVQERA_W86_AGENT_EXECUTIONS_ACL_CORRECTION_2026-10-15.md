@@ -112,3 +112,23 @@ Evidence:
 The final W80 workflow run on commit `24af5583113e606bf8ec80f179cca0854073abac` is [run 38793792365](https://github.com/abdalrhmanata-gif/nexo-w21-isolated-verification-20261015/actions/runs/38793792365) — **SUCCESS**. Latest artifact `12000309494`, ZIP digest `sha256:669bc1f5e29424c00736cb1c24b257c638abc45d238bd7331b4096316746a2d2`, includes the two drift-repair pgTAP log files. Evidence from that exact run confirms PostgreSQL 17 migration replay PASS; simulated drift seed/check PASS; W86 repair and reapply exit codes 0; W66 11/11 and W86 20/20 both after repair and after reapply; W84 21/21 before/after reapply; W85 12/12; W44 17/17, W46 8/8, W80 49/49 before/after W83 reapply; read-only pack smoke PASS; and cleanup `VERIFIED`.
 
 The negative control is still **disposable/local-only**. It reproduces the ACL state and corrects it on a local stack; it is not a hosted repair. The original hosted Development remains unmodified and release remains NO-GO.
+
+
+
+## Verification addendum — inherited-role fail-closed guard (2026-10-16)
+
+The W86 candidate now performs a recursive role-membership/ACL preflight **before any REVOKE or GRANT**. It has no arbitrary depth cutoff; cycle detection prevents repeated role traversal. If a parent role on an inheritable membership path has table-level or column-level ACL entries on `public.agent_executions`, the migration raises an explicit exception before changing ACLs. This is intentionally fail-closed: revoking direct grants from `service_role` cannot remove a grant inherited from another role.
+
+The disposable W80 workflow deliberately seeded `w86_acl_probe_parent`, granted it to `service_role WITH INHERIT TRUE`, then granted table UPDATE and column SELECT. The read-only provenance query correctly returned `W86_ACL_PROVENANCE_INHERITED_ACL_PASS`. The migration then exited nonzero with the expected message:
+`W86 refused: service_role inherits agent_executions privileges from parent roles: column id SELECT via role w86_acl_probe_parent; table UPDATE via role w86_acl_probe_parent`.
+The workflow verified this was an expected guard rejection, removed the disposable role fixture, reapplied W86 successfully, and reran the W66/W86 tests.
+
+**Latest full local PostgreSQL 17.11 evidence:**
+- W80 isolated PostgreSQL 17 run [38857452731](https://github.com/abdalrhmanata-gif/nexo-w21-isolated-verification-20261015/actions/runs/38857452731) — **SUCCESS**, source/workflow SHA `687189c05773318e6ca9e4475eda7cf96b185d3d`.
+- Evidence artifact ID `12027962020`, ZIP SHA-256 `503add2e33ae0fff000c02b8c2953b716be0cd3b48a0cd9246116607da21b352`.
+- Expected inherited-ACL guard failure exit code: 3; marker `W86_INHERITED_ACL_GUARD_PASS`; role-fixture cleanup exit code 0; W86 reapply exit code 0.
+- W66 11/11 and W86 20/20 after seeded direct/column drift repair, after W86 reapply, and again after inherited-role fixture cleanup.
+- W84 21/21 before/after reapply; W85 12/12; W44 17/17; W46 8/8; W80 49/49; full migration replay passed; read-only query packs passed; cleanup `VERIFIED`.
+- Flutter CI on the same source/workflow SHA also passed: [run 38857457330](https://github.com/abdalrhmanata-gif/nexo-w21-isolated-verification-20261015/actions/runs/38857457330).
+
+This proves fail-closed handling in the disposable stack only. **Before any hosted repair is even proposed**, the new read-only ACL provenance query must be captured against Development and reviewed. If it reports any inherited table/column ACLs, W86 must not be applied as-is; the source role/grant and least-privilege resolution need independent owner review. Historical migration provenance remains unresolved. No hosted database write was performed, and release remains **NO-GO**.
