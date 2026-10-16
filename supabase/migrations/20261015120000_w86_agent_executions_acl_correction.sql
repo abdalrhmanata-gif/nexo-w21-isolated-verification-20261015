@@ -14,6 +14,7 @@ do $w86_inherited_acl_preflight$
 declare
   inherited_entries text;
   reachable_authenticated_parent text;
+  reachable_owner_role_path text;
 begin
   with recursive role_path (
     role_oid, role_name, depth, oid_path, inherits_all, can_set_role
@@ -72,8 +73,22 @@ begin
        format('%s via role %I', privilege_description, role_name),
        '; ' order by role_name, privilege_description
      ) from inherited_acl),
-    (select role_names from reachable_authenticated)
-    into inherited_entries, reachable_authenticated_parent;
+    (select role_names from reachable_authenticated),
+    (select string_agg(format('role %I', rp.role_name), ', ' order by rp.role_name)
+       from role_path rp
+       join pg_class c on c.oid = 'public.agent_executions'::regclass
+      where rp.role_name = pg_get_userbyid(c.relowner)
+        and (rp.depth = 0 or rp.can_set_role))
+    into inherited_entries, reachable_authenticated_parent, reachable_owner_role_path;
+
+  -- Ownership carries powers that are not reliably represented by grant rows:
+  -- service_role must not be the owner or be able to SET ROLE to the owner.
+  -- Otherwise the role could restore its own table access after these revokes.
+  if reachable_owner_role_path is not null then
+    raise exception
+      'W86 refused: service_role is or can SET ROLE to owner of public.agent_executions (%); direct ACL revokes do not remove owner authority',
+      reachable_owner_role_path;
+  end if;
 
   -- This migration itself grants SELECT to authenticated after this preflight.
   -- Reject any INHERIT/SET ROLE path to that grant target even when the role
