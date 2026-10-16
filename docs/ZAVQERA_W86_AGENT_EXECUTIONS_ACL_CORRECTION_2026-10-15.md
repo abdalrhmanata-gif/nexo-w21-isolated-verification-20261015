@@ -174,3 +174,13 @@ Static review identified a case where revoking ACL entries is not enough: `servi
 The isolated W80 workflow now runs two disposable negative controls: one grants `SET ROLE` membership to `service_role`, and one grants `INHERIT` while disabling `SET ROLE`. Each transfers table ownership to a temporary role, removes table/column ACL rows, expects W86 to reject before granting `authenticated SELECT`, proves no mutation, cleans up the role/ownership fixture, reapplies W86, and reruns W66/W86. The workflow helper passes `bash -n`, but the dedicated W80 PostgreSQL result is still pending verification; do not claim either database test passed yet.
 
 Release remains **NO-GO**. No hosted database was changed, and the W86 candidate remains unmerged.
+
+## W80 test-fixture correction — 2026-10-16
+
+Artifact inspection of W80 run `38898359863` (overall SUCCESS on source `85a4f1f9e4ae561e1ddb8780e0bcb96e97f31a0d`) showed that both owner-path fixtures stopped at `ALTER TABLE ... OWNER TO ...` with `must be able to SET ROLE`. That run therefore did **not** prove either owner-path guard, despite the overall job result. Do not cite it as owner-path proof.
+
+Corrective commits:
+- `e8b74dda247df4aae822b3fdd42735d7721089b9`: the disposable fixture grants the temporary owner role to `postgres` with `SET TRUE` before transferring ownership, and revokes that membership during cleanup.
+- `c3cc1310e438412f029b9c0082f2fca3ae52539a`: every fixture/guard/cleanup/pgTAP failure directly sets the top-level `owner_path_guard_status` so an owner-path fixture failure cannot be hidden by a successful later cleanup or reapply.
+
+The resulting W80 runs are being re-evaluated. A passing run must show that each fixture succeeds, W86 exits nonzero with the expected owner-path refusal, the `authenticated SELECT` grant did not occur, fixture cleanup succeeds, and W66/W86 are restored at 11/11 and 21/21. Until those exact results are confirmed, the owner-path tests remain **NOT VERIFIED**.
