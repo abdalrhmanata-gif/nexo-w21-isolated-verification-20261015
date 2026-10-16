@@ -599,3 +599,52 @@ Do not reconstruct their SQL from names or neighboring versions. Historical prov
 - Continued schema drift: two mission authority budget tables absent; all 26 selected expected columns absent; ten of 11 selected constraints absent (the remaining state constraint is an outdated definition); all eight selected indexes absent; W75/W76 receipt trigger absent; 23/40 tested function-signature expectations differ; W80/W82/W83/W84 function/ACL mismatches remain.
 - Full review: `docs/ZAVQERA_HOSTED_12_QUERY_AUDIT_REVIEW_2026-10-15.md`. The previous report's statement that the updated pack was awaiting its first hosted capture is superseded by this capture.
 - **Disposition stays NO-GO.** No hosted migration, ledger edit, deployment, secret change, or source product-code mutation occurred. Keep PR #39 OPEN/Draft/unmerged, Issue #23 OPEN and `TRUSTED_DISPATCH_ADAPTERS = Object.freeze({})` empty.
+
+
+## 13. Current checkpoint — W86 inherited-role guard and 13-query capture (2026-10-16)
+
+**Current decision: HOSTED RELEASE NO-GO. No hosted change authorized.**
+
+### W86 candidate verification
+
+- W86 review: [isolated PR #1](https://github.com/abdalrhmanata-gif/nexo-w21-isolated-verification-20261015/pull/1) — OPEN / DRAFT / UNMERGED.
+- Current W86 branch head: `b2f5e412204d74b1f6f5b39039b1326b945d5cb1`; the migration/workflow code itself was last fully tested on `687189c05773318e6ca9e4475eda7cf96b185d3d`. Seven commits after that tested SHA are docs-only.
+- Full local PostgreSQL 17.11 W80/W86: [run 38857452731](https://github.com/abdalrhmanata-gif/nexo-w21-isolated-verification-20261015/actions/runs/38857452731) — SUCCESS; artifact [12027962020](https://github.com/abdalrhmanata-gif/nexo-w21-isolated-verification-20261015/actions/runs/38857452731/artifacts/12027962020), digest `503add2e33ae0fff000c02b8c2953b716be0cd3b48a0cd9246116607da21b352`.
+- Deliberately seeded direct table/column ACL drift was repaired; W66 passed 11/11 and W86 20/20 after repair and after reapply.
+- Deliberately seeded inheritable parent-role table UPDATE and column SELECT caused W86 to stop **before any ACL mutation** with the expected exception. The read-only provenance probe returned `W86_ACL_PROVENANCE_INHERITED_ACL_PASS`; the temporary role fixture was cleaned; W86 then applied successfully and W66/W86 tests passed again.
+- W84 21/21 before/after reapply, W85 12/12, W44 17/17, W46 8/8, W80 49/49, full local migration replay and disposable cleanup all passed. Flutter CI passed on the same tested SHA.
+- This is disposable/local evidence only, not proof that Development matches the candidate.
+
+### 13-query read-only Development capture — still required
+
+- Audit/review branch: `codex/migration-ledger-provenance-20261015`; latest docs update commit: `9250bb24ec172f5c4a83ac721b5d3abb578a65e1`.
+- Audit PR: [isolated PR #2](https://github.com/abdalrhmanata-gif/nexo-w21-isolated-verification-20261015/pull/2) — OPEN / DRAFT / UNMERGED.
+- Query 13 is pinned to SHA-256 `ffdcc3f51ee20fb2ddb44e74f292df4767a76a9dff5e8cd30eef2adb8e9d4f64`; base queries 1–12 remain SHA-256 `a7aba3461786dbb5854f71dc4f87b7e0498d12509add535ab3df4a7ec231a284`.
+- A secure Windows PowerShell wrapper is checked in: `tools/run_zavqera_readonly_effect_audit.ps1`. The current authoritative run steps are the final section of `docs/ZAVQERA_HOSTED_MIGRATION_EFFECT_AUDIT_RUNBOOK_2026-10-15.md`; it supersedes earlier 12-query instructions.
+- Current workflow/runner local validation: [W80 run 38858755502](https://github.com/abdalrhmanata-gif/nexo-w21-isolated-verification-20261015/actions/runs/38858755502) — SUCCESS on `c6fae906f9f57efe11ec7f010afb48b66ac850dc`; Flutter CI [run 38858755489](https://github.com/abdalrhmanata-gif/nexo-w21-isolated-verification-20261015/actions/runs/38858755489) — SUCCESS on the same SHA. The later branch head only adds documentation.
+- **The supplied hosted ZIP is still the old 12-query capture.** No fresh 13-query Development capture has been received. Do not treat the disposable query-13 smoke or simulated inherited-role fixture as hosted evidence.
+
+### Required next action
+
+On the user's Windows machine, from the root of the isolated audit repository (not the original `Nexo` repository):
+
+```powershell
+git fetch origin codex/migration-ledger-provenance-20261015
+git switch codex/migration-ledger-provenance-20261015
+git pull --ff-only origin codex/migration-ledger-provenance-20261015
+
+powershell -NoProfile -ExecutionPolicy Bypass -File .\\tools\\run_zavqera_readonly_effect_audit.ps1
+```
+
+The wrapper runs the self-test before asking for the scoped Development-only PAT via a hidden prompt. Never paste or upload the token. Upload only the newly generated evidence ZIP containing `query_13.json`. If local tests/self-test fail, stop. If query 13 reports any inherited ACLs, W86 must not be applied as-is; require owner-reviewed least-privilege remediation.
+
+### Live guardrails rechecked 2026-10-16
+
+- Original repo PR #39: OPEN / DRAFT / UNMERGED, head `9d752a59f0683ea7149633138dc85bb33cf9a41b`.
+- Original repo Issue #23: OPEN.
+- Isolated W86 PR #1: OPEN / DRAFT / UNMERGED.
+- Isolated audit PR #2: OPEN / DRAFT / UNMERGED.
+- `TRUSTED_DISPATCH_ADAPTERS = Object.freeze({})` remains empty/fail-closed.
+- No hosted database write, migration, ledger repair, deployment, secret, billing, or DNS change occurred.
+- Historical SQL provenance remains unresolved: 22 same-name timestamp conflicts and six hosted-only migration names remain blockers.
+- Release remains **NO-GO**.
