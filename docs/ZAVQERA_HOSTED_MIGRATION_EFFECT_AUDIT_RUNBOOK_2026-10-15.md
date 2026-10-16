@@ -238,3 +238,13 @@ The pinned ACL provenance query was corrected so `service_role_inherited_table_a
 - Evidence artifact [12036577429](https://github.com/abdalrhmanata-gif/nexo-w21-isolated-verification-20261015/actions/runs/38878829978/artifacts/12036577429), digest `sha256:bdc92bfda664dfaca535f475c4666ca042ffed52622dd1754d40a946324817bc`.
 
 **Still blocked on fresh hosted evidence:** the supplied evidence ZIP has only 12 queries; this run is local/disposable and is not a hosted capture. Run `powershell -NoProfile -ExecutionPolicy Bypass -File .\\tools\\run_zavqera_readonly_effect_audit.ps1` locally from the isolated repository checkout on `codex/migration-ledger-provenance-20261015`, using the hidden prompt for a scoped Development-only read-only token. Do not paste or upload the token; upload only the resulting evidence ZIP containing `query_13.json`. The reviewer never authorizes hosted writes (`hosted_write_authorized=false`), even if no parent-role ACL is observed. Historical migration SQL provenance and independent owner authorization remain required. No hosted write, migration repair, deployment, secret, billing, or DNS change was performed; release remains **NO-GO**.
+
+
+## Additional W86 future-grant guard — 2026-10-16
+
+W86 does not merely revoke the currently observed direct grants: after preflight it grants SELECT to `authenticated`. Therefore the reviewer must treat a reachable membership path from `service_role` to `authenticated` as an independent blocker when any path is reachable through all-INHERIT edges or all-SET ROLE edges, even if query 13 reports zero inherited table/column ACL rows. This specific case is now enforced in the W86 candidate and the offline reviewer.
+
+- W86 PostgreSQL 17.11 disposable negative control: [W80 run 38889778593](https://github.com/abdalrhmanata-gif/nexo-w21-isolated-verification-20261015/actions/runs/38889778593), exact code/test/workflow SHA `a94d104f71a4a6ba57233b92ba797b96aa7f3120`; expected fail-closed exit 3, no-mutation check passed, W86 21/21 after fixture cleanup, cleanup verified.
+- Audit reviewer regression: [W80 run 38889843683](https://github.com/abdalrhmanata-gif/nexo-w21-isolated-verification-20261015/actions/runs/38889843683), SHA `35342455b968bc72f964ce28df15049e364e0bad`; 14 offline reviewer tests passed, including the case of an authenticated parent path without any parent ACL rows.
+
+This only strengthens the isolated candidate and offline report. If query 13 shows any inherited parent ACL, or any reachable service_role-to-authenticated path, do not apply W86 as-is. If neither is present, hosted writes still remain unauthorized until historical migration SQL provenance and an independent owner review/explicit authorization are complete. Hosted release remains **NO-GO**.

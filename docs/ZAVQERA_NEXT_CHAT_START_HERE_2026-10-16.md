@@ -53,7 +53,7 @@ Pinned query hashes for the capture to use:
 - Base 12-query pack SHA-256: `a7aba3461786dbb5854f71dc4f87b7e0498d12509add535ab3df4a7ec231a284`.
 - Query 13 inherited-ACL provenance SQL SHA-256: `f9f56944ddd04dd135329ff930cf5259e215eb89f30784b75e03a93f221ff38e`.
 
-After the ZIP is provided, inspect its project identity, query 13, role path and stored/effective ACL results, source manifest and reviewer disposition. If any parent-role ACL is reachable through automatic INHERIT or SET ROLE, **do not apply W86 as-is**; keep it blocked and require independent database-owner analysis of membership/ACL provenance. Even if no inherited grants appear, the capture does not authorize hosted changes.
+After the ZIP is provided, inspect its project identity, query 13, role path and stored/effective ACL results, source manifest and reviewer disposition. If any parent-role table/column ACL is reachable through automatic INHERIT or SET ROLE, **do not apply W86 as-is**. Also block W86 if query 13 shows a reachable membership path from service_role to authenticated via INHERIT or SET ROLE, even when authenticated currently has no ACL entry: W86 itself grants SELECT to authenticated after preflight, which could create a new access path. Require independent database-owner review of membership/ACL provenance. Even if neither path appears, the capture does not authorize hosted changes.
 
 ## 5. Why release is still NO-GO
 
@@ -82,3 +82,13 @@ Other outstanding differences from the prior 12-query capture include absent aut
 ## 7. Paste this message into the next ChatGPT conversation
 
 > استأنف ZAVQERA من ملف البداية هذا أولًا: `docs/ZAVQERA_NEXT_CHAT_START_HERE_2026-10-16.md` ثم اقرأ ملف الاستئناف الكامل المرتبط فيه. تحقّق من الحالة الحية للـPRs وActions قبل أي تعديل. الخطوة العملية التالية هي مراجعة ZIP جديد لالتقاط القراءة فقط ذي 13 استعلامًا؛ الـZIP القديم يحوي 12 فقط ولا يكفي. يجب تشغيل `tools/run_zavqera_readonly_effect_audit.ps1` محليًا على Windows من المستودع المعزول `codex/migration-ledger-provenance-20261015` باستخدام المطالبة المخفية للتوكن، ثم رفع ZIP الناتج فقط — لا ترسل التوكن في الدردشة. حلّل query_13 وقرّر إن كانت صلاحيات الأدوار الموروثة عبر INHERIT أو SET ROLE تمنع تطبيق W86. ممنوع أي كتابة على Supabase المستضاف أو دمج PR أو تغيير PR #39/Issue #23؛ أبقِ TRUSTED_DISPATCH_ADAPTERS فارغًا وقرار الإطلاق NO-GO. لا تعِد العمل المنجز، ولا تدّع نجاحًا مستضافًا اعتمادًا على اختبارات PostgreSQL المحلية.
+
+
+## 8. Additional W86 guard verified after the original checkpoint
+
+Static review identified a future-grant edge case: W86 grants SELECT to authenticated after preflight. The candidate and offline reviewer now block any service_role → authenticated membership path reachable through INHERIT or SET ROLE, even if authenticated has no current table/column ACL row.
+
+- W86 code/test/workflow tested on `a94d104f71a4a6ba57233b92ba797b96aa7f3120`; W80 PostgreSQL 17.11 [run 38889778593](https://github.com/abdalrhmanata-gif/nexo-w21-isolated-verification-20261015/actions/runs/38889778593) SUCCESS.
+- Evidence artifact [12041540640](https://github.com/abdalrhmanata-gif/nexo-w21-isolated-verification-20261015/actions/runs/38889778593/artifacts/12041540640), ZIP SHA-256 `2601c4c5a01a9120bd646875b42da8c2395cf241b3e130a202012e21b9923ee6`. The guard exited 3 as expected before mutation; no-mutation marker passed; after cleanup, W66 11/11 and W86 21/21 passed; cleanup verified.
+- Offline reviewer/test update on audit branch `35342455b968bc72f964ce28df15049e364e0bad`: [W80 run 38889843683](https://github.com/abdalrhmanata-gif/nexo-w21-isolated-verification-20261015/actions/runs/38889843683) SUCCESS; job log confirms 14 reviewer tests passed, including `test_authenticated_parent_path_blocks_future_select_grant`.
+- These remain isolated/local checks. No hosted migration or write is authorized; historical SQL provenance remains unresolved; PR #1/#2 stay draft/open/unmerged; PR #39 and Issue #23 stay open; provider registry empty; release NO-GO.
