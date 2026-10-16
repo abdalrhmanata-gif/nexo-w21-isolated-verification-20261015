@@ -1,65 +1,38 @@
 # ZAVQERA — Supplemental Hosted Migration-Effect Audit Runbook (2026-10-15)
 
-**Status: the original 10-query version was executed; updated 12-query version is prepared but not yet executed against hosted Development.** Captured evidence identified catalog/history mismatches. Queries 11–12 now add the hosted migration ledger version/name pairs and the W66 table ACL inventory. This remains read-only and cannot approve a rollout.
+**Current status — 2026-10-16: REVIEW REQUIRED / NO-GO.** The supplied hosted evidence archive is an older 12-query capture and has no `query_13.json`. This branch contains the pinned 12-query base pack plus a separate, SHA-256-pinned SELECT-only ACL-provenance query 13 and the secure Windows capture wrapper. The isolated tests pass, but **no fresh hosted 13-query capture has been recorded**. The old capture must not be treated as evidence about inherited `INHERIT` / `SET ROLE` paths. This runbook performs read-only metadata collection only; it never authorizes hosted changes or release.
 
 ## Repository and safety scope
 
 - Repository: `abdalrhmanata-gif/nexo-w21-isolated-verification-20261015`
-- Branch: `codex/w80-forward-correction-20261015`
+- Audit branch: `codex/migration-ledger-provenance-20261015` (older instructions on the W80 branch are superseded).
 - Project: `ZAVQERA Development`, ref `mrwmmbytcymqgwvcoywd`, region `eu-west-1`
 - Pack: `supabase/tests/hosted_readonly_migration_effect_audit_queries.sql`
 - Runner: `tools/supabase_readonly_migration_effect_audit.py`
 - Tests: `tests/test_supabase_readonly_migration_effect_audit.py`
-- Pack SHA-256 (LF-normalized, updated 12-query version): `a7aba3461786dbb5854f71dc4f87b7e0498d12509add535ab3df4a7ec231a284`
-- All 12 fixed statements must begin with SELECT. The runner pins the digest, verifies the project identity before SQL and checks effective role/transaction guard before query 2.
+- Base pack SHA-256 (12 SELECT statements): `a7aba3461786dbb5854f71dc4f87b7e0498d12509add535ab3df4a7ec231a284`
+- Query 13 SHA-256 (role-path ACL provenance): `f9f56944ddd04dd135329ff930cf5259e215eb89f30784b75e03a93f221ff38e`
+- The current runner executes 13 fixed SELECT statements. It pins both hashes, validates the target project before SQL, and requires the effective session to be `supabase_read_only_user` in a read-only transaction before accepting evidence.
 - Only `POST /v1/projects/{ref}/database/query/read-only` is allowed for SQL. The normal SQL endpoint is never used.
 - The observed read-only role has `rolbypassrls=true`; the pack is limited to catalog/ledger metadata. Do not add application-row queries.
 - Never set the query target to Main/Production; never send a PAT through ChatGPT, GitHub, a file, command-line argument, or shell history.
 
-## Windows PowerShell procedure
+## Current Windows PowerShell procedure — use only this procedure
 
-Run from the existing checkout in the PowerShell window. First pull the new docs/pack/runner/tests/workflow updates:
+The earlier inline-token procedure in the historical version of this runbook is superseded. Use the secure wrapper below; do not run the capture by manually placing the token in an environment variable, command argument, script, or chat.
 
-```powershell
-git pull --ff-only origin codex/w80-forward-correction-20261015
-```
-
-Then run local self-test and isolated unit tests (no hosted network requests):
+From the isolated repository root:
 
 ```powershell
-py -3 tools/supabase_readonly_migration_effect_audit.py --self-test
-if ($LASTEXITCODE -ne 0) { throw "Self-test failed; do not connect." }
-
-py -3 -m unittest discover -s tests -p "test_supabase_readonly_migration_effect_audit.py" -v
-if ($LASTEXITCODE -ne 0) { throw "Unit tests failed; do not connect." }
+git fetch origin codex/migration-ledger-provenance-20261015
+git switch codex/migration-ledger-provenance-20261015
+git pull --ff-only origin codex/migration-ledger-provenance-20261015
+powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\run_zavqera_readonly_effect_audit.ps1
 ```
 
-Only continue after both commands pass. Confirm your PAT is a **Scoped Personal Access Token** with scope limited to this one Development project and only these permissions:
-- Project Settings — Read
-- Database — Read (`database_read`)
+The wrapper runs the self-test before prompting, collects the scoped Development-only token using hidden SecureString input, executes the pinned 13-query read-only endpoint, clears its temporary token state, and runs the offline reviewer without inheriting the token. It creates a ZIP for evidence. Upload **only the ZIP**; never paste or upload a token.
 
-If the token previously pasted into ChatGPT was not already revoked, revoke it first. A revoked token cannot be reused.
-
-Set the project ref, receive the token through a hidden prompt, and run the supplemental audit. Paste one line at a time or paste this complete block; do not include token text anywhere in it.
-
-```powershell
-$env:SUPABASE_PROJECT_REF = "mrwmmbytcymqgwvcoywd"
-$secure = Read-Host "Scoped Development PAT (hidden)" -AsSecureString
-$env:SUPABASE_ACCESS_TOKEN = [System.Net.NetworkCredential]::new("", $secure).Password
-$secure.Dispose()
-$env:ZAVQERA_AUDIT_CONFIRMATION = "DEVELOPMENT_ONLY_READ_ONLY"
-
-try {
-    py -3 tools/supabase_readonly_migration_effect_audit.py
-    $auditExitCode = $LASTEXITCODE
-    Write-Host "EFFECT_AUDIT_EXIT_CODE=$auditExitCode"
-}
-finally {
-    Remove-Item Env:SUPABASE_ACCESS_TOKEN, Env:SUPABASE_PROJECT_REF, Env:ZAVQERA_AUDIT_CONFIRMATION -ErrorAction SilentlyContinue
-}
-```
-
-The secure prompt normally displays masking characters rather than the token. Do not echo the token or test it with other commands. After the script exits, the environment variables are removed. Revoke the PAT after the work is complete if it was created for this audit only.
+If the token or local checkout is unavailable, stop. Do not substitute the normal Supabase SQL endpoint, make up query 13, or infer role-path results from the old capture. There is no hosted-write authorization in this workflow.
 
 ## Expected output and interpretation
 
@@ -84,10 +57,11 @@ The secure prompt normally displays masking characters rather than the token. Do
 10. Built-in and explicit function-default ACLs for `postgres` and `supabase_admin`.
 11. Migration ledger `version,name` pairs only; SQL bodies are not returned.
 12. Effective and expanded stored ACL rows for `public.agent_executions` (W66).
+13. Reachable role-membership paths and inherited table/column ACL provenance for `service_role`, covering both `INHERIT` and `SET ROLE` semantics.
 
 ## After collection
 
-Next, run the updated pack after CI/local PostgreSQL 17 syntax validation, then manually match ledger tuples to source files and classify the W66 effective/stored ACLs. Do not assume the ledger row count until the new capture is reviewed. A database/platform owner must independently review all unexpected privilege paths, function owners/modes, search paths, relation ACLs and default ACL policy.
+After a fresh 13-query capture, manually match ledger tuples to source files and classify the W66 effective/stored ACLs and query 13 role-path results. Existing isolated PostgreSQL 17/CI success validates the code pack only; it is not a substitute for hosted Development evidence. Do not assume the ledger row count until the new capture is reviewed. A database/platform owner must independently review all unexpected privilege paths, function owners/modes, search paths, relation ACLs and default ACL policy.
 
 No hosted remediation is authorized by this runbook. Do not run `supabase db push`, `migration repair`, manually edit `supabase_migrations.schema_migrations`, replay migrations against hosted Development, or change Supabase Main/Production. Any future hosted migration requires a separate reviewed plan and explicit owner authorization.
 
