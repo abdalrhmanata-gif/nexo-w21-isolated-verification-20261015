@@ -68,16 +68,11 @@ No hosted remediation is authorized by this runbook. Do not run `supabase db pus
 **Release remains NO-GO.** Keep PR #39 open/Draft/unmerged, Issue #23 open, and `TRUSTED_DISPATCH_ADAPTERS` empty/fail-closed.
 
 
-## Offline comparison after the updated 12-query capture
+## Historical 12-query offline comparison — obsolete, not a current procedure
 
-After the updated audit completes and the evidence folder contains query_11.json and query_12.json, run this from the repository root in PowerShell:
+This section records the original 12-query workflow for context only. Do **not** run the old command below against a current evidence folder: the current reviewer requires `query_13.json` and will reject an archive containing only query 11/12.
 
-```powershell
-$auditDir = "C:\Users\oem\nexo-w21-isolated-verification-20261015\zavqera-readonly-effect-audit-output\<new-UTC-folder>"
-py -3 tools/review_hosted_migration_ledger.py --evidence-dir $auditDir
-```
-
-This offline comparator verifies the project/query-pack evidence identity, compares every hosted ledger (version,name) tuple to checked-in migration filenames, records same-name/different-version candidates and inspects the captured W66 ACL matrix. It writes ledger_acl_review.json and ledger_acl_review.md inside that evidence folder. Its status is always REVIEW REQUIRED / NO-GO; it cannot certify historical SQL equality and it never connects to Supabase.
+For a new capture, use **Current authoritative capture procedure — 13 queries** near the end of this runbook. The secure wrapper invokes the offline reviewer against the newly created 13-query evidence folder automatically. The reviewer is offline-only, always reports REVIEW REQUIRED / NO-GO, and cannot authorize hosted writes.
 
 
 ## Verified isolated SQL smoke — 2026-10-15
@@ -102,11 +97,11 @@ The guarded runner now pins two files independently:
 - Base 12-query pack SHA-256: a7aba3461786dbb5854f71dc4f87b7e0498d12509add535ab3df4a7ec231a284
 - Query 13, supabase/tests/hosted_readonly_w86_acl_provenance_query.sql, SHA-256: f9f56944ddd04dd135329ff930cf5259e215eb89f30784b75e03a93f221ff38e
 
-From the repository root in PowerShell, first run: py -3 tools/supabase_readonly_migration_effect_audit.py --self-test
+Use the secure wrapper in the **Current authoritative capture procedure — 13 queries** section below; it performs the no-network self-test before prompting. For a manual self-test without any token or network, run `py -3 tools/supabase_readonly_migration_effect_audit.py --self-test` from the audit repository root.
 
 Expected self-test output: SELF_TEST=PASS; queries=13; base_sha256=a7aba3461786dbb5854f71dc4f87b7e0498d12509add535ab3df4a7ec231a284; acl_provenance_sha256=f9f56944ddd04dd135329ff930cf5259e215eb89f30784b75e03a93f221ff38e; no network requests.
 
-Then run the same guarded Development capture procedure described earlier in this runbook, using the verified Development project ref, explicit DEVELOPMENT_ONLY_READ_ONLY confirmation, and the scoped read-only Management API token locally. The runner verifies both SQL hashes, validates project identity and the read-only role before proceeding, sends only Management API database/query/read-only requests, saves query outputs 01–13, and never saves or prints the token. Do not paste a token into chat. Inspect the evidence ZIP for secrets before uploading it.
+Then run the current secure PowerShell wrapper below using the verified Development project ref and scoped read-only Management API token locally. Do not recreate the older inline-token instructions. The runner verifies both SQL hashes, validates project identity and the read-only role before proceeding, sends only Management API database/query/read-only requests, saves query outputs 01–13, and never saves or prints the token. Do not paste a token into chat. Inspect the evidence ZIP for secrets before uploading it.
 
 After capture, run the offline reviewer against the new evidence folder with: py -3 tools/review_hosted_migration_ledger.py --evidence-dir <new-evidence-folder>
 
