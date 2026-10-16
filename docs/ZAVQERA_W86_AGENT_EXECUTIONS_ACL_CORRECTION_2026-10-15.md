@@ -143,7 +143,7 @@ The current capture procedure is documented in [the 13-query audit runbook](http
 
 - W80 isolated PostgreSQL 17 run [38865144782](https://github.com/abdalrhmanata-gif/nexo-w21-isolated-verification-20261015/actions/runs/38865144782) — **SUCCESS** on candidate/workflow SHA `a5f899ffff202eb0eda7954cec9ad12d82d252dc`.
 - Artifact [12031370300](https://github.com/abdalrhmanata-gif/nexo-w21-isolated-verification-20261015/actions/runs/38865144782/artifacts/12031370300), SHA-256 `8bccecd95878f0fa56309b01f0118d7f19fdc9eccbbdb5180ed5947f9775bc98`.
-- Membership fixture used `INHERIT FALSE, SET TRUE`. Query 13 observed `all_edges_inherit=false`, `all_edges_set_role=true`; the JSON assertion returned `W86_ACL_PROVENANCE_SET_ROLE_PASS` (the workflow's recorded marker is `W86_ACL_PROVENANCE_SET_ROLE_ACL_PASS`).
+- Membership fixture used `INHERIT FALSE, SET TRUE`. Query 13 observed `all_edges_inherit=false`, `all_edges_set_role=true`; the JSON assertion returned `W86_ACL_PROVENANCE_SET_ROLE_ACL_PASS`.
 - The migration's guard rejected the parent-role ACL path before ACL mutation (expected exit code 3). The disposable role was removed, W86 then reapplied successfully, and W66 11/11 plus W86 20/20 passed after cleanup. Full chain, W84/W85/W44/W46/W80 tests, read-only query smoke, and disposable cleanup also passed.
 - Flutter CI: [run 38865152105](https://github.com/abdalrhmanata-gif/nexo-w21-isolated-verification-20261015/actions/runs/38865152105) — **SUCCESS**.
 
