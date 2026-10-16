@@ -1,0 +1,84 @@
+# ZAVQERA — START HERE for next conversation (2026-10-16)
+
+**Use this file as the entrypoint, not as a replacement for the full handoff.** Read the linked comprehensive handoff and current PR descriptions before making changes. It preserves the current exact checkpoint and the required next action so that another conversation does not repeat or undo work.
+
+## 1. Current mission and architecture
+
+ZAVQERA (repository name still Nexo) is an AI Mission Planner / Delegation Layer for both personal and business workspaces from day one. A Mission is the unit of work; it carries the goal, authority, permitted/prohibited actions, budget, expiry, and evidence/outcome. The architecture intent is:
+
+`User Goal → Intent → Identity → Authority → Policy → Authorization → Plan → Action → Execution → Evidence → Verification → Outcome`
+
+Keep the core domain/application provider-, backend-, storage-, queue/worker-, UI-framework-, and vendor-neutral. Never treat client checks, static Dart policy, signed passports, or invocation envelopes alone as server enforcement.
+
+## 2. Read these authoritative records first
+
+1. **Full continuation handoff** (large document containing the project history, architecture/constraints, earlier adversarial tests, W86 work, audit pack, exact hashes, and next-step instructions):  
+   https://github.com/abdalrhmanata-gif/nexo-w21-isolated-verification-20261015/blob/codex/migration-ledger-provenance-20261015/docs/ZAVQERA_CONTINUATION_HANDOFF_2026-10-15.md
+
+2. **Audit PR #2** — pinned source-provenance and 13-query read-only capture/reviewer:  
+   https://github.com/abdalrhmanata-gif/nexo-w21-isolated-verification-20261015/pull/2
+
+3. **Isolated W86 PR #1** — forward-only ACL correction candidate with inherited ACL guards:  
+   https://github.com/abdalrhmanata-gif/nexo-w21-isolated-verification-20261015/pull/1  
+   Supporting candidate notes:  
+   https://github.com/abdalrhmanata-gif/nexo-w21-isolated-verification-20261015/blob/codex/w86-agent-executions-acl-correction-20261015/docs/ZAVQERA_W86_AGENT_EXECUTIONS_ACL_CORRECTION_2026-10-15.md
+
+4. **Original repository status — do not modify/merge**:  
+   PR #39: https://github.com/abdalrhmanata-gif/Nexo/pull/39  
+   Issue #23: https://github.com/abdalrhmanata-gif/Nexo/issues/23
+
+## 3. Verified live checkpoint as of 2026-10-16
+
+- Isolated verification repository: `abdalrhmanata-gif/nexo-w21-isolated-verification-20261015`.
+- Audit branch: `codex/migration-ledger-provenance-20261015`; PR #2 is OPEN / DRAFT / UNMERGED. Its latest previously verified docs-only commit was `c668ad9ae26e246d31e4420c9f1f6371b8deb3cb` before this START-HERE record was added. The code/test workflow revision validated immediately before that was `438dc482863468798bfe1a108fcb1d9b7e836ac2`.
+- W80/PostgreSQL 17.11 exact source/test run: [38878829978](https://github.com/abdalrhmanata-gif/nexo-w21-isolated-verification-20261015/actions/runs/38878829978) — SUCCESS. Evidence artifact [12036577429](https://github.com/abdalrhmanata-gif/nexo-w21-isolated-verification-20261015/actions/runs/38878829978/artifacts/12036577429), SHA-256 `bdc92bfda664dfaca535f475c4666ca042ffed52622dd1754d40a946324817bc`.
+- Flutter CI: [38878829957](https://github.com/abdalrhmanata-gif/nexo-w21-isolated-verification-20261015/actions/runs/38878829957) — SUCCESS on the same code/test SHA.
+- The verified audit tooling reports catalog runner 8/8, migration-effect runner/PowerShell wrapper 13/13, offline ledger/ACL reviewer 13/13. The self-test pins a 13-query flow and both query hashes with no network requests. The disposable PostgreSQL 17.11 migration replay, W44 17/17, W46 8/8, W80 49/49 before/after W83 reapply, W84 21/21 before/after reapply, W85 12/12, query-13 local smoke, and disposable cleanup passed. These are isolated/local results, not hosted Development evidence.
+- W86 candidate code/test was separately verified against PostgreSQL 17.11, including the SET ROLE-only inherited-ACL negative control: [run 38865144782](https://github.com/abdalrhmanata-gif/nexo-w21-isolated-verification-20261015/actions/runs/38865144782). The fixture uses an edge with `INHERIT FALSE, SET TRUE`, confirms the read-only provenance query sees parent-role table UPDATE/column SELECT, and W86 fails closed before mutation. After fixture cleanup, W86 reapplies and W66 11/11 + W86 20/20 pass. This proves the guard on disposable PostgreSQL, not on hosted Development.
+- Original PR #39 is OPEN / DRAFT / UNMERGED; original Issue #23 is OPEN. PR #1 and PR #2 in the isolated repo are also OPEN / DRAFT / UNMERGED at the last verified state. Re-check live status before future actions.
+
+## 4. Immediate next step — requires the user's local Windows environment
+
+The 2026-10-15 evidence ZIP uploaded earlier is SHA-256 `fff6f88aca42c73dc691ead099e969f3cfc911fea5504ce1291b6e04ae0320f6` and contains only **12** queries. It does **not** include the newly required query 13, so it cannot clear the W86 inherited-role preflight.
+
+On the user's Windows machine, from the root of an up-to-date checkout of the **isolated repository** on branch `codex/migration-ledger-provenance-20261015`, run:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\run_zavqera_readonly_effect_audit.ps1
+```
+
+Use the script's hidden prompt for the scoped, Development-only read-only token. Do **not** paste the token into chat, commit it, or include it in the ZIP. The wrapper runs local self-tests, executes the pinned SELECT-only capture, launches the offline reviewer after clearing the token, and packages evidence. Upload **only the generated evidence ZIP** containing `query_13.json` to the next conversation; do not upload the token or unrelated database data.
+
+Pinned query hashes for the capture to use:
+- Base 12-query pack SHA-256: `a7aba3461786dbb5854f71dc4f87b7e0498d12509add535ab3df4a7ec231a284`.
+- Query 13 inherited-ACL provenance SQL SHA-256: `f9f56944ddd04dd135329ff930cf5259e215eb89f30784b75e03a93f221ff38e`.
+
+After the ZIP is provided, inspect its project identity, query 13, role path and stored/effective ACL results, source manifest and reviewer disposition. If any parent-role ACL is reachable through automatic INHERIT or SET ROLE, **do not apply W86 as-is**; keep it blocked and require independent database-owner analysis of membership/ACL provenance. Even if no inherited grants appear, the capture does not authorize hosted changes.
+
+## 5. Why release is still NO-GO
+
+The previous 12-query read-only hosted Development capture (PostgreSQL 17.6; capture time `2026-10-15T18:45:25.121761+00:00`) showed `service_role` with effective SELECT, INSERT, UPDATE, DELETE, TRUNCATE, REFERENCES, TRIGGER, and MAINTAIN on `public.agent_executions`. W66 source expects direct table privileges revoked; this is a critical mismatch. A forward-only correction W86 has been created and hardened to fail closed on inherited grants, but it has **not** been applied to hosted Development.
+
+Historical migration provenance is still unresolved:
+- 89 checked-in migration files vs 74 hosted ledger rows.
+- 46 exact version+name tuples; 22 same-name timestamp conflicts.
+- 43 source tuples absent from the exact hosted ledger; 28 hosted tuples absent from current source tuples.
+- Six hosted-only migration names have no current-source file.
+- The bounded exact-path recovery check searched 28 historical names over 23 visible original-repository branch refs (644 checks, zero commits found). This does not rule out deleted/private refs, local Git objects/reflogs, or external deployment/release archives. Do not infer historical SQL from filenames or current equivalents.
+
+Other outstanding differences from the prior 12-query capture include absent authority-budget tables and selected columns/constraints/indexes, old reservation-state constraint, missing execution success guard, forbidden legacy Research completion/reservation RPCs and EXECUTE grants, SECURITY DEFINER/search-path differences, and `supabase_admin` default function ACLs. The large handoff contains the detailed matrix.
+
+## 6. Non-negotiable guardrails
+
+- Do not apply W86 or any migration to hosted Supabase Development or Main/Production; no ad-hoc SQL, `supabase db push`, migration repair, or manual ledger edits.
+- No writes to any hosted DB, no deployment, no secrets, provider registration, billing, or DNS actions.
+- Keep `TRUSTED_DISPATCH_ADAPTERS = Object.freeze({})` empty/fail-closed.
+- Do not merge or close original PR #39; keep it OPEN/DRAFT/UNMERGED. Keep original Issue #23 OPEN.
+- Do not modify the original repository in this verification task. Work in the temporary isolated verification repository only.
+- No Codex credits or paid external services. Never ask for, receive, or echo a token in chat.
+- A green isolated CI run is not proof of hosted schema parity, production enforcement, or real-provider semantics. An unknown external outcome remains `UNKNOWN`; do not blindly retry.
+- Release remains **NO-GO** until hosted schema/effect parity, historical source provenance, Mission Authority enforcement, and provider-specific idempotency/receipt/reconciliation proof are reviewed.
+
+## 7. Paste this message into the next ChatGPT conversation
+
+> استأنف ZAVQERA من ملف البداية هذا أولًا: `docs/ZAVQERA_NEXT_CHAT_START_HERE_2026-10-16.md` ثم اقرأ ملف الاستئناف الكامل المرتبط فيه. تحقّق من الحالة الحية للـPRs وActions قبل أي تعديل. الخطوة العملية التالية هي مراجعة ZIP جديد لالتقاط القراءة فقط ذي 13 استعلامًا؛ الـZIP القديم يحوي 12 فقط ولا يكفي. يجب تشغيل `tools/run_zavqera_readonly_effect_audit.ps1` محليًا على Windows من المستودع المعزول `codex/migration-ledger-provenance-20261015` باستخدام المطالبة المخفية للتوكن، ثم رفع ZIP الناتج فقط — لا ترسل التوكن في الدردشة. حلّل query_13 وقرّر إن كانت صلاحيات الأدوار الموروثة عبر INHERIT أو SET ROLE تمنع تطبيق W86. ممنوع أي كتابة على Supabase المستضاف أو دمج PR أو تغيير PR #39/Issue #23؛ أبقِ TRUSTED_DISPATCH_ADAPTERS فارغًا وقرار الإطلاق NO-GO. لا تعِد العمل المنجز، ولا تدّع نجاحًا مستضافًا اعتمادًا على اختبارات PostgreSQL المحلية.
