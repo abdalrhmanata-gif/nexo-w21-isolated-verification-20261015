@@ -28,3 +28,14 @@ To create a reproducible *new offline comparison*, rerun `tools/review_hosted_mi
 ## Release / security boundary
 
 This tool change is offline evidence-quality work only. It does not fix `service_role` privileges on `public.agent_executions`, repair missing tables/functions, resolve historical SQL provenance, or certify Mission Authority enforcement. No hosted database write, migration, deployment, secret, billing or DNS change is authorized or performed. Keep the launch **NO-GO**, original PR #39 OPEN/DRAFT/UNMERGED, Issue #23 OPEN and `TRUSTED_DISPATCH_ADAPTERS` empty/fail-closed.
+
+
+## Follow-up: 13-query read-only capture with ACL inheritance provenance — 2026-10-16
+
+The migration-effect runner now executes the original 12 pinned SELECT queries plus one separately pinned W86 ACL provenance SELECT. The original pack remains SHA-256 `a7aba3461786dbb5854f71dc4f87b7e0498d12509add535ab3df4a7ec231a284`; the added query `supabase/tests/hosted_readonly_w86_acl_provenance_query.sql` is pinned at SHA-256 `ffdcc3f51ee20fb2ddb44e74f292df4767a76a9dff5e8cd30eef2adb8e9d4f64`. The runner validates both hashes and requires 13 SELECT-only statements in total. The query reports role membership paths, effective privileges, direct table/column ACL entries, and ACL entries inherited by `service_role`; it does not read application rows.
+
+The offline reviewer now requires `query_13.json`, validates its role/read-only gate and pinned query hash, and records inherited table/column ACL counts and entries in the Markdown/JSON review. Any inherited ACL row is a blocker for the current W86 candidate; this audit captures and reports the state, but does not remediate it or authorize a hosted write.
+
+**Exact-SHA verification:** W80 isolated PostgreSQL 17 workflow [run 38858063330](https://github.com/abdalrhmanata-gif/nexo-w21-isolated-verification-20261015/actions/runs/38858063330) — SUCCESS on `f4d7fed423739db0d39ba576ca455c5d4a182169`. The workflow ran the read-only runner unit tests, self-test (`queries=13`), offline ledger-review tests, full local PostgreSQL 17 migration replay/regression suite, local smoke of the new ACL provenance SQL, and cleanup verification. Evidence artifact `12027554468`, ZIP SHA-256 `8147e0b3624b27bdd6dc83f566b665a8942a1b3aac3e3dd785de1a3fc45a483d`. Flutter CI also passed on the same SHA: [run 38858068979](https://github.com/abdalrhmanata-gif/nexo-w21-isolated-verification-20261015/actions/runs/38858068979).
+
+This does not retroactively add the new query to the previously uploaded 12-query ZIP. To review the current hosted role path, rerun the guarded runner on the verified read-only Development connection and preserve the resulting 13-query output with its two query hashes and exact source manifest/HEAD. No token should be pasted into chat or saved in evidence.
