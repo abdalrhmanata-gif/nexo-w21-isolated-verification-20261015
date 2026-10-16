@@ -99,6 +99,7 @@ SELECT jsonb_build_object(
       'grantee_role', rp.role_name,
       'membership_depth', rp.depth,
       'all_membership_edges_inherit', rp.inherits_all,
+      'all_membership_edges_set_role', rp.can_set_role,
       'privilege_type', acl.privilege_type,
       'is_grantable', acl.is_grantable,
       'grantor', grantor_role.rolname
@@ -118,6 +119,7 @@ SELECT jsonb_build_object(
       'grantee_role', rp.role_name,
       'membership_depth', rp.depth,
       'all_membership_edges_inherit', rp.inherits_all,
+      'all_membership_edges_set_role', rp.can_set_role,
       'privilege_type', acl.privilege_type,
       'is_grantable', acl.is_grantable,
       'grantor', grantor_role.rolname
