@@ -383,6 +383,12 @@ class HostedLedgerReviewTests(unittest.TestCase):
         self.assertIn("any path from `service_role` to the table owner with either `INHERIT` or `SET ROLE` enabled", runbook)
         self.assertIn("no fresh hosted 13-query capture has been recorded", runbook)
         self.assertIn("There is no hosted-write authorization in this workflow.", runbook)
+        self.assertIn("Historical 12-query offline comparison — obsolete, not a current procedure", runbook)
+        historical = runbook.split("## Historical 12-query offline comparison — obsolete, not a current procedure", 1)[1]
+        historical = historical.split("## Verified isolated SQL smoke", 1)[0]
+        self.assertNotIn("$auditDir =", historical)
+        self.assertIn("the current reviewer requires `query_13.json`", historical)
+        self.assertIn("Current authoritative capture procedure — 13 queries", runbook)
     def test_report_is_no_go(self):
         result = review.reconcile(self.evidence, self.repo)
         rendered = review.render_markdown(result)
