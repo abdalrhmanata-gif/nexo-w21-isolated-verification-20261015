@@ -272,6 +272,8 @@ class ReadOnlyEffectAuditTests(unittest.TestCase):
                     {"version": "20261013100000", "name": "w80_fail_closed_workspace_role_checks"},
                     {"version": "20261015100000", "name": "w83_workspace_invitation_privilege_correction"},
                 ]}
+            if number < 12:
+                return {"result": [{"query_number": number, "ok": True}]}
             if number == 12:
                 rows = []
                 for role in ("anon", "authenticated", "service_role", "postgres"):
@@ -305,6 +307,8 @@ class ReadOnlyEffectAuditTests(unittest.TestCase):
                     {"version": "20261013100000", "name": "w80_fail_closed_workspace_role_checks"},
                     {"version": "20261015100000", "name": "w83_workspace_invitation_privilege_correction"},
                 ]}
+            if number < 12:
+                return {"result": [{"query_number": number, "ok": True}]}
             if number == 12:
                 rows = []
                 for role in ("anon", "authenticated", "service_role", "postgres"):
