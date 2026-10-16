@@ -48,6 +48,9 @@ class W86OwnerPathWorkflowSyntaxTests(unittest.TestCase):
         self.assertIn("reachable_via_membership_options", workflow)
         self.assertIn("W86_ACL_PROVENANCE_MIXED_PATH_ACL_PASS", workflow)
         self.assertIn("W86_MIXED_PATH_GUARD_PASS", workflow)
+        self.assertIn("GRANT DELETE ON TABLE public.agent_executions TO service_role", workflow)
+        self.assertIn("W86_MIXED_PATH_NO_MUTATION_PASS", workflow)
+        self.assertIn("w86_mixed_path_no_mutation_exit_code", workflow)
 
 
 if __name__ == "__main__":
