@@ -36,6 +36,8 @@ class W86OwnerPathWorkflowSyntaxTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn('run_owner_path_negative_control role "INHERIT FALSE, SET TRUE"', helper)
         self.assertIn('run_owner_path_negative_control inherit "INHERIT TRUE, SET FALSE"', helper)
+        self.assertIn("GRANT CREATE ON SCHEMA public TO ${role_name}", helper)
+        self.assertIn("REVOKE CREATE ON SCHEMA public FROM ${role_name}", helper)
         self.assertIn("W86_OWNER_${kind^^}_NO_MUTATION_PASS", helper)
         self.assertIn("owner_path_guard_status=1", helper)
 
