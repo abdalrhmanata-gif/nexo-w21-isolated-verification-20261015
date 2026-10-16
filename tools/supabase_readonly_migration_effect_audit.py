@@ -369,6 +369,10 @@ def main() -> int:
                 or not any(item.get("role_name") == "service_role" and item.get("depth") == 0 for item in memberships if isinstance(item, dict))
                 or not all(
                     isinstance(item, dict)
+                    and isinstance(item.get("role_name"), str)
+                    and bool(item.get("role_name"))
+                    and type(item.get("depth")) is int
+                    and item.get("depth", -1) >= 0
                     and isinstance(item.get("all_edges_inherit"), bool)
                     and isinstance(item.get("all_edges_set_role"), bool)
                     for item in memberships
