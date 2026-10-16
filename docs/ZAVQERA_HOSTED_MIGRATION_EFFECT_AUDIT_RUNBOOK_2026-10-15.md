@@ -141,3 +141,10 @@ The reviewer now requires query_13.json and the exact ACL provenance query hash.
 ## Verified local runner and query smoke — 2026-10-16
 
 The 13-query runner, offline reviewer, and ACL provenance SQL passed W80 isolated PostgreSQL 17 validation on run 38858063330, source SHA f4d7fed423739db0d39ba576ca455c5d4a182169. Evidence artifact 12027554468, ZIP SHA-256 8147e0b3624b27bdd6dc83f566b665a8942a1b3aac3e3dd785de1a3fc45a483d; cleanup was verified. Flutter CI passed on the same SHA in run 38858068979. This is local/disposable validation only; a new hosted capture is still outstanding.
+
+
+## Recommended Windows PowerShell helper
+
+From the isolated audit repository root, run: `.\tools\run_zavqera_readonly_effect_audit.ps1`.
+
+The helper first runs the no-network self-test, then prompts for the scoped token using hidden SecureString input, runs the pinned 13-query read-only capture, invokes the offline reviewer against the same checkout, and zips the evidence. It removes the token from the process environment and clears the temporary BSTR in a finally block. It performs no migrations or hosted writes. If the capture stops at a gate, it preserves partial evidence and reports the blocked stage; do not weaken the gate or change the SQL to make it pass.
