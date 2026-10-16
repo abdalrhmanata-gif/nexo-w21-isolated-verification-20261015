@@ -376,6 +376,15 @@ def main() -> int:
                 or set(effective) != {"SELECT", "INSERT", "UPDATE", "DELETE", "TRUNCATE", "REFERENCES", "TRIGGER", "MAINTAIN"}
                 or not isinstance(inherited_table, list)
                 or not isinstance(inherited_column, list)
+                or not all(
+                    isinstance(item, dict)
+                    and isinstance(item.get("grantee_role"), str)
+                    and isinstance(item.get("membership_depth"), int)
+                    and item.get("membership_depth", 0) > 0
+                    and isinstance(item.get("all_membership_edges_inherit"), bool)
+                    and isinstance(item.get("all_membership_edges_set_role"), bool)
+                    for item in inherited_table + inherited_column
+                )
             ):
                 return stop("w86_acl_provenance", "role gate or inherited ACL provenance result incomplete/unrecognized", 5, index)
 
