@@ -233,6 +233,10 @@ class HostedLedgerReviewTests(unittest.TestCase):
         payload = json.loads((self.evidence / "query_13.json").read_text(encoding="utf-8"))
         provenance = payload["response"][0]["w86_acl_provenance"]
         provenance["relation"]["owner_role"] = "w86_acl_probe_parent"
+        acl_payload = json.loads((self.evidence / "query_12.json").read_text(encoding="utf-8"))
+        for acl_row in acl_payload["response"]:
+            acl_row["owner_role"] = provenance["relation"]["owner_role"]
+        save(self.evidence / "query_12.json", acl_payload)
         provenance["service_role_membership_paths"] = [
             {"role_name": "service_role", "depth": 0, "member_of_role": None,
              "all_edges_inherit": True, "all_edges_set_role": True},
@@ -254,6 +258,10 @@ class HostedLedgerReviewTests(unittest.TestCase):
         payload = json.loads((self.evidence / "query_13.json").read_text(encoding="utf-8"))
         provenance = payload["response"][0]["w86_acl_provenance"]
         provenance["relation"]["owner_role"] = "w86_acl_probe_parent"
+        acl_payload = json.loads((self.evidence / "query_12.json").read_text(encoding="utf-8"))
+        for acl_row in acl_payload["response"]:
+            acl_row["owner_role"] = provenance["relation"]["owner_role"]
+        save(self.evidence / "query_12.json", acl_payload)
         provenance["service_role_membership_paths"] = [
             {"role_name": "service_role", "depth": 0, "member_of_role": None,
              "all_edges_inherit": True, "all_edges_set_role": True},
@@ -274,6 +282,10 @@ class HostedLedgerReviewTests(unittest.TestCase):
         payload = json.loads((self.evidence / "query_13.json").read_text(encoding="utf-8"))
         provenance = payload["response"][0]["w86_acl_provenance"]
         provenance["relation"]["owner_role"] = "service_role"
+        acl_payload = json.loads((self.evidence / "query_12.json").read_text(encoding="utf-8"))
+        for acl_row in acl_payload["response"]:
+            acl_row["owner_role"] = provenance["relation"]["owner_role"]
+        save(self.evidence / "query_12.json", acl_payload)
         provenance["service_role_membership_paths"] = [
             {"role_name": "service_role", "depth": 0, "member_of_role": None,
              "all_edges_inherit": True, "all_edges_set_role": True},
