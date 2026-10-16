@@ -169,7 +169,7 @@ This remains disposable/local verification only. It is not evidence of hosted De
 
 ## Additional fail-closed guard — relation owner role path (2026-10-16)
 
-Static review identified a case where revoking ACL entries is not enough: `service_role` must not itself own `public.agent_executions` or be able to `SET ROLE` to its owner. Ownership authority can restore grants even if ordinary ACL rows are empty. W86 now checks the relation's actual owner against every reachable service-role membership path and refuses before any ACL mutation when the owner is the root role or a parent role reachable via `SET ROLE`.
+Static review identified a case where revoking ACL entries is not enough: `service_role` must not itself own `public.agent_executions` or be able to `SET ROLE` to its owner. Ownership authority can restore grants even if ordinary ACL rows are empty. W86 now checks the relation's actual owner against every reachable service-role membership path and refuses before any ACL mutation when the owner is the root role, or when `service_role` can obtain owner authority through either `INHERIT` or `SET ROLE`.
 
 The isolated W80 workflow now includes a disposable negative control that transfers table ownership to a temporary role, removes that role's table/column ACL rows, grants `SET ROLE` membership to `service_role`, and expects W86 to reject the migration while proving the subsequent `authenticated SELECT` grant was not applied. The fixture is cleaned up and W66/W86 tests are rerun afterward. Validation of this new guard is pending the workflow result; do not treat this addendum as a pass claim.
 
