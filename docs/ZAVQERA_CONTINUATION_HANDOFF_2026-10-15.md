@@ -713,3 +713,34 @@ A code review found a preflight gap: the W86 candidate grants table SELECT to `a
 ### Unchanged hosted/release blockers
 
 The latest uploaded user ZIP remains a stale 10-query capture (SHA-256 `5294a52f2695a938a291f3317c379aadf060d9f0aa6c07f7a029ff7865035384`); it is not a 13-query Development capture. The only valid next hosted-evidence action remains the secure local Windows wrapper and upload of the newly generated ZIP with `query_13.json`. No hosted DB write, migration, deployment, secret, billing, or DNS change is authorized. Historical migration SQL provenance and owner review remain unresolved. Keep PR #1 and #2 OPEN/DRAFT/UNMERGED; PR #39 OPEN/DRAFT/UNMERGED; Issue #23 OPEN; `TRUSTED_DISPATCH_ADAPTERS` empty; release **NO-GO**.
+
+
+## 2026-10-16 continuation addendum — latest verified audit branch state
+
+This addendum supersedes older statements above about the latest audit source SHA/test counts, but preserves the historical evidence record. Always check live PR and Actions status before resuming.
+
+### Latest verified audit-runner change
+
+- Code/test/runbook HEAD verified in W80 and Flutter CI: `1cd269094a41cdd5bb1cbea3e8aa411ebd160658`.
+- W80 / disposable PostgreSQL 17 **SUCCESS**: [run 38934043664](https://github.com/abdalrhmanata-gif/nexo-w21-isolated-verification-20261015/actions/runs/38934043664). Flutter CI **SUCCESS**: [run 38934043547](https://github.com/abdalrhmanata-gif/nexo-w21-isolated-verification-20261015/actions/runs/38934043547).
+- Pre-database suites: catalog 8/8; effect runner and secure wrapper 23/23; offline hosted-ledger reviewer 29/29. Both pinned self-tests passed with no network requests.
+- Disposable PostgreSQL 17: replay through W83 plus later migrations succeeded; W83 idempotent reapply exit 0; W44 17/17, W46 8/8, W80 49/49 before and after W83 reapply; W84 21/21 before and after reapply; W85 12/12; all three read-only query packs passed local smoke; cleanup verified with no project containers/volumes left.
+- Artifact [12060416195](https://github.com/abdalrhmanata-gif/nexo-w21-isolated-verification-20261015/actions/runs/38934043664/artifacts/12060416195), SHA-256 `b0162b26fd9bc4757e962f4f43253623f33f6d1ff62bd4bf03af0c280d91f94c`.
+
+### Current evidence-integrity protections
+
+- W66 query 12 must be complete, unique, strictly typed, and consistent with query 13 on schema/relation/owner/RLS metadata and the eight effective `service_role` privilege booleans.
+- Query-13 membership ancestry must be connected through `member_of_role`, rooted at `service_role` depth 0, and respect cumulative INHERIT / SET ROLE flags. Disconnected or impossible chains fail closed. Identical projected rows are tolerated when distinct ancestry branches converge to the same observable role/depth/parent/flags tuple; this does not authorize any action.
+- Runbook describes that the query requests are separate read-only calls, not an atomic catalog snapshot.
+
+### PR isolation and W86 candidate negative controls
+
+- PR #2 latest audit head before this handoff-only commit: `1cd269094a41cdd5bb1cbea3e8aa411ebd160658`, OPEN/DRAFT/UNMERGED. Scope review found audit tools, PowerShell wrapper, tests, runbook/handoff documents, an isolated W80 workflow, and the SELECT-only query 13; no executable migration or application files are part of PR #2.
+- PR #1 latest head: `caf6b84ca243d025e38be5263813b1e49181a756`, OPEN/DRAFT/UNMERGED. Its executable W86 candidate was tested at `ddeca7aa91dd4d94fce5391cf13789aac8312016` (subsequent change was documentation only). W80 [run 38901754218](https://github.com/abdalrhmanata-gif/nexo-w21-isolated-verification-20261015/actions/runs/38901754218) passed, artifact [12046597051](https://github.com/abdalrhmanata-gif/nexo-w21-isolated-verification-20261015/actions/runs/38901754218/artifacts/12046597051), SHA-256 `d499b6a733d5e3d8aa8ea9cd981f196f4ccdb5a2f589d6d131bae299e8caabae`.
+- The W86 negative-control artifact records expected guard refusal before ACL mutation (exit 3) for both SET ROLE owner path and INHERIT owner path; cleanup and reapply exit 0; post-cleanup W66 11/11 and W86 21/21; top-level guard status 0 and cleanup verified.
+
+### Still blocked / next safe work
+
+The supplied hosted Development evidence archive remains 12-query and lacks `query_13.json`. Do not invent the missing query or treat isolated PostgreSQL tests as hosted evidence. The required next hosted-evidence step is the secure local Windows capture wrapper from the isolated repo branch `codex/migration-ledger-provenance-20261015`, using a scoped Development-only read-only Management API token entered only at the hidden local prompt. Upload only its resulting ZIP; never send the token in chat. After capture: manually reconcile migration source provenance, review all role/ACL paths, and require independent database-owner review plus separate authorization.
+
+No hosted Supabase writes were performed; `hosted_write_authorized=false`; `TRUSTED_DISPATCH_ADAPTERS` remains empty/fail-closed; PRs #1/#2 remain open/draft/unmerged; PR #39 and Issue #23 remain open; release remains **NO-GO**. For the latest portable record, read `/mnt/data/ZAVQERA_EXECUTION_CHECKPOINT_2026-10-16.md` in the continuing ChatGPT session.
