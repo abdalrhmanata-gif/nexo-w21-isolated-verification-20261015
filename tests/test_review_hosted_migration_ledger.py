@@ -245,6 +245,22 @@ class HostedLedgerReviewTests(unittest.TestCase):
         with self.assertRaises(review.EvidenceError):
             review.reconcile(self.evidence, self.repo)
 
+    def test_rejects_disconnected_or_duplicated_membership_paths(self):
+        original = json.loads((self.evidence / "query_13.json").read_text(encoding="utf-8"))
+        mutations = (
+            ("disconnected parent", lambda paths: paths[1].update(member_of_role="unobserved_parent")),
+            ("root claims parent", lambda paths: paths[0].update(member_of_role="fabricated_parent")),
+            ("duplicate path", lambda paths: paths.append(dict(paths[1]))),
+        )
+        for label, mutate in mutations:
+            with self.subTest(label=label):
+                payload = json.loads(json.dumps(original))
+                paths = payload["response"][0]["w86_acl_provenance"]["service_role_membership_paths"]
+                mutate(paths)
+                save(self.evidence / "query_13.json", payload)
+                with self.assertRaisesRegex(review.EvidenceError, "role/read-only/shape checks"):
+                    review.reconcile(self.evidence, self.repo)
+
     def test_rejects_membership_path_without_valid_depth(self):
         payload = json.loads((self.evidence / "query_13.json").read_text(encoding="utf-8"))
         provenance = payload["response"][0]["w86_acl_provenance"]
