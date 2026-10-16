@@ -59,17 +59,20 @@ def valid_provenance_payload(inherited=True, **overrides):
                      "row_level_security_enabled": True, "row_level_security_forced": False},
         "service_role_effective_privileges": privileges,
         "service_role_membership_paths": [{"role_name": "service_role", "depth": 0,
-                                            "member_of_role": None, "all_edges_inherit": True}],
+                                            "member_of_role": None, "all_edges_inherit": True,
+                                            "all_edges_set_role": True}],
         "table_acl_entries": [],
         "column_acl_entries": [],
         "service_role_inherited_table_acl_entries": (
             [{"grantee_role": "w86_acl_probe_parent", "membership_depth": 1,
-              "all_membership_edges_inherit": True, "privilege_type": "UPDATE",
+              "all_membership_edges_inherit": True, "all_membership_edges_set_role": True,
+              "privilege_type": "UPDATE",
               "is_grantable": False, "grantor": "postgres"}] if inherited else []
         ),
         "service_role_inherited_column_acl_entries": (
             [{"column_name": "id", "grantee_role": "w86_acl_probe_parent", "membership_depth": 1,
-              "all_membership_edges_inherit": True, "privilege_type": "SELECT",
+              "all_membership_edges_inherit": True, "all_membership_edges_set_role": True,
+              "privilege_type": "SELECT",
               "is_grantable": False, "grantor": "postgres"}] if inherited else []
         ),
     }
@@ -77,6 +80,7 @@ def valid_provenance_payload(inherited=True, **overrides):
         payload["service_role_membership_paths"].append({
             "role_name": "w86_acl_probe_parent", "depth": 1,
             "member_of_role": "service_role", "all_edges_inherit": True,
+            "all_edges_set_role": True,
         })
     payload.update(overrides)
     return payload
