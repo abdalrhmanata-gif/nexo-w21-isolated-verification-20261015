@@ -287,7 +287,7 @@ class ReadOnlyEffectAuditTests(unittest.TestCase):
                 return {"result": rows}
             self.fail("query 13 must not run after malformed query 12")
         code, output = self._run_with_fake_api(fake_api)
-        self.assertEqual(code, 5)
+        self.assertEqual(code, 5, output)
         self.assertIn("effective/stored ACL result set incomplete, duplicated, or malformed", output)
         self.assertEqual(len([call for call in calls if call[0] == "POST"]), 12)
 
@@ -320,7 +320,7 @@ class ReadOnlyEffectAuditTests(unittest.TestCase):
                 return {"result": rows}
             self.fail("query 13 must not run after duplicated query 12")
         code, output = self._run_with_fake_api(fake_api)
-        self.assertEqual(code, 5)
+        self.assertEqual(code, 5, output)
         self.assertIn("effective/stored ACL result set incomplete, duplicated, or malformed", output)
         self.assertEqual(len([call for call in calls if call[0] == "POST"]), 12)
 
