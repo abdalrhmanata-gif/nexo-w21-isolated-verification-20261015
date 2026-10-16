@@ -185,8 +185,19 @@ def reconcile(directory, repo_root):
         or not isinstance(relation, dict) or relation.get("exists") is not True
         or not isinstance(owner_role, str) or not owner_role
         or not isinstance(membership_paths, list)
+        or not any(
+            isinstance(item, dict)
+            and item.get("role_name") == "service_role"
+            and type(item.get("depth")) is int
+            and item.get("depth") == 0
+            for item in membership_paths
+        )
         or not all(
             isinstance(item, dict)
+            and isinstance(item.get("role_name"), str)
+            and bool(item.get("role_name"))
+            and type(item.get("depth")) is int
+            and item.get("depth", -1) >= 0
             and isinstance(item.get("all_edges_inherit"), bool)
             and isinstance(item.get("all_edges_set_role"), bool)
             for item in membership_paths
