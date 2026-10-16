@@ -122,6 +122,20 @@ class ReadOnlyEffectAuditTests(unittest.TestCase):
                          "ffdcc3f51ee20fb2ddb44e74f292df4767a76a9dff5e8cd30eef2adb8e9d4f64")
         self.assertTrue(all(re.match(r"(?is)^\s*SELECT\b", audit.no_comments(s).strip()) for s in statements))
 
+    def test_powershell_wrapper_handles_token_locally_and_cleans_environment(self):
+        wrapper_path = SCRIPT.parent / "run_zavqera_readonly_effect_audit.ps1"
+        wrapper = wrapper_path.read_text(encoding="utf-8")
+        self.assertIn("Read-Host", wrapper)
+        self.assertIn("-AsSecureString", wrapper)
+        self.assertIn("SecureStringToBSTR", wrapper)
+        self.assertIn("ZeroFreeBSTR", wrapper)
+        self.assertIn(r"Remove-Item Env:\SUPABASE_ACCESS_TOKEN", wrapper)
+        self.assertIn("DEVELOPMENT_ONLY_READ_ONLY", wrapper)
+        self.assertIn("py -3 $runner --self-test", wrapper)
+        self.assertIn("py -3 $runner 2>&1", wrapper)
+        self.assertIn("Compress-Archive", wrapper)
+        self.assertNotRegex(wrapper, r"sb_secret_[A-Za-z0-9_-]{20,}")
+
     def test_splitter_handles_literals_nested_comments_and_dollar_quotes(self):
         sql = "-- semicolon ;\nSELECT 'a;''b' AS x; /* outer ; /* inner ; */ end */ SELECT $$c;d$$ AS y;"
         self.assertEqual(len(audit.split_statements(sql)), 2)
