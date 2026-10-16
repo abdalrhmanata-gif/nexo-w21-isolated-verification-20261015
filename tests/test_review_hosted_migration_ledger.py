@@ -495,7 +495,7 @@ class HostedLedgerReviewTests(unittest.TestCase):
         self.assertIn("W86 parent-role ACL gate: **BLOCKED_PARENT_ROLE_ACL**", rendered)
         self.assertIn("Hosted write authorized: **False**", rendered)
         self.assertIn("inherited ACL row is a blocker", rendered)
-        self.assertIn("not a full authorization proof", rendered)
+        self.assertIn("not complete proof of reachability", rendered)
 
 
 if __name__ == "__main__":
