@@ -11,7 +11,7 @@
 - Runner: `tools/supabase_readonly_migration_effect_audit.py`
 - Tests: `tests/test_supabase_readonly_migration_effect_audit.py`
 - Base pack SHA-256 (12 SELECT statements): `a7aba3461786dbb5854f71dc4f87b7e0498d12509add535ab3df4a7ec231a284`
-- Query 13 SHA-256 (role-path ACL provenance): `f9f56944ddd04dd135329ff930cf5259e215eb89f30784b75e03a93f221ff38e`
+- Query 13 SHA-256 (role-path ACL provenance): `806c1fbc1842860387dea71cdcefc6d02edf8e4f23ad1aa07ece96c1a1a8312b`
 - The current runner executes 13 fixed SELECT statements. It pins both hashes, validates the target project before SQL, and requires the effective session to be `supabase_read_only_user` in a read-only transaction before accepting evidence.
 - Only `POST /v1/projects/{ref}/database/query/read-only` is allowed for SQL. The normal SQL endpoint is never used.
 - The observed read-only role has `rolbypassrls=true`; the pack is limited to catalog/ledger metadata. Do not add application-row queries.
@@ -95,11 +95,11 @@ The previous 12-query capture remains valid evidence for the 2026-10-15 observat
 
 The guarded runner now pins two files independently:
 - Base 12-query pack SHA-256: a7aba3461786dbb5854f71dc4f87b7e0498d12509add535ab3df4a7ec231a284
-- Query 13, supabase/tests/hosted_readonly_w86_acl_provenance_query.sql, SHA-256: f9f56944ddd04dd135329ff930cf5259e215eb89f30784b75e03a93f221ff38e
+- Query 13, supabase/tests/hosted_readonly_w86_acl_provenance_query.sql, SHA-256: 806c1fbc1842860387dea71cdcefc6d02edf8e4f23ad1aa07ece96c1a1a8312b
 
 Use the secure wrapper in the **Current authoritative capture procedure — 13 queries** section below; it performs the no-network self-test before prompting. For a manual self-test without any token or network, run `py -3 tools/supabase_readonly_migration_effect_audit.py --self-test` from the audit repository root.
 
-Expected self-test output: SELF_TEST=PASS; queries=13; base_sha256=a7aba3461786dbb5854f71dc4f87b7e0498d12509add535ab3df4a7ec231a284; acl_provenance_sha256=f9f56944ddd04dd135329ff930cf5259e215eb89f30784b75e03a93f221ff38e; no network requests.
+Expected self-test output: SELF_TEST=PASS; queries=13; base_sha256=a7aba3461786dbb5854f71dc4f87b7e0498d12509add535ab3df4a7ec231a284; acl_provenance_sha256=806c1fbc1842860387dea71cdcefc6d02edf8e4f23ad1aa07ece96c1a1a8312b; no network requests.
 
 Then run the current secure PowerShell wrapper below using the verified Development project ref and scoped read-only Management API token locally. Do not recreate the older inline-token instructions. The runner verifies both SQL hashes, validates project identity and the read-only role before proceeding, sends only Management API database/query/read-only requests, saves query outputs 01–13, and never saves or prints the token. Do not paste a token into chat. Inspect the evidence ZIP for secrets before uploading it.
 
@@ -159,7 +159,7 @@ if ($LASTEXITCODE -ne 0) { throw "Offline reviewer tests failed; do not connect.
 
 The self-test must identify **13 SELECT-only queries** and these pinned SHA-256 values:
 - Base query pack (queries 1–12): `a7aba3461786dbb5854f71dc4f87b7e0498d12509add535ab3df4a7ec231a284`
-- Query 13 inherited-ACL provenance: `f9f56944ddd04dd135329ff930cf5259e215eb89f30784b75e03a93f221ff38e`
+- Query 13 inherited-ACL provenance: `806c1fbc1842860387dea71cdcefc6d02edf8e4f23ad1aa07ece96c1a1a8312b`
 
 If any command fails, stop. Do not edit the query pack, bypass a gate, or use the unrestricted SQL endpoint.
 
@@ -241,3 +241,12 @@ The collector and offline reviewer validate that each query-13 membership row be
 ### ACL row field-shape validation
 
 Query 13's direct table ACL, direct column ACL, inherited table ACL, and inherited column ACL arrays are rejected if their row fields are missing or malformed. Each row must use a non-empty grantee/grantee-role and grantor name, a privilege name from the pinned PostgreSQL privilege set, and an actual boolean `is_grantable` value. Column ACL rows also require a non-empty `column_name`. Inherited rows additionally require an exact integer membership depth greater than zero and actual boolean `INHERIT` / `SET ROLE` flags. These checks validate evidence shape; they do not authorize changes or replace the hosted review gates.
+
+
+## Mixed INHERIT / SET ROLE path reachability — 2026-10-16
+
+PostgreSQL permits a session to `SET ROLE` to an intermediate member and then inherit ACL privileges from roles above that intermediate. A path can therefore be reachable even when its cumulative `all_edges_inherit` and `all_edges_set_role` flags are both false. The pinned query-13 SQL computes `reachable_via_membership_options` recursively: a target is reachable if the parent is reachable and the current membership grants `INHERIT`, or if the full prefix to the parent grants `SET ROLE` and the current edge also grants `SET ROLE`. This models any all-SET prefix followed by an all-INHERIT suffix. See [PostgreSQL 17 role membership](https://www.postgresql.org/docs/17/role-membership.html).
+
+The collector and offline reviewer validate this recurrence and use the reachability flag for inherited ACLs, the future `authenticated` grant target, and table-owner authority. Regression cases cover `service_role --SET ROLE--> intermediate --INHERIT--> parent` where both cumulative flags on the final parent are false.
+
+Query 13 SHA-256 is now `806c1fbc1842860387dea71cdcefc6d02edf8e4f23ad1aa07ece96c1a1a8312b`. SHA values and runs in earlier dated sections refer to historic versions of the query. This remains isolated validation only; it is not a fresh hosted Development capture and never authorizes hosted writes.
