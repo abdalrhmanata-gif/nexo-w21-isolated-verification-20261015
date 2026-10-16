@@ -334,13 +334,13 @@ def render_markdown(result):
         "## Same-name/different-version candidates",
         "",
     ]
-    lines.extend(["", "## W86 candidate preflight — not deployment authorization", ""])
-    lines.extend([f"- {item}" for item in result["hosted_write_blockers"]])
-    lines.extend(["", "This preflight is only a safety signal. Even when no parent-role ACL is observed, hosted writes remain unauthorized until historical migration provenance and owner approval are resolved.", ""])
     for row in result["same_name_different_version"]:
         lines.append(f"- {row['name']}: source={','.join(row['local_versions'])}; hosted={','.join(row['hosted_versions'])}")
     if not result["same_name_different_version"]:
         lines.append("None detected.")
+    lines.extend(["", "## W86 candidate preflight — not deployment authorization", ""])
+    lines.extend([f"- {item}" for item in result["hosted_write_blockers"]])
+    lines.extend(["", "This preflight is only a safety signal. Even when no parent-role ACL is observed, hosted writes remain unauthorized until historical migration provenance and owner approval are resolved.", ""])
     lines.extend(["", "## Hosted names absent from source", ""])
     lines.extend([f"- {name}" for name in result["hosted_names_absent_from_source"]] or ["None."])
     lines.extend(["", "## Effective non-owner write grants", ""])
