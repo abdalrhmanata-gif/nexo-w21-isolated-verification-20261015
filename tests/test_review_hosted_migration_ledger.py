@@ -376,7 +376,8 @@ class HostedLedgerReviewTests(unittest.TestCase):
             review.reconcile(self.evidence, self.repo)
 
     def test_runbook_documents_owner_authority_in_both_membership_modes(self):
-        runbook = (self.repo / "docs" / "ZAVQERA_HOSTED_MIGRATION_EFFECT_AUDIT_RUNBOOK_2026-10-15.md").read_text(encoding="utf-8")
+        runbook_path = Path(__file__).resolve().parents[1] / "docs" / "ZAVQERA_HOSTED_MIGRATION_EFFECT_AUDIT_RUNBOOK_2026-10-15.md"
+        runbook = runbook_path.read_text(encoding="utf-8")
         self.assertIn("REVIEW REQUIRED / NO-GO", runbook)
         self.assertIn("obtain owner authority through either `INHERIT` or `SET ROLE`", runbook)
         self.assertIn("any path from `service_role` to the table owner with either `INHERIT` or `SET ROLE` enabled", runbook)
