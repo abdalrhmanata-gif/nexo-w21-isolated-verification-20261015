@@ -138,8 +138,7 @@ class ReadOnlyEffectAuditTests(unittest.TestCase):
         self.assertIn("'service_role_inherited_table_acl_entries'", sql)
         self.assertIn("'service_role_inherited_column_acl_entries'", sql)
         self.assertIn("(child.inherits_all AND membership.inherit_option)", sql)
-        self.assertNotIn("(child.reachable_via_membership_options AND membership.inherit_option)", sql)
-        self.assertNotIn("child.reachable_via_membership_options AND membership.inherit_option", sql)
+        self.assertIn("(child.reachable_via_membership_options AND membership.inherit_option)", sql)
         self.assertIn("child.can_set_role AND membership.set_option", sql)
         self.assertIn("'reachable_via_membership_options'", sql)
         self.assertEqual(sql.count("AND rp.reachable_via_membership_options"), 2)
@@ -333,7 +332,7 @@ class ReadOnlyEffectAuditTests(unittest.TestCase):
         self.assertIn("query 12 and query 13 service_role effective privilege maps disagree", output)
         self.assertEqual(len([call for call in calls if call[0] == "POST"]), 13)
 
-    def test_membership_reachability_cannot_mix_edge_modes(self):
+    def test_membership_reachability_allows_set_role_then_inherit(self):
         paths = [
             {
                 "role_name": "service_role", "depth": 0, "member_of_role": None,
@@ -351,11 +350,13 @@ class ReadOnlyEffectAuditTests(unittest.TestCase):
                 "role_name": "inherit_only_grandparent", "depth": 2, "member_of_role": "set_only_parent",
                 "all_edges_inherit": False, "all_edges_set_role": False,
                 "edge_inherit_option": True, "edge_set_option": False,
-                "reachable_via_membership_options": False,
+                "reachable_via_membership_options": True,
             },
         ]
         self.assertTrue(audit.membership_paths_form_valid_chain(paths))
-        paths[2]["reachable_via_membership_options"] = True
+        # The intermediate role is reachable via SET ROLE and its parent via INHERIT.
+        # Forging the final path as unreachable must be rejected.
+        paths[2]["reachable_via_membership_options"] = False
         self.assertFalse(audit.membership_paths_form_valid_chain(paths))
 
     def test_w86_provenance_malformed_membership_parent_fails_closed(self):
@@ -819,8 +820,8 @@ class ReadOnlyEffectAuditTests(unittest.TestCase):
         self.assertIn("Cross-query W66/W86 evidence consistency gate", runbook)
         self.assertIn("must equal the query-13 summary", runbook)
         self.assertIn("not a single atomic catalog snapshot", runbook)
-        self.assertIn("Homogeneous membership reachability correction", runbook)
-        self.assertIn("must not use a prior generic reachability flag followed by an INHERIT edge", runbook)
+        self.assertIn("Correction: mixed SET ROLE then INHERIT path reachability", runbook)
+        self.assertIn("a parent role reached by SET ROLE may itself inherit privileges from roles above it", runbook)
         self.assertIn("Membership-path ancestry validation", runbook)
         self.assertIn("direct `table_acl_entries` projection", runbook)
         self.assertIn("preserves duplicate rows", runbook)
