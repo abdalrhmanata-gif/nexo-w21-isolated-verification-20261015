@@ -854,6 +854,7 @@ class ReadOnlyEffectAuditTests(unittest.TestCase):
         self.assertIn("no fresh hosted 13-query capture has been recorded", runbook)
         self.assertIn("`query_13.json`", runbook)
         self.assertIn("f9f56944ddd04dd135329ff930cf5259e215eb89f30784b75e03a93f221ff38e", runbook)
+        self.assertIn(audit.ACL_PROVENANCE_SHA256, runbook)
         self.assertIn("Cross-query W66/W86 evidence consistency gate", runbook)
         self.assertIn("must equal the query-13 summary", runbook)
         self.assertIn("not a single atomic catalog snapshot", runbook)
