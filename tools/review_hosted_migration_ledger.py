@@ -73,16 +73,18 @@ def membership_paths_form_valid_chain(paths):
             return False
         if type(inherits) is not bool or type(can_set) is not bool:
             return False
-        key = (name, depth, member, inherits, can_set)
-        if key in seen:
+        if "member_of_role" not in item:
             return False
-        seen.add(key)
         if depth == 0:
             roots.append(item)
             if name != "service_role" or member is not None or inherits is not True or can_set is not True:
                 return False
         elif not isinstance(member, str) or not member:
             return False
+        key = (name, depth, member, inherits, can_set)
+        if key in seen:
+            return False
+        seen.add(key)
     if len(roots) != 1:
         return False
     for item in paths:
