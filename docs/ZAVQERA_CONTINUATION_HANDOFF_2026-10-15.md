@@ -677,7 +677,7 @@ The only external dependency remains: run the secure PowerShell wrapper locally 
 
 ## Query 13 direct-vs-parent ACL scope correction — 2026-10-16
 
-The pinned ACL provenance query was corrected so `service_role_inherited_table_acl_entries` and `service_role_inherited_column_acl_entries` contain only reachable parent roles (`depth > 0`) with an all-`INHERIT` or all-`SET ROLE` path. Direct `service_role` ACLs remain separately reported by the effective privilege map, `table_acl_entries`, and `column_acl_entries`; they must not be mislabeled as inherited grants.
+The pinned ACL provenance query was corrected so `service_role_inherited_table_acl_entries` and `service_role_inherited_column_acl_entries` contain only reachable parent roles (`depth > 0`) with an all-`INHERIT` or all-`SET ROLE` path. Each inherited table/column ACL record now carries both `all_membership_edges_inherit` and `all_membership_edges_set_role`, so the reviewer can distinguish the two reachability modes per grant. Direct `service_role` ACLs remain separately reported by the effective privilege map, `table_acl_entries`, and `column_acl_entries`; they must not be mislabeled as inherited grants.
 
 - Query 13 SHA-256: `f9f56944ddd04dd135329ff930cf5259e215eb89f30784b75e03a93f221ff38e`.
 - Offline reviewer and self-test pin this hash, and a regression test asserts that depth-zero direct ACLs are excluded from parent-role result arrays.
