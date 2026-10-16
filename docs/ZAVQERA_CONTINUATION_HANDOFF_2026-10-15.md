@@ -689,3 +689,37 @@ Audit PR #2 now includes tools/run_zavqera_readonly_effect_audit.ps1. It runs th
 Latest local validation: W80 PostgreSQL 17 run 38858755502 PASS on SHA c6fae906f9f57efe11ec7f010afb48b66ac850dc; 8 catalog tests, 12 migration-effect/wrapper tests, 10 offline-review tests passed; 13-query self-test/hash pinning passed; query13 local SQL smoke and cleanup passed. Artifact 12028448084 SHA-256 c7388aaa1d1ef85c9c70951db1c3c33cc46da376c2c7e0b1ebcd1e33aafd38f3. Flutter CI run 38858755489 PASS on same SHA.
 
 The only immediate external action is to run the helper from the isolated audit repository root on the user's Windows machine with a scoped read-only Development Management API token. Then upload the generated ZIP for offline review. No token should be shared in chat. Even a clean query13 result does not resolve the 22 timestamp conflicts/six hosted-only historical names, does not authorize hosted repair, and does not change the NO-GO release decision.
+
+
+## 12. W86 hosted agent_executions ACL drift — isolated correction candidate (2026-10-16 continuation)
+
+**Status: isolated candidate verified; hosted Development still NOT changed; release NO-GO.**
+
+- Isolated branch: `codex/w86-agent-executions-acl-correction-20261015`
+- Exact final candidate/test SHA: `8dbaa7cb27abbb15144f6b81f1bb8538dd2ce5be`
+- Review PR: [isolated W86 candidate PR #1](https://github.com/abdalrhmanata-gif/nexo-w21-isolated-verification-20261015/pull/1) — OPEN / DRAFT / UNMERGED. This is in the temporary isolated verification repository, not the original repo.
+- Candidate migration: `supabase/migrations/20261015120000_w86_agent_executions_acl_correction.sql`
+- Test: `supabase/tests/w86_agent_executions_acl_correction.sql`
+- Candidate rationale and stop conditions: `docs/ZAVQERA_W86_AGENT_EXECUTIONS_ACL_CORRECTION_2026-10-15.md`
+
+### Exact-SHA isolated verification — PASS
+
+[W80/W86 isolated PostgreSQL 17 workflow run 38790810307](https://github.com/abdalrhmanata-gif/nexo-w21-isolated-verification-20261015/actions/runs/38790810307) — SUCCESS on the exact SHA above. [Flutter CI run 38790810387](https://github.com/abdalrhmanata-gif/nexo-w21-isolated-verification-20261015/actions/runs/38790810387) — SUCCESS on the same SHA.
+
+Artifact [11999338335](https://github.com/abdalrhmanata-gif/nexo-w21-isolated-verification-20261015/actions/runs/38790810307/artifacts/11999338335) confirms:
+- Fresh disposable PostgreSQL 17.11 migration replay: exit code 0; 90 checked-in migration files plus the documented local-only historical compatibility fixture.
+- W66 original regression: 11/11 pass after W86.
+- W86 ACL regression: 20/20 pass.
+- W86 idempotent reapplication: exit code 0; W66 11/11 and W86 20/20 pass again.
+- W84 assertions: 21/21 before and after reapplication; W85 Supabase-admin ACL audit: 12/12.
+- W44 17/17, W46 8/8, W80 49/49 before and after W83 reapplication.
+- Both pinned SELECT-only audit query packs pass their local PostgreSQL smoke tests.
+- Disposable stack cleanup verified: no project containers or volumes remain.
+
+### Meaning and remaining blockers
+
+The W86 candidate revokes table-level and possible column-level privileges on `public.agent_executions` from PUBLIC, anon, authenticated, and service_role, then restores only RLS-governed table SELECT to authenticated. It does not change function EXECUTE grants; tests verify the trusted service_role completion RPC remains available while the public wrapper is not executable by anon/authenticated.
+
+This proves the candidate behaves as intended in the disposable stack only. It does **not** prove hosted parity, establish the origin of hosted ACL drift, or reconcile the migration history. Keep the hosted migration blocked until exact historical SQL/provenance is reconciled (including 22 timestamp conflicts and six hosted-only ledger names), owner/ACL context is reviewed, and a separate explicit approval authorizes any hosted change. No hosted DB, migration ledger, secret, deployment, billing, or DNS was changed in this work.
+
+Keep the original repository PR #39 OPEN/DRAFT/UNMERGED and Issue #23 OPEN; keep `TRUSTED_DISPATCH_ADAPTERS = Object.freeze({})` empty/fail-closed. Release remains **NO-GO**.
