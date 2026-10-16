@@ -6,17 +6,18 @@
 -- It deliberately does not grant or revoke EXECUTE on any function.
 -- Hosted application is blocked pending separate migration-history review and approval.
 
--- Do not silently claim a complete repair if service_role inherits ACLs from
--- another role. Revoking grants directly from service_role cannot remove those.
--- Inspect inherited parent-role ACLs first and stop before any mutation if found.
+-- Do not silently claim a complete repair if service_role can obtain ACLs
+-- through a parent role, either by automatic INHERIT or by SET ROLE. Revoking
+-- direct grants from service_role cannot remove either privilege path.
+-- Inspect all reachable parent-role ACLs and stop before any mutation if found.
 do $w86_inherited_acl_preflight$
 declare
   inherited_entries text;
 begin
   with recursive role_path (
-    role_oid, role_name, depth, oid_path, inherits_all
+    role_oid, role_name, depth, oid_path, inherits_all, can_set_role
   ) as (
-    select r.oid, r.rolname, 0, array[r.oid]::oid[], true
+    select r.oid, r.rolname, 0, array[r.oid]::oid[], true, true
       from pg_roles r
      where r.rolname = 'service_role'
     union all
@@ -24,7 +25,8 @@ begin
            parent.rolname,
            child.depth + 1,
            child.oid_path || parent.oid,
-           child.inherits_all and membership.inherit_option
+           child.inherits_all and membership.inherit_option,
+           child.can_set_role and membership.set_option
       from role_path child
       join pg_auth_members membership on membership.member = child.role_oid
       join pg_roles parent on parent.oid = membership.roleid
@@ -37,7 +39,7 @@ begin
       join pg_class c on c.oid = 'public.agent_executions'::regclass
       cross join lateral aclexplode(coalesce(c.relacl, acldefault('r', c.relowner))) acl
      where rp.depth > 0
-       and rp.inherits_all
+       and (rp.inherits_all or rp.can_set_role)
        and acl.grantee = rp.role_oid
   ),
   inherited_column_acl as (
@@ -49,7 +51,7 @@ begin
      where a.attnum > 0
        and not a.attisdropped
        and rp.depth > 0
-       and rp.inherits_all
+       and (rp.inherits_all or rp.can_set_role)
        and acl.grantee = rp.role_oid
   ),
   inherited_acl as (
@@ -66,7 +68,7 @@ begin
 
   if inherited_entries is not null then
     raise exception
-      'W86 refused: service_role inherits agent_executions privileges from parent roles: %',
+      'W86 refused: service_role can obtain agent_executions privileges via parent roles (INHERIT or SET ROLE): %',
       inherited_entries;
   end if;
 end
