@@ -375,6 +375,13 @@ class HostedLedgerReviewTests(unittest.TestCase):
         with self.assertRaises(review.EvidenceError):
             review.reconcile(self.evidence, self.repo)
 
+    def test_runbook_documents_owner_authority_in_both_membership_modes(self):
+        runbook = (self.repo / "docs" / "ZAVQERA_HOSTED_MIGRATION_EFFECT_AUDIT_RUNBOOK_2026-10-15.md").read_text(encoding="utf-8")
+        self.assertIn("REVIEW REQUIRED / NO-GO", runbook)
+        self.assertIn("obtain owner authority through either `INHERIT` or `SET ROLE`", runbook)
+        self.assertIn("any path from `service_role` to the table owner with either `INHERIT` or `SET ROLE` enabled", runbook)
+        self.assertIn("no fresh hosted 13-query capture has been recorded", runbook)
+        self.assertIn("There is no hosted-write authorization in this workflow.", runbook)
     def test_report_is_no_go(self):
         result = review.reconcile(self.evidence, self.repo)
         rendered = review.render_markdown(result)
