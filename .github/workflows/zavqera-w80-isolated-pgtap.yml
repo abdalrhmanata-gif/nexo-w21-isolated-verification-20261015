@@ -480,7 +480,7 @@ jobs:
             fi
 
             run_pgtap W66_AFTER_W86_DRIFT_REPAIR supabase/tests/w66_service_role_table_privilege_hardening.sql 11 || w86_status=1
-            run_pgtap W86_AFTER_W86_DRIFT_REPAIR supabase/tests/w86_agent_executions_acl_correction.sql 20 || w86_status=1
+            run_pgtap W86_AFTER_W86_DRIFT_REPAIR supabase/tests/w86_agent_executions_acl_correction.sql 21 || w86_status=1
 
             # Reapply W86 once more and rerun both suites for idempotency.
             docker cp "${GITHUB_WORKSPACE}/supabase/migrations/20261015120000_w86_agent_executions_acl_correction.sql" \
@@ -496,7 +496,7 @@ jobs:
               w86_status=1
             fi
             run_pgtap W66_AFTER_W86_REAPPLY supabase/tests/w66_service_role_table_privilege_hardening.sql 11 || w86_status=1
-            run_pgtap W86_AFTER_REAPPLY supabase/tests/w86_agent_executions_acl_correction.sql 20 || w86_status=1
+            run_pgtap W86_AFTER_REAPPLY supabase/tests/w86_agent_executions_acl_correction.sql 21 || w86_status=1
           fi
           echo "w84_idempotency_and_pg_tap_status=${w84_status}" >> "${RUNNER_TEMP}/W80_EVIDENCE.txt"
           echo "w85_supabase_admin_audit_status=${w85_status}" >> "${RUNNER_TEMP}/W80_EVIDENCE.txt"
@@ -688,7 +688,7 @@ jobs:
                     pack_status=1
                   else
                     run_pgtap W66_AFTER_INHERITED_ACL_GUARD_REAPPLY supabase/tests/w66_service_role_table_privilege_hardening.sql 11 || pack_status=1
-                    run_pgtap W86_AFTER_INHERITED_ACL_GUARD_REAPPLY supabase/tests/w86_agent_executions_acl_correction.sql 20 || pack_status=1
+                    run_pgtap W86_AFTER_INHERITED_ACL_GUARD_REAPPLY supabase/tests/w86_agent_executions_acl_correction.sql 21 || pack_status=1
                   fi
                 fi
               fi
@@ -697,7 +697,221 @@ jobs:
             if [ "${pack_status}" -ne 0 ]; then query_pack_status=1; fi
           done
 
-          if [ "${regression_status}" -ne 0 ] || [ "${later_status}" -ne 0 ] || [ "${w84_status}" -ne 0 ] || [ "${w85_status}" -ne 0 ] || [ "${w86_status}" -ne 0 ] || [ "${query_pack_status}" -ne 0 ]; then exit 1; fi
+
+          # Negative control: W86 later grants SELECT to authenticated. Even if that
+          # role currently has no ACL entry, a SET ROLE path from service_role must block W86.
+          w86_authenticated_parent_guard_status=0
+          cat > "${RUNNER_TEMP}/W86_AUTHENTICATED_PARENT_GUARD_FIXTURE.sql" <<'SQL'
+          REVOKE ALL PRIVILEGES ON TABLE public.agent_executions FROM authenticated;
+          DO $cleanup$
+          DECLARE column_names text;
+          BEGIN
+            SELECT string_agg(format('%I', a.attname), ', ' ORDER BY a.attnum)
+              INTO column_names
+              FROM pg_attribute a
+             WHERE a.attrelid = 'public.agent_executions'::regclass
+               AND a.attnum > 0 AND NOT a.attisdropped;
+            IF column_names IS NOT NULL THEN
+              EXECUTE format(
+                'REVOKE ALL PRIVILEGES (%s) ON TABLE public.agent_executions FROM authenticated',
+                column_names
+              );
+            END IF;
+          END
+          $cleanup$;
+          GRANT authenticated TO service_role WITH INHERIT FALSE, SET TRUE;
+          SQL
+          docker cp "${RUNNER_TEMP}/W86_AUTHENTICATED_PARENT_GUARD_FIXTURE.sql" "${db_container}:/tmp/W86_AUTHENTICATED_PARENT_GUARD_FIXTURE.sql"
+          set +e
+          docker exec "${db_container}" psql -U postgres -d postgres -X -v ON_ERROR_STOP=1 \
+            -f /tmp/W86_AUTHENTICATED_PARENT_GUARD_FIXTURE.sql 2>&1 | tee "${RUNNER_TEMP}/W86_AUTHENTICATED_PARENT_GUARD_FIXTURE_OUTPUT.txt"
+          auth_fixture_status="${PIPESTATUS[0]}"
+          set -e
+          echo "w86_authenticated_parent_fixture_exit_code=${auth_fixture_status}" >> "${RUNNER_TEMP}/W80_EVIDENCE.txt"
+          if [ "${auth_fixture_status}" -ne 0 ]; then
+            w86_authenticated_parent_guard_status=1
+          else
+            set +e
+            docker exec "${db_container}" psql -U postgres -d postgres -X -v ON_ERROR_STOP=1 \
+              -f /tmp/w86_agent_executions_acl_correction.sql 2>&1 | tee "${RUNNER_TEMP}/W86_AUTHENTICATED_PARENT_GUARD_CHECK.txt"
+            auth_guard_exit_code="${PIPESTATUS[0]}"
+            set -e
+            echo "w86_authenticated_parent_guard_exit_code=${auth_guard_exit_code}" >> "${RUNNER_TEMP}/W80_EVIDENCE.txt"
+            if [ "${auth_guard_exit_code}" -eq 0 ] || ! grep -q "W86 refused: service_role can reach authenticated via a parent role path" "${RUNNER_TEMP}/W86_AUTHENTICATED_PARENT_GUARD_CHECK.txt"; then
+              echo "::error::W86 did not fail closed on the future authenticated SELECT grant path."
+              w86_authenticated_parent_guard_status=1
+            else
+              echo "W86_AUTHENTICATED_PARENT_GUARD_PASS" >> "${RUNNER_TEMP}/W80_EVIDENCE.txt"
+              set +e
+              docker exec "${db_container}" psql -U postgres -d postgres -X -qAt -v ON_ERROR_STOP=1 \
+                -c "SELECT CASE WHEN NOT has_table_privilege('authenticated', 'public.agent_executions', 'SELECT') THEN 'W86_AUTHENTICATED_PARENT_NO_MUTATION_PASS' ELSE 'W86_AUTHENTICATED_PARENT_NO_MUTATION_FAIL' END" \
+                2>&1 | tee "${RUNNER_TEMP}/W86_AUTHENTICATED_PARENT_NO_MUTATION_CHECK.txt"
+              no_mutation_status="${PIPESTATUS[0]}"
+              set -e
+              if [ "${no_mutation_status}" -ne 0 ] || ! grep -q '^W86_AUTHENTICATED_PARENT_NO_MUTATION_PASS
+
+      - name: Stop and prove disposable resource cleanup
+        if: always()
+        shell: bash
+        run: |
+          set +e
+          proof="${RUNNER_TEMP}/W80_CLEANUP_PROOF.txt"
+          workdir="${RUNNER_TEMP}/zavqera-w80-local"
+          {
+            echo "cleanup_started=true"
+            echo "project_id=zavqera-w80-local"
+            if [ -d "${workdir}" ] && command -v supabase >/dev/null 2>&1; then
+              supabase stop --no-backup --workdir "${workdir}" >/tmp/w80-stop.log 2>&1
+              stop_status=$?
+              cat /tmp/w80-stop.log
+              echo "supabase_stop_exit_code=${stop_status}"
+            else
+              stop_status=0
+              echo "supabase_stop=not_started_or_cli_unavailable"
+            fi
+            if command -v docker >/dev/null 2>&1; then
+              labelled_containers="$(docker ps -aq --filter label=com.supabase.cli.project=zavqera-w80-local 2>/dev/null)"
+              named_containers="$(docker ps -aq --filter name=zavqera-w80-local 2>/dev/null)"
+              containers="$(printf '%s\n%s\n' "${labelled_containers}" "${named_containers}" | sed '/^$/d' | sort -u)"
+              labelled_volumes="$(docker volume ls -q --filter label=com.supabase.cli.project=zavqera-w80-local 2>/dev/null)"
+              named_volumes="$(docker volume ls -q --filter name=zavqera-w80-local 2>/dev/null)"
+              volumes="$(printf '%s\n%s\n' "${labelled_volumes}" "${named_volumes}" | sed '/^$/d' | sort -u)"
+              echo "remaining_project_containers=${containers:-none}"
+              echo "remaining_project_volumes=${volumes:-none}"
+              if [ -z "${containers}" ] && [ -z "${volumes}" ] && [ "${stop_status}" -eq 0 ]; then
+                echo "cleanup=VERIFIED"
+              else
+                echo "cleanup=NOT_VERIFIED"
+                exit_code=1
+              fi
+            else
+              echo "docker_inventory=unavailable"
+              echo "cleanup=NOT_VERIFIED"
+              exit_code=1
+            fi
+            exit "${exit_code:-0}"
+          } > "${proof}" 2>&1
+
+      - name: Redact disposable local credentials from evidence artifacts
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          for artifact in "${RUNNER_TEMP}"/W66_*.txt "${RUNNER_TEMP}"/W80_*.txt "${RUNNER_TEMP}"/W85_*.txt "${RUNNER_TEMP}"/W86_*.txt; do
+            [ -f "${artifact}" ] || continue
+            sed -E -i \
+              -e 's/sb_(publishable|secret)_[A-Za-z0-9_-]+/sb_\1_[REDACTED_LOCAL_KEY]/g' \
+              -e 's#eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+#[REDACTED_LOCAL_JWT]#g' \
+              -e 's#(postgresql?://[^:/[:space:]]+:)[^@/[:space:]]+@#\1[REDACTED_DB_PASSWORD]@#g' \
+              -e 's/(SERVICE_ROLE_KEY=|ANON_KEY=|JWT_SECRET=)[^[:space:]]+/\1[REDACTED_LOCAL_SECRET]/g' \
+              "${artifact}"
+          done
+
+      - name: Upload W80 isolated verification artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: zavqera-w80-isolated-pgtap-${{ github.sha }}
+          if-no-files-found: warn
+          path: |
+            ${{ runner.temp }}/W80_EVIDENCE.txt
+            ${{ runner.temp }}/W80_MIGRATION_REPLAY.txt
+            ${{ runner.temp }}/W44_BEFORE_REAPPLY_PGTAP_OUTPUT.txt
+            ${{ runner.temp }}/W46_BEFORE_REAPPLY_PGTAP_OUTPUT.txt
+            ${{ runner.temp }}/W80_BEFORE_REAPPLY_PGTAP_OUTPUT.txt
+            ${{ runner.temp }}/W44_AFTER_REAPPLY_PGTAP_OUTPUT.txt
+            ${{ runner.temp }}/W46_AFTER_REAPPLY_PGTAP_OUTPUT.txt
+            ${{ runner.temp }}/W80_AFTER_REAPPLY_PGTAP_OUTPUT.txt
+            ${{ runner.temp }}/W83_CATALOG_BEFORE_REAPPLY.txt
+            ${{ runner.temp }}/W83_CATALOG_AFTER_REAPPLY.txt
+            ${{ runner.temp }}/W80_CLEANUP_PROOF.txt
+            ${{ runner.temp }}/W80_MIGRATION_MANIFEST.sha256
+            ${{ runner.temp }}/W85_SUPABASE_ADMIN_AUDIT_PGTAP_OUTPUT.txt
+            ${{ runner.temp }}/W66_AFTER_W86_FORWARD_CORRECTION_PGTAP_OUTPUT.txt
+            ${{ runner.temp }}/W86_AGENT_EXECUTIONS_ACL_CORRECTION_PGTAP_OUTPUT.txt
+            ${{ runner.temp }}/W66_AFTER_W86_DRIFT_REPAIR_PGTAP_OUTPUT.txt
+            ${{ runner.temp }}/W86_AFTER_W86_DRIFT_REPAIR_PGTAP_OUTPUT.txt
+            ${{ runner.temp }}/W66_AFTER_W86_REAPPLY_PGTAP_OUTPUT.txt
+            ${{ runner.temp }}/W86_AFTER_REAPPLY_PGTAP_OUTPUT.txt
+            ${{ runner.temp }}/W86_MIGRATION_REAPPLY.txt
+            ${{ runner.temp }}/W86_INHERITED_ACL_GUARD_CHECK.txt
+            ${{ runner.temp }}/W86_INHERITED_ACL_GUARD_ASSERTION.txt
+            ${{ runner.temp }}/W86_INHERITED_ACL_GUARD_REAPPLY.txt
+            ${{ runner.temp }}/W66_AFTER_INHERITED_ACL_GUARD_REAPPLY_PGTAP_OUTPUT.txt
+            ${{ runner.temp }}/W86_AFTER_INHERITED_ACL_GUARD_REAPPLY_PGTAP_OUTPUT.txt
+            ${{ runner.temp }}/W86_SIMULATED_DRIFT_SEED.sql
+            ${{ runner.temp }}/W86_SIMULATED_DRIFT_SEED_OUTPUT.txt
+            ${{ runner.temp }}/W86_DRIFT_FIXTURE_CHECK.txt
+            ${{ runner.temp }}/W86_MIGRATION_DRIFT_REPAIR.txt
+            ${{ runner.temp }}/W85_READONLY_CATALOG_QUERY_PACK.txt
+            ${{ runner.temp }}/MIGRATION_EFFECT_READONLY_QUERY_PACK.txt
+            ${{ runner.temp }}/W86_ACL_PROVENANCE_READONLY_QUERY_PACK.txt
+            ${{ runner.temp }}/W86_ACL_PROVENANCE_ROLE_FIXTURE.sql
+            ${{ runner.temp }}/W86_ACL_PROVENANCE_ROLE_FIXTURE_OUTPUT.txt
+            ${{ runner.temp }}/W86_ACL_PROVENANCE_JSON_ASSERTION.txt
+            ${{ runner.temp }}/W86_ACL_PROVENANCE_ROLE_CLEANUP.sql
+            ${{ runner.temp }}/W86_ACL_PROVENANCE_ROLE_CLEANUP_OUTPUT.txt
+            ${{ runner.temp }}/W86_AUTHENTICATED_PARENT_GUARD_FIXTURE.sql
+            ${{ runner.temp }}/W86_AUTHENTICATED_PARENT_GUARD_FIXTURE_OUTPUT.txt
+            ${{ runner.temp }}/W86_AUTHENTICATED_PARENT_GUARD_CHECK.txt
+            ${{ runner.temp }}/W86_AUTHENTICATED_PARENT_NO_MUTATION_CHECK.txt
+            ${{ runner.temp }}/W86_AUTHENTICATED_PARENT_GUARD_CLEANUP.sql
+            ${{ runner.temp }}/W86_AUTHENTICATED_PARENT_GUARD_CLEANUP_OUTPUT.txt
+            ${{ runner.temp }}/W86_AUTHENTICATED_PARENT_GUARD_REAPPLY.txt
+ "${RUNNER_TEMP}/W86_AUTHENTICATED_PARENT_NO_MUTATION_CHECK.txt"; then
+                echo "::error::W86 changed authenticated table privileges before stopping."
+                w86_authenticated_parent_guard_status=1
+              fi
+            fi
+          fi
+
+          # Always clean the disposable role edge/ACL fixture before restoring the intended state.
+          cat > "${RUNNER_TEMP}/W86_AUTHENTICATED_PARENT_GUARD_CLEANUP.sql" <<'SQL'
+          REVOKE authenticated FROM service_role;
+          REVOKE ALL PRIVILEGES ON TABLE public.agent_executions FROM authenticated;
+          DO $cleanup$
+          DECLARE column_names text;
+          BEGIN
+            SELECT string_agg(format('%I', a.attname), ', ' ORDER BY a.attnum)
+              INTO column_names
+              FROM pg_attribute a
+             WHERE a.attrelid = 'public.agent_executions'::regclass
+               AND a.attnum > 0 AND NOT a.attisdropped;
+            IF column_names IS NOT NULL THEN
+              EXECUTE format(
+                'REVOKE ALL PRIVILEGES (%s) ON TABLE public.agent_executions FROM authenticated',
+                column_names
+              );
+            END IF;
+          END
+          $cleanup$;
+          SQL
+          docker cp "${RUNNER_TEMP}/W86_AUTHENTICATED_PARENT_GUARD_CLEANUP.sql" "${db_container}:/tmp/W86_AUTHENTICATED_PARENT_GUARD_CLEANUP.sql"
+          set +e
+          docker exec "${db_container}" psql -U postgres -d postgres -X -v ON_ERROR_STOP=1 \
+            -f /tmp/W86_AUTHENTICATED_PARENT_GUARD_CLEANUP.sql 2>&1 | tee "${RUNNER_TEMP}/W86_AUTHENTICATED_PARENT_GUARD_CLEANUP_OUTPUT.txt"
+          auth_cleanup_status="${PIPESTATUS[0]}"
+          set -e
+          echo "w86_authenticated_parent_cleanup_exit_code=${auth_cleanup_status}" >> "${RUNNER_TEMP}/W80_EVIDENCE.txt"
+          if [ "${auth_cleanup_status}" -ne 0 ]; then
+            w86_authenticated_parent_guard_status=1
+          else
+            set +e
+            docker exec "${db_container}" psql -U postgres -d postgres -X -v ON_ERROR_STOP=1 \
+              -f /tmp/w86_agent_executions_acl_correction.sql 2>&1 | tee "${RUNNER_TEMP}/W86_AUTHENTICATED_PARENT_GUARD_REAPPLY.txt"
+            auth_reapply_status="${PIPESTATUS[0]}"
+            set -e
+            echo "w86_authenticated_parent_reapply_exit_code=${auth_reapply_status}" >> "${RUNNER_TEMP}/W80_EVIDENCE.txt"
+            if [ "${auth_reapply_status}" -ne 0 ]; then
+              w86_authenticated_parent_guard_status=1
+            else
+              run_pgtap W66_AFTER_AUTHENTICATED_PARENT_GUARD_REAPPLY supabase/tests/w66_service_role_table_privilege_hardening.sql 11 || w86_authenticated_parent_guard_status=1
+              run_pgtap W86_AFTER_AUTHENTICATED_PARENT_GUARD_REAPPLY supabase/tests/w86_agent_executions_acl_correction.sql 21 || w86_authenticated_parent_guard_status=1
+            fi
+          fi
+          echo "w86_authenticated_parent_guard_status=${w86_authenticated_parent_guard_status}" >> "${RUNNER_TEMP}/W80_EVIDENCE.txt"
+
+          if [ "${regression_status}" -ne 0 ] || [ "${later_status}" -ne 0 ] || [ "${w84_status}" -ne 0 ] || [ "${w85_status}" -ne 0 ] || [ "${w86_status}" -ne 0 ] || [ "${query_pack_status}" -ne 0 ] || [ "${w86_authenticated_parent_guard_status}" -ne 0 ]; then exit 1; fi
 
       - name: Stop and prove disposable resource cleanup
         if: always()

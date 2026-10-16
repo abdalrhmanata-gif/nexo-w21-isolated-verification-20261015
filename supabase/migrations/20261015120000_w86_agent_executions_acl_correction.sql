@@ -13,6 +13,7 @@
 do $w86_inherited_acl_preflight$
 declare
   inherited_entries text;
+  reachable_authenticated_parent text;
 begin
   with recursive role_path (
     role_oid, role_name, depth, oid_path, inherits_all, can_set_role
@@ -58,13 +59,30 @@ begin
     select role_name, privilege_description from inherited_table_acl
     union all
     select role_name, privilege_description from inherited_column_acl
+  ),
+  reachable_authenticated as (
+    select string_agg(format('role %I', rp.role_name), ', ' order by rp.role_name) as role_names
+      from role_path rp
+     where rp.depth > 0
+       and rp.role_name = 'authenticated'
+       and (rp.inherits_all or rp.can_set_role)
   )
-  select string_agg(
-           format('%s via role %I', privilege_description, role_name),
-           '; ' order by role_name, privilege_description
-         )
-    into inherited_entries
-    from inherited_acl;
+  select
+    (select string_agg(
+       format('%s via role %I', privilege_description, role_name),
+       '; ' order by role_name, privilege_description
+     ) from inherited_acl),
+    (select role_names from reachable_authenticated)
+    into inherited_entries, reachable_authenticated_parent;
+
+  -- This migration itself grants SELECT to authenticated after this preflight.
+  -- Reject any INHERIT/SET ROLE path to that grant target even when the role
+  -- currently has no ACL entry, otherwise the new grant would create access.
+  if reachable_authenticated_parent is not null then
+    raise exception
+      'W86 refused: service_role can reach authenticated via a parent role path (%); granting authenticated SELECT would create a table access path',
+      reachable_authenticated_parent;
+  end if;
 
   if inherited_entries is not null then
     raise exception
