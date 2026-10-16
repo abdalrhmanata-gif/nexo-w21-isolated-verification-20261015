@@ -179,7 +179,7 @@ class HostedLedgerReviewTests(unittest.TestCase):
     def test_rejects_membership_path_without_valid_depth(self):
         payload = json.loads((self.evidence / "query_13.json").read_text(encoding="utf-8"))
         provenance = payload["response"][0]["w86_acl_provenance"]
-        provenance["service_role_membership_paths"][0].pop("depth")
+        provenance["service_role_membership_paths"][1].pop("depth")
         save(self.evidence / "query_13.json", payload)
         with self.assertRaises(review.EvidenceError):
             review.reconcile(self.evidence, self.repo)
