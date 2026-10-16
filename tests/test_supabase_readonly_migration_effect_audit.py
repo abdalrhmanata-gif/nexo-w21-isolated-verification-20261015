@@ -343,10 +343,11 @@ class ReadOnlyEffectAuditTests(unittest.TestCase):
                 for role in ("anon", "authenticated", "service_role", "postgres"):
                     for privilege in ("SELECT", "INSERT", "UPDATE", "DELETE", "TRUNCATE", "REFERENCES", "TRIGGER", "MAINTAIN"):
                         rows.append({
-                            "evidence_kind": "EFFECTIVE_PRIVILEGE",
-                            "relation_name": "agent_executions",
-                            "grantee": role,
-                            "privilege_type": privilege,
+                            "evidence_kind": "EFFECTIVE_PRIVILEGE", "schema_name": "public",
+                            "relation_name": "agent_executions", "owner_role": "postgres",
+                            "row_level_security_enabled": True, "row_level_security_forced": False,
+                            "grantee": role, "privilege_type": privilege,
+                            "effective_privilege": False, "is_grantable": None, "grantor": None,
                         })
                 return {"result": rows}
             provenance = valid_provenance_payload(inherited=False)
@@ -376,8 +377,13 @@ class ReadOnlyEffectAuditTests(unittest.TestCase):
                 rows = []
                 for role in ("anon", "authenticated", "service_role", "postgres"):
                     for privilege in ("SELECT", "INSERT", "UPDATE", "DELETE", "TRUNCATE", "REFERENCES", "TRIGGER", "MAINTAIN"):
-                        rows.append({"evidence_kind": "EFFECTIVE_PRIVILEGE", "relation_name": "agent_executions",
-                                     "grantee": role, "privilege_type": privilege})
+                        rows.append({
+                    "evidence_kind": "EFFECTIVE_PRIVILEGE", "schema_name": "public",
+                    "relation_name": "agent_executions", "owner_role": "postgres",
+                    "row_level_security_enabled": True, "row_level_security_forced": False,
+                    "grantee": role, "privilege_type": privilege,
+                    "effective_privilege": False, "is_grantable": None, "grantor": None,
+                })
                 return {"result": rows}
             provenance = valid_provenance_payload(inherited=True)
             provenance["service_role_inherited_table_acl_entries"][0]["membership_depth"] = 2
@@ -403,8 +409,13 @@ class ReadOnlyEffectAuditTests(unittest.TestCase):
                 rows = []
                 for role in ("anon", "authenticated", "service_role", "postgres"):
                     for privilege in ("SELECT", "INSERT", "UPDATE", "DELETE", "TRUNCATE", "REFERENCES", "TRIGGER", "MAINTAIN"):
-                        rows.append({"evidence_kind": "EFFECTIVE_PRIVILEGE", "relation_name": "agent_executions",
-                                     "grantee": role, "privilege_type": privilege})
+                        rows.append({
+                    "evidence_kind": "EFFECTIVE_PRIVILEGE", "schema_name": "public",
+                    "relation_name": "agent_executions", "owner_role": "postgres",
+                    "row_level_security_enabled": True, "row_level_security_forced": False,
+                    "grantee": role, "privilege_type": privilege,
+                    "effective_privilege": False, "is_grantable": None, "grantor": None,
+                })
                 return {"result": rows}
             return {"result": [{"w86_acl_provenance": valid_provenance_payload(inherited=False, current_user="postgres")}]}
         code, output = self._run_with_fake_api(fake_api)
@@ -427,8 +438,13 @@ class ReadOnlyEffectAuditTests(unittest.TestCase):
                 rows = []
                 for role in ("anon", "authenticated", "service_role", "postgres"):
                     for privilege in ("SELECT", "INSERT", "UPDATE", "DELETE", "TRUNCATE", "REFERENCES", "TRIGGER", "MAINTAIN"):
-                        rows.append({"evidence_kind": "EFFECTIVE_PRIVILEGE", "relation_name": "agent_executions",
-                                     "grantee": role, "privilege_type": privilege})
+                        rows.append({
+                    "evidence_kind": "EFFECTIVE_PRIVILEGE", "schema_name": "public",
+                    "relation_name": "agent_executions", "owner_role": "postgres",
+                    "row_level_security_enabled": True, "row_level_security_forced": False,
+                    "grantee": role, "privilege_type": privilege,
+                    "effective_privilege": False, "is_grantable": None, "grantor": None,
+                })
                 return {"result": rows}
             provenance = valid_provenance_payload(inherited=False)
             provenance["relation"].pop("owner_role")
@@ -452,8 +468,13 @@ class ReadOnlyEffectAuditTests(unittest.TestCase):
                 rows = []
                 for role in ("anon", "authenticated", "service_role", "postgres"):
                     for privilege in ("SELECT", "INSERT", "UPDATE", "DELETE", "TRUNCATE", "REFERENCES", "TRIGGER", "MAINTAIN"):
-                        rows.append({"evidence_kind": "EFFECTIVE_PRIVILEGE", "relation_name": "agent_executions",
-                                     "grantee": role, "privilege_type": privilege})
+                        rows.append({
+                    "evidence_kind": "EFFECTIVE_PRIVILEGE", "schema_name": "public",
+                    "relation_name": "agent_executions", "owner_role": "postgres",
+                    "row_level_security_enabled": True, "row_level_security_forced": False,
+                    "grantee": role, "privilege_type": privilege,
+                    "effective_privilege": False, "is_grantable": None, "grantor": None,
+                })
                 return {"result": rows}
             provenance = valid_provenance_payload(inherited=False)
             provenance["service_role_membership_paths"] = []
@@ -512,7 +533,7 @@ class ReadOnlyEffectAuditTests(unittest.TestCase):
             return {"result": []}
         code, output = self._run_with_fake_api(fake_api)
         self.assertEqual(code, 5)
-        self.assertIn("effective ACL result set incomplete", output)
+        self.assertIn("effective/stored ACL result set incomplete", output)
         self.assertEqual(len([call for call in calls if call[0] == "POST"]), 12)
 
     def test_runbook_points_to_current_13_query_secure_wrapper(self):

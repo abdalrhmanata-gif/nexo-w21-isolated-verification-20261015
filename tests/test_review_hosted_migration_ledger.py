@@ -126,6 +126,14 @@ class HostedLedgerReviewTests(unittest.TestCase):
         self.assertIsNone(result["source_migrations_worktree_clean"])
         self.assertRegex(result["source_migration_manifest_sha256"], r"^[0-9a-f]{64}$")
 
+    def test_rejects_duplicate_query12_effective_privilege(self):
+        payload = json.loads((self.evidence / "query_12.json").read_text(encoding="utf-8"))
+        effective = next(row for row in payload["response"] if row.get("evidence_kind") == "EFFECTIVE_PRIVILEGE")
+        payload["response"].append(dict(effective))
+        save(self.evidence / "query_12.json", payload)
+        with self.assertRaisesRegex(review.EvidenceError, "effective table ACL matrix incomplete, duplicated or unexpected"):
+            review.reconcile(self.evidence, self.repo)
+
     def test_rejects_non_boolean_query12_effective_privilege(self):
         payload = json.loads((self.evidence / "query_12.json").read_text(encoding="utf-8"))
         effective = next(row for row in payload["response"] if row.get("evidence_kind") == "EFFECTIVE_PRIVILEGE")
