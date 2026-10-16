@@ -620,6 +620,9 @@ class ReadOnlyEffectAuditTests(unittest.TestCase):
         self.assertIn("no fresh hosted 13-query capture has been recorded", runbook)
         self.assertIn("`query_13.json`", runbook)
         self.assertIn("f9f56944ddd04dd135329ff930cf5259e215eb89f30784b75e03a93f221ff38e", runbook)
+        self.assertIn("Cross-query W66/W86 evidence consistency gate", runbook)
+        self.assertIn("query 12 and query 13 service_role effective privilege maps must match", runbook)
+        self.assertIn("not a single atomic catalog snapshot", runbook)
         current = runbook.split("## Current Windows PowerShell procedure — use only this procedure", 1)[1]
         current = current.split("## Expected output and interpretation", 1)[0]
         self.assertIn(r".\tools\run_zavqera_readonly_effect_audit.ps1", current)

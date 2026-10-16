@@ -217,3 +217,15 @@ W86 does not merely revoke the currently observed direct grants: after preflight
 - Audit reviewer regression: [W80 run 38889843683](https://github.com/abdalrhmanata-gif/nexo-w21-isolated-verification-20261015/actions/runs/38889843683), SHA `35342455b968bc72f964ce28df15049e364e0bad`; 14 offline reviewer tests passed, including the case of an authenticated parent path without any parent ACL rows.
 
 This only strengthens the isolated candidate and offline report. If query 13 shows any inherited parent ACL, or any reachable service_role-to-authenticated path, do not apply W86 as-is. If neither is present, hosted writes still remain unauthorized until historical migration SQL provenance and an independent owner review/explicit authorization are complete. Hosted release remains **NO-GO**.
+
+
+## Cross-query W66/W86 evidence consistency gate — 2026-10-16
+
+The current capture runner and offline reviewer cross-check the two pinned read-only result sets before accepting the evidence for manual review:
+
+- Query 12 must contain the complete, unique effective privilege matrix for `anon`, `authenticated`, `service_role`, and `postgres`, and every privilege result must have the expected boolean shape and relation metadata.
+- Query 13 must identify `public.agent_executions`, the same owner role and RLS flags, and exactly typed booleans for the eight `service_role_effective_privileges` entries.
+- The eight effective `service_role` privilege booleans in query 12 must equal the query-13 summary. Any disagreement blocks the capture/review; it is not safe to choose whichever query appears more plausible.
+- Every inherited table/column ACL row must also match a concrete membership-path tuple with role name, exact integer depth, `INHERIT`, and `SET ROLE` flags. Owner-authority paths and paths to `authenticated` remain independent W86 blockers.
+
+The two queries are separate read-only API requests, not a single atomic catalog snapshot. Consistency checks catch malformed or contradictory responses but do **not** prove transaction-level snapshot identity, deployed historical SQL equality, or authorize hosted changes. A fresh Development-only 13-query capture, manual migration-source reconciliation, independent database-owner review, and separate authorization remain mandatory. Release stays **NO-GO**.
