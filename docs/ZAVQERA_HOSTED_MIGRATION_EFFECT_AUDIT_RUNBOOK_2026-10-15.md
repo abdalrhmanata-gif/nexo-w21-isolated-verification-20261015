@@ -229,3 +229,8 @@ The current capture runner and offline reviewer cross-check the two pinned read-
 - Every inherited table/column ACL row must also match a concrete membership-path tuple with role name, exact integer depth, `INHERIT`, and `SET ROLE` flags. Owner-authority paths and paths to `authenticated` remain independent W86 blockers.
 
 The two queries are separate read-only API requests, not a single atomic catalog snapshot. Consistency checks catch malformed or contradictory responses but do **not** prove transaction-level snapshot identity, deployed historical SQL equality, or authorize hosted changes. A fresh Development-only 13-query capture, manual migration-source reconciliation, independent database-owner review, and separate authorization remain mandatory. Release stays **NO-GO**.
+
+
+### Membership-path ancestry validation
+
+The collector and offline reviewer validate that each query-13 membership row belongs to one connected chain rooted at a single `service_role` row at depth 0. A non-root `member_of_role` must identify a row at the preceding depth, and cumulative `INHERIT` / `SET ROLE` flags may transition from true to false but cannot become true again after a false edge. Root rows with a parent, duplicate path tuples, missing parent rows, malformed flags, or disconnected paths are rejected before role-path conclusions are emitted.
