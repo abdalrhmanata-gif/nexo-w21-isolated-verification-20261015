@@ -157,6 +157,32 @@ class HostedLedgerReviewTests(unittest.TestCase):
         with self.assertRaises(review.EvidenceError):
             review.reconcile(self.evidence, self.repo)
 
+    def test_rejects_missing_relation_owner_identity(self):
+        payload = json.loads((self.evidence / "query_13.json").read_text(encoding="utf-8"))
+        provenance = payload["response"][0]["w86_acl_provenance"]
+        provenance["relation"].pop("owner_role")
+        save(self.evidence / "query_13.json", payload)
+        with self.assertRaises(review.EvidenceError):
+            review.reconcile(self.evidence, self.repo)
+
+    def test_rejects_missing_root_service_role_membership_path(self):
+        payload = json.loads((self.evidence / "query_13.json").read_text(encoding="utf-8"))
+        provenance = payload["response"][0]["w86_acl_provenance"]
+        provenance["service_role_membership_paths"] = [
+            item for item in provenance["service_role_membership_paths"]
+            if item.get("depth") != 0
+        ]
+        save(self.evidence / "query_13.json", payload)
+        with self.assertRaises(review.EvidenceError):
+            review.reconcile(self.evidence, self.repo)
+
+    def test_rejects_membership_path_without_valid_depth(self):
+        payload = json.loads((self.evidence / "query_13.json").read_text(encoding="utf-8"))
+        provenance = payload["response"][0]["w86_acl_provenance"]
+        provenance["service_role_membership_paths"][0].pop("depth")
+        save(self.evidence / "query_13.json", payload)
+        with self.assertRaises(review.EvidenceError):
+            review.reconcile(self.evidence, self.repo)
     def test_relation_owner_set_role_path_blocks_even_without_acl_entries(self):
         payload = json.loads((self.evidence / "query_13.json").read_text(encoding="utf-8"))
         provenance = payload["response"][0]["w86_acl_provenance"]
