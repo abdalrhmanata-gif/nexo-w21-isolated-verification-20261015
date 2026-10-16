@@ -126,11 +126,11 @@ The previous 12-query capture remains valid evidence for the 2026-10-15 observat
 
 The guarded runner now pins two files independently:
 - Base 12-query pack SHA-256: a7aba3461786dbb5854f71dc4f87b7e0498d12509add535ab3df4a7ec231a284
-- Query 13, supabase/tests/hosted_readonly_w86_acl_provenance_query.sql, SHA-256: d8e9a1266729964ebe682140e1e73e1d7953d0d01bbdb0f077fbf76633ca4e13
+- Query 13, supabase/tests/hosted_readonly_w86_acl_provenance_query.sql, SHA-256: f9f56944ddd04dd135329ff930cf5259e215eb89f30784b75e03a93f221ff38e
 
 From the repository root in PowerShell, first run: py -3 tools/supabase_readonly_migration_effect_audit.py --self-test
 
-Expected self-test output: SELF_TEST=PASS; queries=13; base_sha256=a7aba3461786dbb5854f71dc4f87b7e0498d12509add535ab3df4a7ec231a284; acl_provenance_sha256=d8e9a1266729964ebe682140e1e73e1d7953d0d01bbdb0f077fbf76633ca4e13; no network requests.
+Expected self-test output: SELF_TEST=PASS; queries=13; base_sha256=a7aba3461786dbb5854f71dc4f87b7e0498d12509add535ab3df4a7ec231a284; acl_provenance_sha256=f9f56944ddd04dd135329ff930cf5259e215eb89f30784b75e03a93f221ff38e; no network requests.
 
 Then run the same guarded Development capture procedure described earlier in this runbook, using the verified Development project ref, explicit DEVELOPMENT_ONLY_READ_ONLY confirmation, and the scoped read-only Management API token locally. The runner verifies both SQL hashes, validates project identity and the read-only role before proceeding, sends only Management API database/query/read-only requests, saves query outputs 01–13, and never saves or prints the token. Do not paste a token into chat. Inspect the evidence ZIP for secrets before uploading it.
 
@@ -190,7 +190,7 @@ if ($LASTEXITCODE -ne 0) { throw "Offline reviewer tests failed; do not connect.
 
 The self-test must identify **13 SELECT-only queries** and these pinned SHA-256 values:
 - Base query pack (queries 1–12): `a7aba3461786dbb5854f71dc4f87b7e0498d12509add535ab3df4a7ec231a284`
-- Query 13 inherited-ACL provenance: `d8e9a1266729964ebe682140e1e73e1d7953d0d01bbdb0f077fbf76633ca4e13`
+- Query 13 inherited-ACL provenance: `f9f56944ddd04dd135329ff930cf5259e215eb89f30784b75e03a93f221ff38e`
 
 If any command fails, stop. Do not edit the query pack, bypass a gate, or use the unrestricted SQL endpoint.
 
@@ -222,6 +222,6 @@ No hosted change is authorized by this procedure. Keep release **NO-GO** and the
 
 The pinned ACL provenance query was corrected so `service_role_inherited_table_acl_entries` and `service_role_inherited_column_acl_entries` contain only reachable parent roles (`depth > 0`) with an all-`INHERIT` or all-`SET ROLE` path. Direct `service_role` ACLs remain separately reported by the effective privilege map, `table_acl_entries`, and `column_acl_entries`; they must not be mislabeled as inherited grants.
 
-- Query 13 SHA-256: `d8e9a1266729964ebe682140e1e73e1d7953d0d01bbdb0f077fbf76633ca4e13`.
+- Query 13 SHA-256: `f9f56944ddd04dd135329ff930cf5259e215eb89f30784b75e03a93f221ff38e`.
 - Offline reviewer and self-test pin this hash, and a regression test asserts that depth-zero direct ACLs are excluded from parent-role result arrays.
 - The previously uploaded hosted evidence ZIP contains 12 queries and is not evidence for this corrected 13-query probe. No fresh hosted capture is recorded here. No hosted write is authorized; historical migration provenance and independent owner approval remain required.
