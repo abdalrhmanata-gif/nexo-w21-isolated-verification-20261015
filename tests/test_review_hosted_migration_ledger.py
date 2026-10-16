@@ -1,4 +1,5 @@
 import importlib.util
+from itertools import product
 import json
 from pathlib import Path
 import shutil
@@ -311,6 +312,42 @@ class HostedLedgerReviewTests(unittest.TestCase):
         save(self.evidence / "query_13.json", payload)
         with self.assertRaises(review.EvidenceError):
             review.reconcile(self.evidence, self.repo)
+
+    def test_membership_reachability_matches_role_option_paths_exhaustively(self):
+        edge_options = ((False, False), (False, True), (True, False), (True, True))
+        for length in range(1, 5):
+            for edges in product(edge_options, repeat=length):
+                paths = [{
+                    "role_name": "service_role", "depth": 0, "member_of_role": None,
+                    "all_edges_inherit": True, "all_edges_set_role": True,
+                    "edge_inherit_option": None, "edge_set_option": None,
+                    "reachable_via_membership_options": True,
+                }]
+                all_inherit = True
+                all_set_role = True
+                prefix = []
+                parent_name = "service_role"
+                for depth, (edge_inherit, edge_set_role) in enumerate(edges, start=1):
+                    prefix.append((edge_inherit, edge_set_role))
+                    all_inherit = all_inherit and edge_inherit
+                    all_set_role = all_set_role and edge_set_role
+                    expected_reachable = any(
+                        all(edge[1] for edge in prefix[:split])
+                        and all(edge[0] for edge in prefix[split:])
+                        for split in range(len(prefix) + 1)
+                    )
+                    role_name = f"role_{depth}"
+                    paths.append({
+                        "role_name": role_name, "depth": depth, "member_of_role": parent_name,
+                        "all_edges_inherit": all_inherit, "all_edges_set_role": all_set_role,
+                        "edge_inherit_option": edge_inherit, "edge_set_option": edge_set_role,
+                        "reachable_via_membership_options": expected_reachable,
+                    })
+                    parent_name = role_name
+                self.assertTrue(review.membership_paths_form_valid_chain(paths), msg=f"valid edge sequence rejected: {edges}")
+                corrupted = [dict(item) for item in paths]
+                corrupted[-1]["reachable_via_membership_options"] = not corrupted[-1]["reachable_via_membership_options"]
+                self.assertFalse(review.membership_paths_form_valid_chain(corrupted), msg=f"corrupt edge sequence accepted: {edges}")
 
     def test_membership_reachability_allows_set_role_then_inherit(self):
         paths = [
