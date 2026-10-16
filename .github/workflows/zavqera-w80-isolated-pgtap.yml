@@ -629,6 +629,21 @@ jobs:
               fi
 
               if [ "${label}" = "w86_acl_provenance" ] && [ "${provenance_fixture_seeded}" -eq 1 ]; then
+                # The inherited-ACL probe must also prove W86 fails closed before
+                # changing anything when service_role inherits a parent-role grant.
+                set +e
+                docker exec "${db_container}" psql -U postgres -d postgres -X -v ON_ERROR_STOP=1 \
+                  -f /tmp/w86_agent_executions_acl_correction.sql 2>&1 | tee "${RUNNER_TEMP}/W86_INHERITED_ACL_GUARD_CHECK.txt"
+                inherited_guard_status="${PIPESTATUS[0]}"
+                set -e
+                echo "w86_inherited_acl_guard_exit_code=${inherited_guard_status}" >> "${RUNNER_TEMP}/W80_EVIDENCE.txt"
+                if [ "${inherited_guard_status}" -eq 0 ] || ! grep -q "W86 refused: service_role inherits agent_executions privileges from parent roles" "${RUNNER_TEMP}/W86_INHERITED_ACL_GUARD_CHECK.txt"; then
+                  echo "::error::W86 did not fail closed on inherited service_role ACLs."
+                  pack_status=1
+                else
+                  echo "W86_INHERITED_ACL_GUARD_PASS" > "${RUNNER_TEMP}/W86_INHERITED_ACL_GUARD_ASSERTION.txt"
+                fi
+
                 cat > "${RUNNER_TEMP}/W86_ACL_PROVENANCE_ROLE_CLEANUP.sql" <<'SQL'
           REVOKE ALL PRIVILEGES ON TABLE public.agent_executions FROM w86_acl_probe_parent;
           DO $cleanup$
@@ -659,6 +674,21 @@ jobs:
                 echo "w86_acl_provenance_role_cleanup_exit_code=${cleanup_fixture_status}" >> "${RUNNER_TEMP}/W80_EVIDENCE.txt"
                 if [ "${cleanup_fixture_status}" -ne 0 ]; then
                   pack_status=1
+                else
+                  # After removing the inherited grant path, W86 must be usable
+                  # again and its existing table/column ACL suites must still pass.
+                  set +e
+                  docker exec "${db_container}" psql -U postgres -d postgres -X -v ON_ERROR_STOP=1 \
+                    -f /tmp/w86_agent_executions_acl_correction.sql 2>&1 | tee "${RUNNER_TEMP}/W86_INHERITED_ACL_GUARD_REAPPLY.txt"
+                  inherited_reapply_status="${PIPESTATUS[0]}"
+                  set -e
+                  echo "w86_inherited_acl_guard_reapply_exit_code=${inherited_reapply_status}" >> "${RUNNER_TEMP}/W80_EVIDENCE.txt"
+                  if [ "${inherited_reapply_status}" -ne 0 ]; then
+                    pack_status=1
+                  else
+                    run_pgtap W66_AFTER_INHERITED_ACL_GUARD_REAPPLY supabase/tests/w66_service_role_table_privilege_hardening.sql 11 || pack_status=1
+                    run_pgtap W86_AFTER_INHERITED_ACL_GUARD_REAPPLY supabase/tests/w86_agent_executions_acl_correction.sql 20 || pack_status=1
+                  fi
                 fi
               fi
             fi
@@ -752,6 +782,11 @@ jobs:
             ${{ runner.temp }}/W66_AFTER_W86_REAPPLY_PGTAP_OUTPUT.txt
             ${{ runner.temp }}/W86_AFTER_REAPPLY_PGTAP_OUTPUT.txt
             ${{ runner.temp }}/W86_MIGRATION_REAPPLY.txt
+            ${{ runner.temp }}/W86_INHERITED_ACL_GUARD_CHECK.txt
+            ${{ runner.temp }}/W86_INHERITED_ACL_GUARD_ASSERTION.txt
+            ${{ runner.temp }}/W86_INHERITED_ACL_GUARD_REAPPLY.txt
+            ${{ runner.temp }}/W66_AFTER_INHERITED_ACL_GUARD_REAPPLY_PGTAP_OUTPUT.txt
+            ${{ runner.temp }}/W86_AFTER_INHERITED_ACL_GUARD_REAPPLY_PGTAP_OUTPUT.txt
             ${{ runner.temp }}/W86_SIMULATED_DRIFT_SEED.sql
             ${{ runner.temp }}/W86_SIMULATED_DRIFT_SEED_OUTPUT.txt
             ${{ runner.temp }}/W86_DRIFT_FIXTURE_CHECK.txt
