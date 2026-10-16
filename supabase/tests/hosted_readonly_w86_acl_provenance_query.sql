@@ -17,8 +17,7 @@ WITH RECURSIVE role_path (
     FROM role_path child
     JOIN pg_auth_members membership ON membership.member = child.role_oid
     JOIN pg_roles parent ON parent.oid = membership.roleid
-   WHERE child.depth < 16
-     AND NOT parent.oid = ANY(child.oid_path)
+   WHERE NOT parent.oid = ANY(child.oid_path)
 ),
 target AS (
   SELECT to_regclass('public.agent_executions')::oid AS relid
