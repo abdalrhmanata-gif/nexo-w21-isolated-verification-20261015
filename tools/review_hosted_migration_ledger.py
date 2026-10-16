@@ -19,7 +19,7 @@ PROJECT_NAME = "ZAVQERA Development"
 PROJECT_REGION = "eu-west-1"
 QUERY_COUNT = 13
 PACK_SHA256 = "a7aba3461786dbb5854f71dc4f87b7e0498d12509add535ab3df4a7ec231a284"
-ACL_PROVENANCE_SHA256 = "ffdcc3f51ee20fb2ddb44e74f292df4767a76a9dff5e8cd30eef2adb8e9d4f64"
+ACL_PROVENANCE_SHA256 = "700939087d9708fc3d6a72ebe10064b4c0db7f5d26b08556c7e641e1aa09a919"
 MIGRATION = re.compile(r"^(?P<version>[0-9]+)_(?P<name>.+)\.sql$")
 ROLES = ("anon", "authenticated", "service_role", "postgres")
 PRIVILEGES = ("SELECT", "INSERT", "UPDATE", "DELETE", "TRUNCATE", "REFERENCES", "TRIGGER", "MAINTAIN")
@@ -183,6 +183,12 @@ def reconcile(directory, repo_root):
         or not truthy_db(provenance.get("transaction_read_only"))
         or not isinstance(relation, dict) or relation.get("exists") is not True
         or not isinstance(membership_paths, list)
+        or not all(
+            isinstance(item, dict)
+            and isinstance(item.get("all_edges_inherit"), bool)
+            and isinstance(item.get("all_edges_set_role"), bool)
+            for item in membership_paths
+        )
         or not isinstance(effective_privileges, dict)
         or set(effective_privileges) != set(PRIVILEGES)
         or not isinstance(inherited_table, list)
@@ -250,8 +256,13 @@ def reconcile(directory, repo_root):
         "acl_provenance_query_sha256": ACL_PROVENANCE_SHA256,
         "service_role_membership_paths": membership_paths,
         "service_role_effective_privileges": effective_privileges,
+        "service_role_set_role_path_count": sum(
+            1 for item in membership_paths
+            if isinstance(item, dict) and item.get("depth", 0) > 0 and item.get("all_edges_set_role") is True
+        ),
         "service_role_inherited_table_acl_rows": len(inherited_table),
         "service_role_inherited_column_acl_rows": len(inherited_column),
+        "service_role_parent_role_acl_path_semantics": "entries reachable through INHERIT or SET ROLE",
         "service_role_inherited_table_acl_entries": inherited_table,
         "service_role_inherited_column_acl_entries": inherited_column,
         "source_checkout_head_sha": source_identity["source_checkout_head_sha"],
