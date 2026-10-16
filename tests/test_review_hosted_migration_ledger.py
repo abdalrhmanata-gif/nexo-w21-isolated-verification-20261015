@@ -134,6 +134,14 @@ class HostedLedgerReviewTests(unittest.TestCase):
         with self.assertRaises(review.EvidenceError):
             review.reconcile(self.evidence, self.repo)
 
+    def test_rejects_inherited_acl_entry_without_matching_membership_path(self):
+        payload = json.loads((self.evidence / "query_13.json").read_text(encoding="utf-8"))
+        provenance = payload["response"][0]["w86_acl_provenance"]
+        provenance["service_role_inherited_table_acl_entries"][0]["membership_depth"] = 2
+        save(self.evidence / "query_13.json", payload)
+        with self.assertRaisesRegex(review.EvidenceError, "does not match a reachable membership path"):
+            review.reconcile(self.evidence, self.repo)
+
     def test_set_role_only_parent_acl_path_is_reported(self):
         payload = json.loads((self.evidence / "query_13.json").read_text(encoding="utf-8"))
         provenance = payload["response"][0]["w86_acl_provenance"]

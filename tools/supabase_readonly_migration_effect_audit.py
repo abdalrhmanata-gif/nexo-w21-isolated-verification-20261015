@@ -385,7 +385,7 @@ def main() -> int:
                 or not all(
                     isinstance(item, dict)
                     and isinstance(item.get("grantee_role"), str)
-                    and isinstance(item.get("membership_depth"), int)
+                    and type(item.get("membership_depth")) is int
                     and item.get("membership_depth", 0) > 0
                     and isinstance(item.get("all_membership_edges_inherit"), bool)
                     and isinstance(item.get("all_membership_edges_set_role"), bool)
@@ -393,6 +393,19 @@ def main() -> int:
                 )
             ):
                 return stop("w86_acl_provenance", "role gate or inherited ACL provenance result incomplete/unrecognized", 5, index)
+            membership_keys = {
+                (item["role_name"], item["depth"], item["all_edges_inherit"], item["all_edges_set_role"])
+                for item in memberships
+            }
+            inherited_entries = inherited_table + inherited_column
+            if any(
+                (item["grantee_role"], item["membership_depth"],
+                 item["all_membership_edges_inherit"], item["all_membership_edges_set_role"])
+                not in membership_keys
+                or not (item["all_membership_edges_inherit"] or item["all_membership_edges_set_role"])
+                for item in inherited_entries
+            ):
+                return stop("w86_acl_provenance", "inherited ACL entry does not match a reachable membership path", 5, index)
 
     ledger_rows = rows_from(json.loads((out / "query_11.json").read_text(encoding="utf-8"))["response"])
     acl_rows = rows_from(json.loads((out / "query_12.json").read_text(encoding="utf-8"))["response"])

@@ -210,7 +210,7 @@ def reconcile(directory, repo_root):
         or not all(
             isinstance(item, dict)
             and isinstance(item.get("grantee_role"), str)
-            and isinstance(item.get("membership_depth"), int)
+            and type(item.get("membership_depth")) is int
             and item.get("membership_depth", 0) > 0
             and isinstance(item.get("all_membership_edges_inherit"), bool)
             and isinstance(item.get("all_membership_edges_set_role"), bool)
@@ -218,6 +218,19 @@ def reconcile(directory, repo_root):
         )
     ):
         raise EvidenceError("query 13 ACL provenance payload failed role/read-only/shape checks")
+    membership_keys = {
+        (item["role_name"], item["depth"], item["all_edges_inherit"], item["all_edges_set_role"])
+        for item in membership_paths
+    }
+    inherited_entries = inherited_table + inherited_column
+    if any(
+        (item["grantee_role"], item["membership_depth"],
+         item["all_membership_edges_inherit"], item["all_membership_edges_set_role"])
+        not in membership_keys
+        or not (item["all_membership_edges_inherit"] or item["all_membership_edges_set_role"])
+        for item in inherited_entries
+    ):
+        raise EvidenceError("inherited ACL entry does not match a reachable membership path")
     if not ledger:
         raise EvidenceError("hosted migration ledger returned zero rows")
     hosted = []
