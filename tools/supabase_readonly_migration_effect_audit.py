@@ -24,6 +24,8 @@ EXPECTED_REGION = "eu-west-1"
 READ_ONLY_ROLE = "supabase_read_only_user"
 PACK_SHA256 = "a7aba3461786dbb5854f71dc4f87b7e0498d12509add535ab3df4a7ec231a284"
 PACK_RELATIVE = Path("supabase/tests/hosted_readonly_migration_effect_audit_queries.sql")
+ACL_PROVENANCE_SHA256 = "014bd621768fd5f85dca25682568b484539683ab41d8ff6d2385b4068d80c05b"
+ACL_PROVENANCE_RELATIVE = Path("supabase/tests/hosted_readonly_w86_acl_provenance_query.sql")
 OUTPUT_RELATIVE = Path("zavqera-readonly-effect-audit-output")
 REF_RE = re.compile(r"^[a-z0-9]{20}$")
 
@@ -140,7 +142,19 @@ def load_pack(root: Path) -> tuple[list[str], str]:
         raise ValueError(f"approved query-pack hash mismatch ({digest}); stop for review")
     statements = split_statements(raw.decode("utf-8"))
     if len(statements) != 12:
-        raise ValueError(f"expected exactly 12 supplemental audit queries, found {len(statements)}")
+        raise ValueError(f"expected exactly 12 base audit queries, found {len(statements)}")
+
+    provenance_path = root / ACL_PROVENANCE_RELATIVE
+    provenance_raw = provenance_path.read_bytes().replace(b"\r\n", b"\n")
+    provenance_digest = hashlib.sha256(provenance_raw).hexdigest()
+    if provenance_digest != ACL_PROVENANCE_SHA256:
+        raise ValueError(f"approved ACL provenance query hash mismatch ({provenance_digest}); stop for review")
+    provenance_statements = split_statements(provenance_raw.decode("utf-8"))
+    if len(provenance_statements) != 1:
+        raise ValueError(f"expected exactly 1 ACL provenance query, found {len(provenance_statements)}")
+    statements.extend(provenance_statements)
+    if len(statements) != 13:
+        raise ValueError(f"expected exactly 13 total audit queries, found {len(statements)}")
     for number, statement in enumerate(statements, 1):
         if not re.match(r"(?is)^\s*SELECT\b", no_comments(statement).strip()):
             raise ValueError(f"query {number} is not a SELECT; refusing to run")
@@ -222,7 +236,7 @@ def main() -> int:
         queries, digest = load_pack(root)
         if len(split_statements(sample)) != 2:
             raise AssertionError("SQL splitter self-test failed")
-        print(f"SELF_TEST=PASS; queries={len(queries)}; sha256={digest}; no network requests")
+        print(f"SELF_TEST=PASS; queries={len(queries)}; base_sha256={digest}; acl_provenance_sha256={ACL_PROVENANCE_SHA256}; no network requests")
         return 0
 
     ref = os.getenv("SUPABASE_PROJECT_REF", "").strip()
@@ -255,9 +269,10 @@ def main() -> int:
         "expected_region": EXPECTED_REGION,
         "endpoint": "Supabase Management API /database/query/read-only (Beta)",
         "query_pack_sha256": pack_hash,
+        "acl_provenance_query_sha256": ACL_PROVENANCE_SHA256,
         "query_count": len(queries),
         "token_saved": False,
-        "scope": "catalog/migration-effect metadata plus migration ledger version/name pairs and public.agent_executions ACL; no application rows",
+        "scope": "catalog/migration-effect metadata, migration ledger, public.agent_executions ACL, and service_role inherited-role ACL provenance; no application rows",
     })
 
     def stop(stage: str, reason: str, code: int, completed: int) -> int:
@@ -334,9 +349,34 @@ def main() -> int:
             expected = {(role, privilege) for role in roles for privilege in privileges}
             if actual != expected or any(row.get("relation_name") != "agent_executions" for row in effective):
                 return stop("w66_table_acl", "effective ACL result set incomplete or unrecognized", 5, index)
+        elif index == 13:
+            if len(rows) != 1 or not isinstance(rows[0].get("w86_acl_provenance"), dict):
+                return stop("w86_acl_provenance", "expected one structured ACL provenance result", 5, index)
+            provenance = rows[0]["w86_acl_provenance"]
+            relation = provenance.get("relation")
+            memberships = provenance.get("service_role_membership_paths")
+            effective = provenance.get("service_role_effective_privileges")
+            inherited_table = provenance.get("service_role_inherited_table_acl_entries")
+            inherited_column = provenance.get("service_role_inherited_column_acl_entries")
+            if (
+                provenance.get("probe_name") != "w86_acl_provenance_v1"
+                or provenance.get("current_user") != READ_ONLY_ROLE
+                or provenance.get("session_user") != READ_ONLY_ROLE
+                or as_bool(provenance.get("transaction_read_only")) is not True
+                or not isinstance(relation, dict) or relation.get("exists") is not True
+                or not isinstance(memberships, list)
+                or not any(item.get("role_name") == "service_role" and item.get("depth") == 0 for item in memberships if isinstance(item, dict))
+                or not isinstance(effective, dict)
+                or set(effective) != {"SELECT", "INSERT", "UPDATE", "DELETE", "TRUNCATE", "REFERENCES", "TRIGGER", "MAINTAIN"}
+                or not isinstance(inherited_table, list)
+                or not isinstance(inherited_column, list)
+            ):
+                return stop("w86_acl_provenance", "role gate or inherited ACL provenance result incomplete/unrecognized", 5, index)
 
     ledger_rows = rows_from(json.loads((out / "query_11.json").read_text(encoding="utf-8"))["response"])
     acl_rows = rows_from(json.loads((out / "query_12.json").read_text(encoding="utf-8"))["response"])
+    provenance_rows = rows_from(json.loads((out / "query_13.json").read_text(encoding="utf-8"))["response"])
+    provenance = provenance_rows[0]["w86_acl_provenance"]
     effective_acl_rows = [row for row in acl_rows if row.get("evidence_kind") == "EFFECTIVE_PRIVILEGE"]
     summary = {
         "status": "CAPTURED_FOR_MANUAL_REVIEW",
@@ -344,6 +384,11 @@ def main() -> int:
         "migration_ledger_rows": len(ledger_rows),
         "effective_table_privilege_rows": len(effective_acl_rows),
         "stored_table_acl_rows": len(acl_rows) - len(effective_acl_rows),
+        "acl_provenance_query_sha256": ACL_PROVENANCE_SHA256,
+        "service_role_membership_path_count": len(provenance["service_role_membership_paths"]),
+        "service_role_inherited_table_acl_rows": len(provenance["service_role_inherited_table_acl_entries"]),
+        "service_role_inherited_column_acl_rows": len(provenance["service_role_inherited_column_acl_entries"]),
+        "service_role_effective_privileges": provenance["service_role_effective_privileges"],
         "read_only_role_gate": "PASS",
         "project": EXPECTED_PROJECT,
         "region": EXPECTED_REGION,
