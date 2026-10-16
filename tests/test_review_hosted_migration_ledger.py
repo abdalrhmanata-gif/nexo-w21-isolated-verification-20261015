@@ -87,12 +87,12 @@ class HostedLedgerReviewTests(unittest.TestCase):
             "column_acl_entries": [],
             "service_role_inherited_table_acl_entries": [
                 {"grantee_role": "w86_acl_probe_parent", "membership_depth": 1,
-                 "all_membership_edges_inherit": True, "privilege_type": "UPDATE",
+                 "all_membership_edges_inherit": True, "all_membership_edges_set_role": True, "privilege_type": "UPDATE",
                  "is_grantable": False, "grantor": "postgres"}
             ],
             "service_role_inherited_column_acl_entries": [
                 {"column_name": "id", "grantee_role": "w86_acl_probe_parent", "membership_depth": 1,
-                 "all_membership_edges_inherit": True, "privilege_type": "SELECT",
+                 "all_membership_edges_inherit": True, "all_membership_edges_set_role": True, "privilege_type": "SELECT",
                  "is_grantable": False, "grantor": "postgres"}
             ]
         }
@@ -119,6 +119,27 @@ class HostedLedgerReviewTests(unittest.TestCase):
         self.assertIsNone(result["source_checkout_head_sha"])
         self.assertIsNone(result["source_migrations_worktree_clean"])
         self.assertRegex(result["source_migration_manifest_sha256"], r"^[0-9a-f]{64}$")
+
+    def test_set_role_only_parent_acl_path_is_reported(self):
+        payload = json.loads((self.evidence / "query_13.json").read_text(encoding="utf-8"))
+        provenance = payload["response"][0]["w86_acl_provenance"]
+        provenance["service_role_effective_privileges"]["UPDATE"] = False
+        provenance["service_role_membership_paths"][1]["all_edges_inherit"] = False
+        provenance["service_role_membership_paths"][1]["all_edges_set_role"] = True
+        provenance["service_role_inherited_table_acl_entries"][0]["all_membership_edges_inherit"] = False
+        provenance["service_role_inherited_table_acl_entries"][0]["all_membership_edges_set_role"] = True
+        provenance["service_role_inherited_column_acl_entries"][0]["all_membership_edges_inherit"] = False
+        provenance["service_role_inherited_column_acl_entries"][0]["all_membership_edges_set_role"] = True
+        save(self.evidence / "query_13.json", payload)
+
+        result = review.reconcile(self.evidence, self.repo)
+        self.assertEqual(result["service_role_set_role_path_count"], 1)
+        self.assertEqual(result["service_role_inherited_table_acl_rows"], 1)
+        self.assertEqual(result["service_role_inherited_column_acl_rows"], 1)
+        self.assertEqual(
+            result["service_role_parent_role_acl_path_semantics"],
+            "entries reachable through INHERIT or SET ROLE",
+        )
 
     def test_source_migration_manifest_is_deterministic_and_content_sensitive(self):
         first = review.reconcile(self.evidence, self.repo)
