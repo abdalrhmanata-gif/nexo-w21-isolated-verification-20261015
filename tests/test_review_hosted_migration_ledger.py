@@ -81,8 +81,8 @@ class HostedLedgerReviewTests(unittest.TestCase):
                 "TRUNCATE": False, "REFERENCES": False, "TRIGGER": False, "MAINTAIN": False
             },
             "service_role_membership_paths": [
-                {"role_name": "service_role", "depth": 0, "member_of_role": None, "all_edges_inherit": True, "all_edges_set_role": True},
-                {"role_name": "w86_acl_probe_parent", "depth": 1, "member_of_role": "service_role", "all_edges_inherit": True, "all_edges_set_role": True}
+                {"role_name": "service_role", "depth": 0, "member_of_role": None, "all_edges_inherit": True, "all_edges_set_role": True, "edge_inherit_option": None, "edge_set_option": None, "reachable_via_membership_options": True},
+                {"role_name": "w86_acl_probe_parent", "depth": 1, "member_of_role": "service_role", "all_edges_inherit": True, "all_edges_set_role": True, "edge_inherit_option": True, "edge_set_option": True, "reachable_via_membership_options": True}
             ],
             "table_acl_entries": [
                 {"grantee": "service_role", "privilege_type": "UPDATE",
@@ -91,12 +91,12 @@ class HostedLedgerReviewTests(unittest.TestCase):
             "column_acl_entries": [],
             "service_role_inherited_table_acl_entries": [
                 {"grantee_role": "w86_acl_probe_parent", "membership_depth": 1,
-                 "all_membership_edges_inherit": True, "all_membership_edges_set_role": True, "privilege_type": "UPDATE",
+                 "all_membership_edges_inherit": True, "all_membership_edges_set_role": True, "member_of_role": "service_role", "edge_inherit_option": True, "edge_set_option": True, "reachable_via_membership_options": True, "privilege_type": "UPDATE",
                  "is_grantable": False, "grantor": "postgres"}
             ],
             "service_role_inherited_column_acl_entries": [
                 {"column_name": "id", "grantee_role": "w86_acl_probe_parent", "membership_depth": 1,
-                 "all_membership_edges_inherit": True, "all_membership_edges_set_role": True, "privilege_type": "SELECT",
+                 "all_membership_edges_inherit": True, "all_membership_edges_set_role": True, "member_of_role": "service_role", "edge_inherit_option": True, "edge_set_option": True, "reachable_via_membership_options": True, "privilege_type": "SELECT",
                  "is_grantable": False, "grantor": "postgres"}
             ]
         }
@@ -160,6 +160,44 @@ class HostedLedgerReviewTests(unittest.TestCase):
         with self.assertRaisesRegex(review.EvidenceError, "query 12 and query 13 service_role effective privilege maps disagree"):
             review.reconcile(self.evidence, self.repo)
 
+    def test_mixed_set_prefix_then_inherit_suffix_blocks_parent_acl(self):
+        payload = json.loads((self.evidence / "query_13.json").read_text(encoding="utf-8"))
+        provenance = payload["response"][0]["w86_acl_provenance"]
+        provenance["service_role_membership_paths"] = [
+            {"role_name": "service_role", "depth": 0, "member_of_role": None,
+             "all_edges_inherit": True, "all_edges_set_role": True,
+             "edge_inherit_option": None, "edge_set_option": None,
+             "reachable_via_membership_options": True},
+            {"role_name": "w86_acl_probe_intermediate", "depth": 1,
+             "member_of_role": "service_role", "all_edges_inherit": False,
+             "all_edges_set_role": True, "edge_inherit_option": False,
+             "edge_set_option": True, "reachable_via_membership_options": True},
+            {"role_name": "w86_acl_probe_parent", "depth": 2,
+             "member_of_role": "w86_acl_probe_intermediate", "all_edges_inherit": False,
+             "all_edges_set_role": False, "edge_inherit_option": True,
+             "edge_set_option": False, "reachable_via_membership_options": True},
+        ]
+        provenance["service_role_inherited_table_acl_entries"] = [{
+            "grantee_role": "w86_acl_probe_parent", "membership_depth": 2,
+            "all_membership_edges_inherit": False, "all_membership_edges_set_role": False,
+            "member_of_role": "w86_acl_probe_intermediate", "edge_inherit_option": True,
+            "edge_set_option": False, "reachable_via_membership_options": True,
+            "privilege_type": "UPDATE", "is_grantable": False, "grantor": "postgres",
+        }]
+        provenance["service_role_inherited_column_acl_entries"] = [{
+            "column_name": "id", "grantee_role": "w86_acl_probe_parent", "membership_depth": 2,
+            "all_membership_edges_inherit": False, "all_membership_edges_set_role": False,
+            "member_of_role": "w86_acl_probe_intermediate", "edge_inherit_option": True,
+            "edge_set_option": False, "reachable_via_membership_options": True,
+            "privilege_type": "SELECT", "is_grantable": False, "grantor": "postgres",
+        }]
+        save(self.evidence / "query_13.json", payload)
+        result = review.reconcile(self.evidence, self.repo)
+        self.assertEqual(result["service_role_inherited_table_acl_rows"], 1)
+        self.assertEqual(result["service_role_inherited_column_acl_rows"], 1)
+        self.assertEqual(result["w86_candidate_parent_acl_gate"], "BLOCKED_PARENT_ROLE_ACL")
+        self.assertIs(result["hosted_write_authorized"], False)
+
     def test_rejects_query12_owner_mismatch_against_query13(self):
         payload = json.loads((self.evidence / "query_12.json").read_text(encoding="utf-8"))
         row = next(
@@ -221,10 +259,19 @@ class HostedLedgerReviewTests(unittest.TestCase):
         save(self.evidence / "query_12.json", acl_payload)
         provenance["service_role_membership_paths"][1]["all_edges_inherit"] = False
         provenance["service_role_membership_paths"][1]["all_edges_set_role"] = True
+        provenance["service_role_membership_paths"][1]["edge_inherit_option"] = False
+        provenance["service_role_membership_paths"][1]["edge_set_option"] = True
+        provenance["service_role_membership_paths"][1]["reachable_via_membership_options"] = True
         provenance["service_role_inherited_table_acl_entries"][0]["all_membership_edges_inherit"] = False
         provenance["service_role_inherited_table_acl_entries"][0]["all_membership_edges_set_role"] = True
+        provenance["service_role_inherited_table_acl_entries"][0]["edge_inherit_option"] = False
+        provenance["service_role_inherited_table_acl_entries"][0]["edge_set_option"] = True
+        provenance["service_role_inherited_table_acl_entries"][0]["reachable_via_membership_options"] = True
         provenance["service_role_inherited_column_acl_entries"][0]["all_membership_edges_inherit"] = False
         provenance["service_role_inherited_column_acl_entries"][0]["all_membership_edges_set_role"] = True
+        provenance["service_role_inherited_column_acl_entries"][0]["edge_inherit_option"] = False
+        provenance["service_role_inherited_column_acl_entries"][0]["edge_set_option"] = True
+        provenance["service_role_inherited_column_acl_entries"][0]["reachable_via_membership_options"] = True
         save(self.evidence / "query_13.json", payload)
 
         result = review.reconcile(self.evidence, self.repo)
@@ -273,11 +320,11 @@ class HostedLedgerReviewTests(unittest.TestCase):
             ("non-string parent", lambda paths: paths[1].update(member_of_role=17)),
             ("missing parent field", lambda paths: paths[1].pop("member_of_role")),
             ("flags re-enabled after false edge", lambda paths: (
-                paths[1].update(all_edges_inherit=False),
+                paths[1].update(all_edges_inherit=False, edge_inherit_option=False),
                 paths.append({
                     "role_name": "nested_role", "depth": 2,
                     "member_of_role": "w86_acl_probe_parent",
-                    "all_edges_inherit": True, "all_edges_set_role": True,
+                    "all_edges_inherit": True, "all_edges_set_role": True, "edge_inherit_option": True, "edge_set_option": True, "reachable_via_membership_options": True,
                 }),
             )),
         )
@@ -339,9 +386,9 @@ class HostedLedgerReviewTests(unittest.TestCase):
         save(self.evidence / "query_12.json", acl_payload)
         provenance["service_role_membership_paths"] = [
             {"role_name": "service_role", "depth": 0, "member_of_role": None,
-             "all_edges_inherit": True, "all_edges_set_role": True},
+             "all_edges_inherit": True, "all_edges_set_role": True, "edge_inherit_option": None, "edge_set_option": None, "reachable_via_membership_options": True},
             {"role_name": "w86_acl_probe_parent", "depth": 1, "member_of_role": "service_role",
-             "all_edges_inherit": False, "all_edges_set_role": True},
+             "all_edges_inherit": False, "all_edges_set_role": True, "edge_inherit_option": False, "edge_set_option": True, "reachable_via_membership_options": True},
         ]
         provenance["service_role_inherited_table_acl_entries"] = []
         provenance["service_role_inherited_column_acl_entries"] = []
@@ -364,9 +411,9 @@ class HostedLedgerReviewTests(unittest.TestCase):
         save(self.evidence / "query_12.json", acl_payload)
         provenance["service_role_membership_paths"] = [
             {"role_name": "service_role", "depth": 0, "member_of_role": None,
-             "all_edges_inherit": True, "all_edges_set_role": True},
+             "all_edges_inherit": True, "all_edges_set_role": True, "edge_inherit_option": None, "edge_set_option": None, "reachable_via_membership_options": True},
             {"role_name": "w86_acl_probe_parent", "depth": 1, "member_of_role": "service_role",
-             "all_edges_inherit": True, "all_edges_set_role": False},
+             "all_edges_inherit": True, "all_edges_set_role": False, "edge_inherit_option": True, "edge_set_option": False, "reachable_via_membership_options": True},
         ]
         provenance["service_role_inherited_table_acl_entries"] = []
         provenance["service_role_inherited_column_acl_entries"] = []
@@ -395,7 +442,7 @@ class HostedLedgerReviewTests(unittest.TestCase):
         save(self.evidence / "query_12.json", acl_payload)
         provenance["service_role_membership_paths"] = [
             {"role_name": "service_role", "depth": 0, "member_of_role": None,
-             "all_edges_inherit": True, "all_edges_set_role": True},
+             "all_edges_inherit": True, "all_edges_set_role": True, "edge_inherit_option": None, "edge_set_option": None, "reachable_via_membership_options": True},
         ]
         provenance["service_role_inherited_table_acl_entries"] = []
         provenance["service_role_inherited_column_acl_entries"] = []
@@ -418,9 +465,9 @@ class HostedLedgerReviewTests(unittest.TestCase):
         provenance = payload["response"][0]["w86_acl_provenance"]
         provenance["service_role_membership_paths"] = [
             {"role_name": "service_role", "depth": 0, "member_of_role": None,
-             "all_edges_inherit": True, "all_edges_set_role": True},
+             "all_edges_inherit": True, "all_edges_set_role": True, "edge_inherit_option": None, "edge_set_option": None, "reachable_via_membership_options": True},
             {"role_name": "authenticated", "depth": 1, "member_of_role": "service_role",
-             "all_edges_inherit": False, "all_edges_set_role": True},
+             "all_edges_inherit": False, "all_edges_set_role": True, "edge_inherit_option": False, "edge_set_option": True, "reachable_via_membership_options": True},
         ]
         provenance["service_role_inherited_table_acl_entries"] = []
         provenance["service_role_inherited_column_acl_entries"] = []
@@ -436,6 +483,32 @@ class HostedLedgerReviewTests(unittest.TestCase):
         ))
         self.assertEqual(result["service_role_inherited_table_acl_rows"], 0)
         self.assertEqual(result["service_role_inherited_column_acl_rows"], 0)
+
+    def test_mixed_set_prefix_then_inherit_suffix_blocks_authenticated_role(self):
+        payload = json.loads((self.evidence / "query_13.json").read_text(encoding="utf-8"))
+        provenance = payload["response"][0]["w86_acl_provenance"]
+        provenance["service_role_membership_paths"] = [
+            {"role_name": "service_role", "depth": 0, "member_of_role": None,
+             "all_edges_inherit": True, "all_edges_set_role": True,
+             "edge_inherit_option": None, "edge_set_option": None,
+             "reachable_via_membership_options": True},
+            {"role_name": "w86_acl_probe_intermediate", "depth": 1,
+             "member_of_role": "service_role", "all_edges_inherit": False,
+             "all_edges_set_role": True, "edge_inherit_option": False,
+             "edge_set_option": True, "reachable_via_membership_options": True},
+            {"role_name": "authenticated", "depth": 2,
+             "member_of_role": "w86_acl_probe_intermediate", "all_edges_inherit": False,
+             "all_edges_set_role": False, "edge_inherit_option": True,
+             "edge_set_option": False, "reachable_via_membership_options": True},
+        ]
+        provenance["service_role_inherited_table_acl_entries"] = []
+        provenance["service_role_inherited_column_acl_entries"] = []
+        save(self.evidence / "query_13.json", payload)
+        result = review.reconcile(self.evidence, self.repo)
+        self.assertEqual(result["service_role_authenticated_parent_path_count"], 1)
+        self.assertEqual(result["w86_candidate_parent_acl_gate"], "BLOCKED_AUTHENTICATED_ROLE_PATH")
+        self.assertEqual(result["service_role_inherited_table_acl_rows"], 0)
+        self.assertIs(result["hosted_write_authorized"], False)
 
     def test_no_parent_acl_observed_still_never_authorizes_hosted_write(self):
         payload = json.loads((self.evidence / "query_13.json").read_text(encoding="utf-8"))

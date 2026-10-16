@@ -65,13 +65,13 @@ def valid_provenance_payload(inherited=True, **overrides):
         "column_acl_entries": [],
         "service_role_inherited_table_acl_entries": (
             [{"grantee_role": "w86_acl_probe_parent", "membership_depth": 1,
-              "all_membership_edges_inherit": True, "all_membership_edges_set_role": True,
+              "all_membership_edges_inherit": True, "all_membership_edges_set_role": True, "member_of_role": "service_role", "edge_inherit_option": True, "edge_set_option": True, "reachable_via_membership_options": True,
               "privilege_type": "UPDATE",
               "is_grantable": False, "grantor": "postgres"}] if inherited else []
         ),
         "service_role_inherited_column_acl_entries": (
             [{"column_name": "id", "grantee_role": "w86_acl_probe_parent", "membership_depth": 1,
-              "all_membership_edges_inherit": True, "all_membership_edges_set_role": True,
+              "all_membership_edges_inherit": True, "all_membership_edges_set_role": True, "member_of_role": "service_role", "edge_inherit_option": True, "edge_set_option": True, "reachable_via_membership_options": True,
               "privilege_type": "SELECT",
               "is_grantable": False, "grantor": "postgres"}] if inherited else []
         ),
@@ -123,7 +123,7 @@ class ReadOnlyEffectAuditTests(unittest.TestCase):
         self.assertEqual(len(statements), 13)
         self.assertEqual(digest, audit.PACK_SHA256)
         self.assertEqual(audit.ACL_PROVENANCE_SHA256,
-                         "f9f56944ddd04dd135329ff930cf5259e215eb89f30784b75e03a93f221ff38e")
+                         "806c1fbc1842860387dea71cdcefc6d02edf8e4f23ad1aa07ece96c1a1a8312b")
         self.assertTrue(all(re.match(r"(?is)^\s*SELECT\b", audit.no_comments(s).strip()) for s in statements))
 
     def test_acl_provenance_query_excludes_direct_grants_from_parent_acl_rows(self):
@@ -137,6 +137,11 @@ class ReadOnlyEffectAuditTests(unittest.TestCase):
         self.assertIn("'table_acl_entries'", sql)
         self.assertIn("'service_role_inherited_table_acl_entries'", sql)
         self.assertIn("'service_role_inherited_column_acl_entries'", sql)
+        self.assertIn("child.reachable_via_membership_options AND membership.inherit_option", sql)
+        self.assertIn("child.can_set_role AND membership.set_option", sql)
+        self.assertIn("'reachable_via_membership_options'", sql)
+        self.assertEqual(sql.count("AND rp.reachable_via_membership_options"), 2)
+        self.assertNotIn("AND (rp.inherits_all OR rp.can_set_role)", sql)
 
     def test_powershell_wrapper_handles_token_locally_and_cleans_environment(self):
         wrapper_path = SCRIPT.parent / "run_zavqera_readonly_effect_audit.ps1"
@@ -241,6 +246,34 @@ class ReadOnlyEffectAuditTests(unittest.TestCase):
                 return {"result": rows}
             if number == 13:
                 provenance = valid_provenance_payload(inherited=True)
+                provenance["service_role_membership_paths"] = [
+                    {"role_name": "service_role", "depth": 0, "member_of_role": None,
+                     "all_edges_inherit": True, "all_edges_set_role": True,
+                     "edge_inherit_option": None, "edge_set_option": None,
+                     "reachable_via_membership_options": True},
+                    {"role_name": "w86_acl_probe_intermediate", "depth": 1,
+                     "member_of_role": "service_role", "all_edges_inherit": False,
+                     "all_edges_set_role": True, "edge_inherit_option": False,
+                     "edge_set_option": True, "reachable_via_membership_options": True},
+                    {"role_name": "w86_acl_probe_parent", "depth": 2,
+                     "member_of_role": "w86_acl_probe_intermediate", "all_edges_inherit": False,
+                     "all_edges_set_role": False, "edge_inherit_option": True,
+                     "edge_set_option": False, "reachable_via_membership_options": True},
+                ]
+                provenance["service_role_inherited_table_acl_entries"] = [{
+                    "grantee_role": "w86_acl_probe_parent", "membership_depth": 2,
+                    "all_membership_edges_inherit": False, "all_membership_edges_set_role": False,
+                    "member_of_role": "w86_acl_probe_intermediate", "edge_inherit_option": True,
+                    "edge_set_option": False, "reachable_via_membership_options": True,
+                    "privilege_type": "UPDATE", "is_grantable": False, "grantor": "postgres",
+                }]
+                provenance["service_role_inherited_column_acl_entries"] = [{
+                    "column_name": "id", "grantee_role": "w86_acl_probe_parent", "membership_depth": 2,
+                    "all_membership_edges_inherit": False, "all_membership_edges_set_role": False,
+                    "member_of_role": "w86_acl_probe_intermediate", "edge_inherit_option": True,
+                    "edge_set_option": False, "reachable_via_membership_options": True,
+                    "privilege_type": "SELECT", "is_grantable": False, "grantor": "postgres",
+                }]
                 provenance["table_acl_entries"] = [{
                     "grantee": "postgres", "privilege_type": "SELECT",
                     "is_grantable": False, "grantor": "postgres",
