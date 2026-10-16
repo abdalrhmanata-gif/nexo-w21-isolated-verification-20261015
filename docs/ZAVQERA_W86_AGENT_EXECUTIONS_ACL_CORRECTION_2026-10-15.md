@@ -132,3 +132,8 @@ The workflow verified this was an expected guard rejection, removed the disposab
 - Flutter CI on the same source/workflow SHA also passed: [run 38857457330](https://github.com/abdalrhmanata-gif/nexo-w21-isolated-verification-20261015/actions/runs/38857457330).
 
 This proves fail-closed handling in the disposable stack only. **Before any hosted repair is even proposed**, the new read-only ACL provenance query must be captured against Development and reviewed. If it reports any inherited table/column ACLs, W86 must not be applied as-is; the source role/grant and least-privilege resolution need independent owner review. Historical migration provenance remains unresolved. No hosted database write was performed, and release remains **NO-GO**.
+
+
+## Hosted evidence gate updated — 2026-10-16
+
+The current capture procedure is documented in [the 13-query audit runbook](https://github.com/abdalrhmanata-gif/nexo-w21-isolated-verification-20261015/blob/codex/migration-ledger-provenance-20261015/docs/ZAVQERA_HOSTED_MIGRATION_EFFECT_AUDIT_RUNBOOK_2026-10-15.md) and implemented in [audit PR #2](https://github.com/abdalrhmanata-gif/nexo-w21-isolated-verification-20261015/pull/2). Query 13 is pinned at SHA-256 `ffdcc3f51ee20fb2ddb44e74f292df4767a76a9dff5e8cd30eef2adb8e9d4f64`; it records service_role membership paths and inherited table/column ACLs. Local W80 validation passed on `f4d7fed423739db0d39ba576ca455c5d4a182169`, but the old hosted ZIP remains 12-query evidence. A fresh 13-query capture under the verified read-only Development session is still required. No hosted repair is authorized by these tests.
