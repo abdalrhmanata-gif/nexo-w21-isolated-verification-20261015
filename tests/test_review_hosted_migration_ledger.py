@@ -251,6 +251,16 @@ class HostedLedgerReviewTests(unittest.TestCase):
             ("disconnected parent", lambda paths: paths[1].update(member_of_role="unobserved_parent")),
             ("root claims parent", lambda paths: paths[0].update(member_of_role="fabricated_parent")),
             ("duplicate path", lambda paths: paths.append(dict(paths[1]))),
+            ("non-string parent", lambda paths: paths[1].update(member_of_role=17)),
+            ("missing parent field", lambda paths: paths[1].pop("member_of_role")),
+            ("flags re-enabled after false edge", lambda paths: (
+                paths[1].update(all_edges_inherit=False),
+                paths.append({
+                    "role_name": "nested_role", "depth": 2,
+                    "member_of_role": "w86_acl_probe_parent",
+                    "all_edges_inherit": True, "all_edges_set_role": True,
+                }),
+            )),
         )
         for label, mutate in mutations:
             with self.subTest(label=label):
