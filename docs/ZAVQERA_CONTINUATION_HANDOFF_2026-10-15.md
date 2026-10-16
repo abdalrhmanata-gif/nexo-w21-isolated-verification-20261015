@@ -664,3 +664,19 @@ W86 now runs an inheritable role-path/table-and-column ACL preflight before any 
 The source migration-history blocker remains unresolved. The all-ref path search checked 28 historical filenames across 23 visible original-repository refs (644 lookups, zero matches/errors). A bounded archive check found zero visible GitHub releases/tags and reviewed artifacts from five recent W21 runs; each had only tiny evidence/browser-diagnostics artifacts, no SQL source archive. See [archive/artifact recovery report](https://github.com/abdalrhmanata-gif/nexo-w21-isolated-verification-20261015/blob/codex/migration-ledger-provenance-20261015/docs/ZAVQERA_GITHUB_ARCHIVE_ARTIFACT_RECOVERY_CHECK_2026-10-16.md). This does not inspect local Git reflogs, deleted/private refs, or external backups.
 
 **Critical:** the hosted 12-query capture predates the new ACL provenance query. Do not apply W86 to hosted Development or Main/Production. Before any hosted repair proposal, run the pinned read-only `hosted_readonly_w86_acl_provenance_query.sql` under the verified read-only Management API session and review the actual inherited role paths. Any inherited ACL means W86 must not be applied as-is. No hosted write, ledger edit, deployment, secret, billing or DNS change occurred. Keep original PR #39 OPEN/DRAFT/UNMERGED, Issue #23 OPEN, `TRUSTED_DISPATCH_ADAPTERS` empty/fail-closed and release **NO-GO**.
+
+
+## 17. Fresh hosted ACL provenance capture procedure — 2026-10-16
+
+The previous uploaded hosted ZIP is a 12-query capture and does not include role inheritance. A guarded 13-query runner is now available in the isolated audit branch/PR #2:
+- PR #2: https://github.com/abdalrhmanata-gif/nexo-w21-isolated-verification-20261015/pull/2
+- Runner: tools/supabase_readonly_migration_effect_audit.py
+- Offline reviewer: tools/review_hosted_migration_ledger.py
+- Base 12-query SQL hash: a7aba3461786dbb5854f71dc4f87b7e0498d12509add535ab3df4a7ec231a284
+- Query 13 SQL path: supabase/tests/hosted_readonly_w86_acl_provenance_query.sql
+- Query 13 SQL hash: ffdcc3f51ee20fb2ddb44e74f292df4767a76a9dff5e8cd30eef2adb8e9d4f64
+- Local verification: W80 run 38858063330 PASS on f4d7fed423739db0d39ba576ca455c5d4a182169; artifact 12027554468 SHA-256 8147e0b3624b27bdd6dc83f566b665a8942a1b3aac3e3dd785de1a3fc45a483d. Flutter CI 38858068979 PASS on same SHA.
+
+To continue: use the new runbook section in docs/ZAVQERA_HOSTED_MIGRATION_EFFECT_AUDIT_RUNBOOK_2026-10-15.md. First run the self-test (13 queries, no network), then run the guarded capture against the verified Development project using the scoped read-only Management API token only in local PowerShell. Never paste a token into chat. Upload the resulting evidence ZIP, then run the offline reviewer with that evidence folder and the exact source checkout used for the comparison.
+
+The reviewer reports inherited table/column ACLs and membership paths. Any inherited ACL means W86 must not be applied as-is. Even if no inherited ACL exists, migration-history reconciliation and owner review remain mandatory; no hosted writes are authorized by this audit. Original PR #39 remains OPEN/DRAFT/UNMERGED; Issue #23 remains OPEN; the trusted adapter registry remains empty/fail-closed; release remains NO-GO.
