@@ -24,7 +24,7 @@ EXPECTED_REGION = "eu-west-1"
 READ_ONLY_ROLE = "supabase_read_only_user"
 PACK_SHA256 = "a7aba3461786dbb5854f71dc4f87b7e0498d12509add535ab3df4a7ec231a284"
 PACK_RELATIVE = Path("supabase/tests/hosted_readonly_migration_effect_audit_queries.sql")
-ACL_PROVENANCE_SHA256 = "f9f56944ddd04dd135329ff930cf5259e215eb89f30784b75e03a93f221ff38e"
+ACL_PROVENANCE_SHA256 = "806c1fbc1842860387dea71cdcefc6d02edf8e4f23ad1aa07ece96c1a1a8312b"
 ACL_PROVENANCE_RELATIVE = Path("supabase/tests/hosted_readonly_w86_acl_provenance_query.sql")
 OUTPUT_RELATIVE = Path("zavqera-readonly-effect-audit-output")
 REF_RE = re.compile(r"^[a-z0-9]{20}$")
@@ -218,7 +218,7 @@ def rows_from(payload):
 
 
 def membership_paths_form_valid_chain(paths):
-    """Reject broken, duplicate, or impossible recursive role-membership paths."""
+    """Validate ancestry and mixed INHERIT/SET ROLE reachability semantics."""
     if not isinstance(paths, list) or not paths:
         return False
     roots = []
@@ -228,17 +228,26 @@ def membership_paths_form_valid_chain(paths):
         name, depth = item.get("role_name"), item.get("depth")
         member = item.get("member_of_role")
         inherits, can_set = item.get("all_edges_inherit"), item.get("all_edges_set_role")
+        edge_inherit, edge_set = item.get("edge_inherit_option"), item.get("edge_set_option")
+        reachable = item.get("reachable_via_membership_options")
         if not isinstance(name, str) or not name or type(depth) is not int or depth < 0:
             return False
-        if type(inherits) is not bool or type(can_set) is not bool:
+        if type(inherits) is not bool or type(can_set) is not bool or type(reachable) is not bool:
             return False
         if "member_of_role" not in item:
             return False
         if depth == 0:
             roots.append(item)
-            if name != "service_role" or member is not None or inherits is not True or can_set is not True:
+            if (
+                name != "service_role" or member is not None
+                or edge_inherit is not None or edge_set is not None
+                or inherits is not True or can_set is not True or reachable is not True
+            ):
                 return False
-        elif not isinstance(member, str) or not member:
+        elif (
+            not isinstance(member, str) or not member
+            or type(edge_inherit) is not bool or type(edge_set) is not bool
+        ):
             return False
     if len(roots) != 1:
         return False
@@ -248,8 +257,12 @@ def membership_paths_form_valid_chain(paths):
         if not any(
             parent["role_name"] == item["member_of_role"]
             and parent["depth"] == item["depth"] - 1
-            and (not item["all_edges_inherit"] or parent["all_edges_inherit"])
-            and (not item["all_edges_set_role"] or parent["all_edges_set_role"])
+            and item["all_edges_inherit"] == (parent["all_edges_inherit"] and item["edge_inherit_option"])
+            and item["all_edges_set_role"] == (parent["all_edges_set_role"] and item["edge_set_option"])
+            and item["reachable_via_membership_options"] == (
+                (parent["reachable_via_membership_options"] and item["edge_inherit_option"])
+                or (parent["all_edges_set_role"] and item["edge_set_option"])
+            )
             for parent in paths
         ):
             return False
@@ -284,6 +297,12 @@ def acl_entries_have_valid_shape(entries, *, inherited=False, column=False):
             if type(item.get("all_membership_edges_inherit")) is not bool:
                 return False
             if type(item.get("all_membership_edges_set_role")) is not bool:
+                return False
+            if not isinstance(item.get("member_of_role"), str) or not item["member_of_role"]:
+                return False
+            if type(item.get("edge_inherit_option")) is not bool or type(item.get("edge_set_option")) is not bool:
+                return False
+            if item.get("reachable_via_membership_options") is not True:
                 return False
     return True
 
@@ -507,15 +526,23 @@ def main() -> int:
             ):
                 return stop("w86_acl_provenance", "role gate or inherited ACL provenance result incomplete/unrecognized", 5, index)
             membership_keys = {
-                (item["role_name"], item["depth"], item["all_edges_inherit"], item["all_edges_set_role"])
+                (
+                    item["role_name"], item["depth"], item["member_of_role"],
+                    item["edge_inherit_option"], item["edge_set_option"],
+                    item["all_edges_inherit"], item["all_edges_set_role"],
+                    item["reachable_via_membership_options"],
+                )
                 for item in memberships
             }
             inherited_entries = inherited_table + inherited_column
             if any(
-                (item["grantee_role"], item["membership_depth"],
-                 item["all_membership_edges_inherit"], item["all_membership_edges_set_role"])
-                not in membership_keys
-                or not (item["all_membership_edges_inherit"] or item["all_membership_edges_set_role"])
+                (
+                    item["grantee_role"], item["membership_depth"], item["member_of_role"],
+                    item["edge_inherit_option"], item["edge_set_option"],
+                    item["all_membership_edges_inherit"], item["all_membership_edges_set_role"],
+                    item["reachable_via_membership_options"],
+                ) not in membership_keys
+                or item["reachable_via_membership_options"] is not True
                 for item in inherited_entries
             ):
                 return stop("w86_acl_provenance", "inherited ACL entry does not match a reachable membership path", 5, index)

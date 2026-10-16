@@ -4,9 +4,11 @@
 SELECT *
 FROM (
 WITH RECURSIVE role_path (
-  role_oid, role_name, depth, oid_path, inherits_all, can_set_role, member_role_name
+  role_oid, role_name, depth, oid_path, inherits_all, can_set_role, member_role_name,
+  edge_inherit_option, edge_set_option, reachable_via_membership_options
 ) AS (
-  SELECT r.oid, r.rolname, 0, ARRAY[r.oid]::oid[], true, true, NULL::text COLLATE "C"
+  SELECT r.oid, r.rolname, 0, ARRAY[r.oid]::oid[], true, true, NULL::text COLLATE "C",
+         NULL::boolean, NULL::boolean, true
     FROM pg_roles r
    WHERE r.rolname = 'service_role'
   UNION ALL
@@ -16,7 +18,11 @@ WITH RECURSIVE role_path (
          child.oid_path || parent.oid,
          child.inherits_all AND membership.inherit_option,
          child.can_set_role AND membership.set_option,
-         child.role_name::text COLLATE "C"
+         child.role_name::text COLLATE "C",
+         membership.inherit_option,
+         membership.set_option,
+         (child.reachable_via_membership_options AND membership.inherit_option)
+           OR (child.can_set_role AND membership.set_option)
     FROM role_path child
     JOIN pg_auth_members membership ON membership.member = child.role_oid
     JOIN pg_roles parent ON parent.oid = membership.roleid
@@ -62,7 +68,10 @@ SELECT jsonb_build_object(
       'depth', rp.depth,
       'member_of_role', rp.member_role_name,
       'all_edges_inherit', rp.inherits_all,
-      'all_edges_set_role', rp.can_set_role
+      'all_edges_set_role', rp.can_set_role,
+      'edge_inherit_option', rp.edge_inherit_option,
+      'edge_set_option', rp.edge_set_option,
+      'reachable_via_membership_options', rp.reachable_via_membership_options
     ) ORDER BY rp.depth, rp.role_name), '[]'::jsonb)
       FROM role_path rp
   ),
@@ -100,6 +109,10 @@ SELECT jsonb_build_object(
       'membership_depth', rp.depth,
       'all_membership_edges_inherit', rp.inherits_all,
       'all_membership_edges_set_role', rp.can_set_role,
+      'member_of_role', rp.member_role_name,
+      'edge_inherit_option', rp.edge_inherit_option,
+      'edge_set_option', rp.edge_set_option,
+      'reachable_via_membership_options', rp.reachable_via_membership_options,
       'privilege_type', acl.privilege_type,
       'is_grantable', acl.is_grantable,
       'grantor', grantor_role.rolname
@@ -111,7 +124,7 @@ SELECT jsonb_build_object(
       LEFT JOIN pg_roles grantor_role ON grantor_role.oid = acl.grantor
      WHERE acl.grantee = rp.role_oid
        AND rp.depth > 0
-       AND (rp.inherits_all OR rp.can_set_role)
+       AND rp.reachable_via_membership_options
   ),
   'service_role_inherited_column_acl_entries', (
     SELECT COALESCE(jsonb_agg(jsonb_build_object(
@@ -120,6 +133,10 @@ SELECT jsonb_build_object(
       'membership_depth', rp.depth,
       'all_membership_edges_inherit', rp.inherits_all,
       'all_membership_edges_set_role', rp.can_set_role,
+      'member_of_role', rp.member_role_name,
+      'edge_inherit_option', rp.edge_inherit_option,
+      'edge_set_option', rp.edge_set_option,
+      'reachable_via_membership_options', rp.reachable_via_membership_options,
       'privilege_type', acl.privilege_type,
       'is_grantable', acl.is_grantable,
       'grantor', grantor_role.rolname
@@ -132,7 +149,7 @@ SELECT jsonb_build_object(
      WHERE a.attnum > 0 AND NOT a.attisdropped
        AND acl.grantee = rp.role_oid
        AND rp.depth > 0
-       AND (rp.inherits_all OR rp.can_set_role)
+       AND rp.reachable_via_membership_options
   )
 ) AS w86_acl_provenance
 ) AS provenance;
