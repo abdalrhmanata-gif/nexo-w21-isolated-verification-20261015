@@ -364,6 +364,7 @@ def main() -> int:
                 or provenance.get("session_user") != READ_ONLY_ROLE
                 or as_bool(provenance.get("transaction_read_only")) is not True
                 or not isinstance(relation, dict) or relation.get("exists") is not True
+                or not isinstance(relation.get("owner_role"), str) or not relation.get("owner_role")
                 or not isinstance(memberships, list)
                 or not any(item.get("role_name") == "service_role" and item.get("depth") == 0 for item in memberships if isinstance(item, dict))
                 or not all(
