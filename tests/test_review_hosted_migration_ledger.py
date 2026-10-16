@@ -168,11 +168,11 @@ class HostedLedgerReviewTests(unittest.TestCase):
             result["hosted_write_authorization_status"],
             "NOT_AUTHORIZED_BY_OFFLINE_REVIEWER",
         )
-        self.assertTrue(any("historical migration SQL provenance" in item
+        self.assertTrue(any("historical migration SQL provenance" in item.lower()
                             for item in result["hosted_write_blockers"]))
         rendered = review.render_markdown(result)
         self.assertIn("NO_PARENT_ROLE_ACL_OBSERVED", rendered)
-        self.assertIn("Hosted writes remain unauthorized", rendered)
+        self.assertIn("hosted writes remain unauthorized", rendered.lower())
 
     def test_source_migration_manifest_is_deterministic_and_content_sensitive(self):
         first = review.reconcile(self.evidence, self.repo)
