@@ -1,6 +1,8 @@
 -- W86 prerequisite: read-only privilege provenance probe.
 -- Returns catalog metadata only; no writes, setting changes, or application rows.
 -- Run with a verified read-only session before any owner-reviewed hosted proposal.
+SELECT *
+FROM (
 WITH RECURSIVE role_path (
   role_oid, role_name, depth, oid_path, inherits_all, member_role_name
 ) AS (
@@ -126,4 +128,5 @@ SELECT jsonb_build_object(
        AND acl.grantee = rp.role_oid
        AND (rp.depth = 0 OR rp.inherits_all)
   )
-) AS w86_acl_provenance;
+) AS w86_acl_provenance
+) AS provenance;
