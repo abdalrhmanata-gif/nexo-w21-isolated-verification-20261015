@@ -663,7 +663,8 @@ class ReadOnlyEffectAuditTests(unittest.TestCase):
         self.assertIn("not a single atomic catalog snapshot", runbook)
         self.assertIn("Membership-path ancestry validation", runbook)
         self.assertIn("preceding depth", runbook)
-        self.assertIn("duplicate path tuples", runbook)
+        self.assertIn("Repeated projected tuples can occur", runbook)
+        self.assertIn("do not change the reachability facts", runbook)
         current = runbook.split("## Current Windows PowerShell procedure — use only this procedure", 1)[1]
         current = current.split("## Expected output and interpretation", 1)[0]
         self.assertIn(r".\tools\run_zavqera_readonly_effect_audit.ps1", current)
