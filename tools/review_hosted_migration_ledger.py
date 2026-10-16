@@ -261,7 +261,7 @@ def reconcile(directory, repo_root):
         if item.get("role_name") == owner_role
         and (
             item.get("depth", 0) == 0
-            or (item.get("depth", 0) > 0 and item.get("all_edges_set_role") is True)
+            or (item.get("depth", 0) > 0 and (item.get("all_edges_inherit") is True or item.get("all_edges_set_role") is True))
         )
     ]
     relation_owner_path_found = bool(relation_owner_paths)
@@ -283,7 +283,7 @@ def reconcile(directory, repo_root):
     if relation_owner_path_found:
         hosted_write_blockers.insert(
             0,
-            "service_role is the relation owner or can SET ROLE to the owner of public.agent_executions; owner authority can restore ACLs and is not safely handled by direct table/column revokes. Do not apply W86 as-is.",
+            "service_role is the relation owner, inherits owner authority, or can SET ROLE to the owner of public.agent_executions; owner authority can restore ACLs and is not safely handled by direct table/column revokes. Do not apply W86 as-is.",
         )
     if authenticated_grant_path_found:
         hosted_write_blockers.insert(
@@ -358,7 +358,7 @@ def reconcile(directory, repo_root):
             "The source checkout HEAD and dirty flag are local Git metadata; the manifest is required to identify the actual source bytes.",
             "Direct table/column revokes do not remove privileges inherited from parent roles; any inherited ACL row is a blocker for the current W86 candidate and requires owner-reviewed resolution.",
             "W86 grants SELECT to authenticated after its preflight; any reachable INHERIT/SET ROLE path from service_role to authenticated is independently a blocker, even if that role has no ACL entry in the current capture.",
-            "A service_role membership path to the relation owner with SET ROLE enabled, or service_role itself as relation owner, is a separate blocker because ownership authority can restore ACLs even when owner ACL rows are absent.",
+            "A service_role membership path to the relation owner with INHERIT or SET ROLE enabled, or service_role itself as relation owner, is a separate blocker because ownership authority can restore ACLs even when owner ACL rows are absent.",
             "Effective ACLs are a signal, not complete proof of reachability; review RLS, memberships, function ownership and trusted writers separately.",
             "The observed role has rolbypassrls=true; do not use this evidence credential for application-row reads.",
             "This is offline analysis only; it performs no SQL, hosted writes, migration repair, or deployment.",
