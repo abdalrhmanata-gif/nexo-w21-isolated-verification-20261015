@@ -24,7 +24,7 @@ EXPECTED_REGION = "eu-west-1"
 READ_ONLY_ROLE = "supabase_read_only_user"
 PACK_SHA256 = "a7aba3461786dbb5854f71dc4f87b7e0498d12509add535ab3df4a7ec231a284"
 PACK_RELATIVE = Path("supabase/tests/hosted_readonly_migration_effect_audit_queries.sql")
-ACL_PROVENANCE_SHA256 = "ffdcc3f51ee20fb2ddb44e74f292df4767a76a9dff5e8cd30eef2adb8e9d4f64"
+ACL_PROVENANCE_SHA256 = "700939087d9708fc3d6a72ebe10064b4c0db7f5d26b08556c7e641e1aa09a919"
 ACL_PROVENANCE_RELATIVE = Path("supabase/tests/hosted_readonly_w86_acl_provenance_query.sql")
 OUTPUT_RELATIVE = Path("zavqera-readonly-effect-audit-output")
 REF_RE = re.compile(r"^[a-z0-9]{20}$")
@@ -366,6 +366,12 @@ def main() -> int:
                 or not isinstance(relation, dict) or relation.get("exists") is not True
                 or not isinstance(memberships, list)
                 or not any(item.get("role_name") == "service_role" and item.get("depth") == 0 for item in memberships if isinstance(item, dict))
+                or not all(
+                    isinstance(item, dict)
+                    and isinstance(item.get("all_edges_inherit"), bool)
+                    and isinstance(item.get("all_edges_set_role"), bool)
+                    for item in memberships
+                )
                 or not isinstance(effective, dict)
                 or set(effective) != {"SELECT", "INSERT", "UPDATE", "DELETE", "TRUNCATE", "REFERENCES", "TRIGGER", "MAINTAIN"}
                 or not isinstance(inherited_table, list)
@@ -386,8 +392,13 @@ def main() -> int:
         "stored_table_acl_rows": len(acl_rows) - len(effective_acl_rows),
         "acl_provenance_query_sha256": ACL_PROVENANCE_SHA256,
         "service_role_membership_path_count": len(provenance["service_role_membership_paths"]),
+        "service_role_set_role_path_count": sum(
+            1 for item in provenance["service_role_membership_paths"]
+            if isinstance(item, dict) and item.get("depth", 0) > 0 and item.get("all_edges_set_role") is True
+        ),
         "service_role_inherited_table_acl_rows": len(provenance["service_role_inherited_table_acl_entries"]),
         "service_role_inherited_column_acl_rows": len(provenance["service_role_inherited_column_acl_entries"]),
+        "service_role_parent_role_acl_path_semantics": "entries reachable through INHERIT or SET ROLE",
         "service_role_effective_privileges": provenance["service_role_effective_privileges"],
         "read_only_role_gate": "PASS",
         "project": EXPECTED_PROJECT,
