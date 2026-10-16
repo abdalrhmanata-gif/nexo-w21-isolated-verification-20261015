@@ -28,8 +28,7 @@ begin
       from role_path child
       join pg_auth_members membership on membership.member = child.role_oid
       join pg_roles parent on parent.oid = membership.roleid
-     where child.depth < 16
-       and not parent.oid = any(child.oid_path)
+     where not parent.oid = any(child.oid_path)
   ),
   inherited_table_acl as (
     select rp.role_name,
