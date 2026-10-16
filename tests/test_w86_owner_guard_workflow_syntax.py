@@ -41,6 +41,14 @@ class W86OwnerPathWorkflowSyntaxTests(unittest.TestCase):
         self.assertIn("W86_OWNER_${kind^^}_NO_MUTATION_PASS", helper)
         self.assertIn("owner_path_guard_status=1", helper)
 
+    def test_w86_read_only_acl_probe_covers_mixed_set_role_then_inherit_path(self):
+        workflow = WORKFLOW.read_text(encoding="utf-8")
+        self.assertIn("CREATE ROLE w86_acl_probe_grandparent NOLOGIN", workflow)
+        self.assertIn("GRANT w86_acl_probe_grandparent TO w86_acl_probe_parent WITH INHERIT TRUE, SET FALSE", workflow)
+        self.assertIn("reachable_via_membership_options", workflow)
+        self.assertIn("W86_ACL_PROVENANCE_MIXED_PATH_ACL_PASS", workflow)
+        self.assertIn("W86_MIXED_PATH_GUARD_PASS", workflow)
+
 
 if __name__ == "__main__":
     unittest.main()
