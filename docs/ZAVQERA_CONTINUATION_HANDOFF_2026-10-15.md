@@ -723,3 +723,16 @@ The W86 candidate revokes table-level and possible column-level privileges on `p
 This proves the candidate behaves as intended in the disposable stack only. It does **not** prove hosted parity, establish the origin of hosted ACL drift, or reconcile the migration history. Keep the hosted migration blocked until exact historical SQL/provenance is reconciled (including 22 timestamp conflicts and six hosted-only ledger names), owner/ACL context is reviewed, and a separate explicit approval authorizes any hosted change. No hosted DB, migration ledger, secret, deployment, billing, or DNS was changed in this work.
 
 Keep the original repository PR #39 OPEN/DRAFT/UNMERGED and Issue #23 OPEN; keep `TRUSTED_DISPATCH_ADAPTERS = Object.freeze({})` empty/fail-closed. Release remains **NO-GO**.
+
+
+## 19. SET ROLE-only ACL guard verified — 2026-10-16
+
+Supersedes the earlier inherited-only description in section 12.
+
+- Current W86 branch head: `aa034e47531da316e5f5c6e2d928f648c2d0a702`; the W86 migration/workflow/test code was verified on `a5f899ffff202eb0eda7954cec9ad12d82d252dc`; subsequent changes are docs/PR-description only.
+- W80 isolated PostgreSQL 17.11: [run 38865144782](https://github.com/abdalrhmanata-gif/nexo-w21-isolated-verification-20261015/actions/runs/38865144782) — SUCCESS; artifact [12031370300](https://github.com/abdalrhmanata-gif/nexo-w21-isolated-verification-20261015/actions/runs/38865144782/artifacts/12031370300), SHA-256 `8bccecd95878f0fa56309b01f0118d7f19fdc9eccbbdb5180ed5947f9775bc98`.
+- Disposable fixture uses `GRANT w86_acl_probe_parent TO service_role WITH INHERIT FALSE, SET TRUE` and parent-role table UPDATE/column SELECT. Query 13 returns `all_edges_inherit=false`, `all_edges_set_role=true` and marker `W86_ACL_PROVENANCE_SET_ROLE_ACL_PASS`.
+- W86 refuses before any ACL mutation with expected exit code 3 and explicit INHERIT/SET ROLE guard error. Fixture cleanup passes; W86 then reapplies successfully; W66 11/11 and W86 20/20 pass. W84 21/21 before/after, W85 12/12, W44 17/17, W46 8/8, W80 49/49, full replay and cleanup pass.
+- Query 13 digest is now `700939087d9708fc3d6a72ebe10064b4c0db7f5d26b08556c7e641e1aa09a919`; base query pack remains `a7aba3461786dbb5854f71dc4f87b7e0498d12509add535ab3df4a7ec231a284`.
+
+The fresh hosted 13-query Development capture is still required. No hosted write was performed; historical migration provenance remains unresolved; original PR #39 and Issue #23 remain open as required; dispatch adapters stay empty/fail-closed; release remains **NO-GO**.
