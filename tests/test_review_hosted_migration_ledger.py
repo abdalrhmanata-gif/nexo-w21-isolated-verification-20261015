@@ -149,6 +149,14 @@ class HostedLedgerReviewTests(unittest.TestCase):
             "entries reachable through INHERIT or SET ROLE",
         )
 
+    def test_rejects_parent_acl_row_without_set_role_path_evidence(self):
+        payload = json.loads((self.evidence / "query_13.json").read_text(encoding="utf-8"))
+        provenance = payload["response"][0]["w86_acl_provenance"]
+        del provenance["service_role_inherited_table_acl_entries"][0]["all_membership_edges_set_role"]
+        save(self.evidence / "query_13.json", payload)
+        with self.assertRaises(review.EvidenceError):
+            review.reconcile(self.evidence, self.repo)
+
     def test_no_parent_acl_observed_still_never_authorizes_hosted_write(self):
         payload = json.loads((self.evidence / "query_13.json").read_text(encoding="utf-8"))
         provenance = payload["response"][0]["w86_acl_provenance"]
