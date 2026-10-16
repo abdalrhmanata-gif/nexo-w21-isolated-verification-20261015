@@ -619,7 +619,7 @@ Do not reconstruct their SQL from names or neighboring versions. Historical prov
 
 - Audit/review branch: `codex/migration-ledger-provenance-20261015`; latest docs update commit: `9250bb24ec172f5c4a83ac721b5d3abb578a65e1`.
 - Audit PR: [isolated PR #2](https://github.com/abdalrhmanata-gif/nexo-w21-isolated-verification-20261015/pull/2) — OPEN / DRAFT / UNMERGED.
-- Query 13 is pinned to SHA-256 `700939087d9708fc3d6a72ebe10064b4c0db7f5d26b08556c7e641e1aa09a919`; base queries 1–12 remain SHA-256 `a7aba3461786dbb5854f71dc4f87b7e0498d12509add535ab3df4a7ec231a284`.
+- Query 13 is pinned to SHA-256 `643ba4acaea2e72448b42e19f974b7e888f5857d3998a6c83f4473238d78259f`; base queries 1–12 remain SHA-256 `a7aba3461786dbb5854f71dc4f87b7e0498d12509add535ab3df4a7ec231a284`.
 - A secure Windows PowerShell wrapper is checked in: `tools/run_zavqera_readonly_effect_audit.ps1`. The current authoritative run steps are the final section of `docs/ZAVQERA_HOSTED_MIGRATION_EFFECT_AUDIT_RUNBOOK_2026-10-15.md`; it supersedes earlier 12-query instructions.
 - Current workflow/runner local validation: [W80 run 38858755502](https://github.com/abdalrhmanata-gif/nexo-w21-isolated-verification-20261015/actions/runs/38858755502) — SUCCESS on `c6fae906f9f57efe11ec7f010afb48b66ac850dc`; Flutter CI [run 38858755489](https://github.com/abdalrhmanata-gif/nexo-w21-isolated-verification-20261015/actions/runs/38858755489) — SUCCESS on the same SHA. The later branch head only adds documentation.
 - **The supplied hosted ZIP is still the old 12-query capture.** No fresh 13-query Development capture has been received. Do not treat the disposable query-13 smoke or simulated inherited-role fixture as hosted evidence.
@@ -658,7 +658,7 @@ This section supersedes earlier W86 notes that covered only automatic INHERIT pa
 - W80 local PostgreSQL 17.11: [run 38865144782](https://github.com/abdalrhmanata-gif/nexo-w21-isolated-verification-20261015/actions/runs/38865144782) — SUCCESS. Evidence artifact [12031370300](https://github.com/abdalrhmanata-gif/nexo-w21-isolated-verification-20261015/actions/runs/38865144782/artifacts/12031370300), digest `8bccecd95878f0fa56309b01f0118d7f19fdc9eccbbdb5180ed5947f9775bc98`.
 - The disposable fixture grants a parent role to `service_role WITH INHERIT FALSE, SET TRUE`, then gives that parent table UPDATE and column SELECT. Query 13 proves `all_edges_inherit=false` and `all_edges_set_role=true`; W86 refuses before any ACL mutation with the expected fail-closed error. After fixture cleanup, W86 reapplies successfully and W66 11/11 plus W86 20/20 pass.
 - Full migration replay, W84 21/21 before/after reapply, W85 12/12, W44 17/17, W46 8/8, W80 49/49, local read-only query smoke and cleanup all pass. Flutter CI [run 38865152105](https://github.com/abdalrhmanata-gif/nexo-w21-isolated-verification-20261015/actions/runs/38865152105) also passed.
-- Query 13 now tracks both `INHERIT` and `SET ROLE` paths. Pinned query digest is `700939087d9708fc3d6a72ebe10064b4c0db7f5d26b08556c7e641e1aa09a919`; base query pack digest remains `a7aba3461786dbb5854f71dc4f87b7e0498d12509add535ab3df4a7ec231a284`.
+- Query 13 now tracks both `INHERIT` and `SET ROLE` paths. Pinned query digest is `643ba4acaea2e72448b42e19f974b7e888f5857d3998a6c83f4473238d78259f`; base query pack digest remains `a7aba3461786dbb5854f71dc4f87b7e0498d12509add535ab3df4a7ec231a284`.
 - Fresh hosted Development 13-query evidence is still outstanding. The supplied ZIP is the old 12-query capture. Do not infer hosted role-membership state from the disposable fixture or local smoke.
 
 **Next and only required external step:** run the secure wrapper from the isolated audit checkout root on Windows, using the hidden prompt for the scoped Development-only PAT, then upload only the resulting ZIP containing `query_13.json`. Never share the token. Any parent-role ACL reachable via INHERIT or SET ROLE blocks W86 as-is. Historical SQL provenance (22 timestamp conflicts and six hosted-only migration names) remains unresolved. No hosted write; release **NO-GO**.
@@ -669,8 +669,16 @@ This section supersedes earlier W86 notes that covered only automatic INHERIT pa
 - W80 local PostgreSQL 17.11: [run 38866102409](https://github.com/abdalrhmanata-gif/nexo-w21-isolated-verification-20261015/actions/runs/38866102409) — **SUCCESS** on exact code/test SHA `9503a117890edd6597cf234c23f011f48ead9a56`.
 - Artifact [12030744508](https://github.com/abdalrhmanata-gif/nexo-w21-isolated-verification-20261015/actions/runs/38866102409/artifacts/12030744508), ZIP SHA-256 `df13702d2a28e09e3d0208919e70501ce666c07388385a1847f76cb5d8cef67f`.
 - Flutter CI: [run 38866102406](https://github.com/abdalrhmanata-gif/nexo-w21-isolated-verification-20261015/actions/runs/38866102406) — **SUCCESS** on the same SHA.
-- Runner tests: catalog 8/8; migration-effect/PowerShell wrapper 12/12; offline migration reviewer 11/11. Self-test: `queries=13`, base hash `a7aba3461786dbb5854f71dc4f87b7e0498d12509add535ab3df4a7ec231a284`, query 13 hash `700939087d9708fc3d6a72ebe10064b4c0db7f5d26b08556c7e641e1aa09a919`, no network requests.
+- Runner tests: catalog 8/8; migration-effect/PowerShell wrapper 12/12; offline migration reviewer 11/11. Self-test: `queries=13`, base hash `a7aba3461786dbb5854f71dc4f87b7e0498d12509add535ab3df4a7ec231a284`, query 13 hash `643ba4acaea2e72448b42e19f974b7e888f5857d3998a6c83f4473238d78259f`, no network requests.
 - Disposable PostgreSQL 17.11 full migration replay exit code 0; W44 17/17, W46 8/8, W80 49/49 before/after W83 reapply; W84 21/21 before/after reapply; W85 12/12; query 13 local smoke passed; cleanup `VERIFIED`.
 - This validates the updated query pack and offline review only against disposable/local evidence. It is **not** a hosted Development capture and does not clear the W86 gate.
 
 The only external dependency remains: run the secure PowerShell wrapper locally with the scoped Development-only token and upload the resulting fresh ZIP containing `query_13.json`. Do not share the token. Historical SQL provenance (22 timestamp conflicts and six hosted-only names) remains unresolved; no hosted write; release remains **NO-GO**.
+
+## Query 13 direct-vs-parent ACL scope correction — 2026-10-16
+
+The pinned ACL provenance query was corrected so `service_role_inherited_table_acl_entries` and `service_role_inherited_column_acl_entries` contain only reachable parent roles (`depth > 0`) with an all-`INHERIT` or all-`SET ROLE` path. Direct `service_role` ACLs remain separately reported by the effective privilege map, `table_acl_entries`, and `column_acl_entries`; they must not be mislabeled as inherited grants.
+
+- Query 13 SHA-256: `643ba4acaea2e72448b42e19f974b7e888f5857d3998a6c83f4473238d78259f`.
+- Offline reviewer and self-test pin this hash, and a regression test asserts that depth-zero direct ACLs are excluded from parent-role result arrays.
+- The previously uploaded hosted evidence ZIP contains 12 queries and is not evidence for this corrected 13-query probe. No fresh hosted capture is recorded here. No hosted write is authorized; historical migration provenance and independent owner approval remain required.
