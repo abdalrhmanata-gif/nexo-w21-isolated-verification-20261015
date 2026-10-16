@@ -312,7 +312,7 @@ class HostedLedgerReviewTests(unittest.TestCase):
         with self.assertRaises(review.EvidenceError):
             review.reconcile(self.evidence, self.repo)
 
-    def test_membership_reachability_cannot_mix_edge_modes(self):
+    def test_membership_reachability_allows_set_role_then_inherit(self):
         paths = [
             {
                 "role_name": "service_role", "depth": 0, "member_of_role": None,
@@ -330,13 +330,14 @@ class HostedLedgerReviewTests(unittest.TestCase):
                 "role_name": "inherit_only_grandparent", "depth": 2, "member_of_role": "set_only_parent",
                 "all_edges_inherit": False, "all_edges_set_role": False,
                 "edge_inherit_option": True, "edge_set_option": False,
-                "reachable_via_membership_options": False,
+                "reachable_via_membership_options": True,
             },
         ]
+        # PostgreSQL allows SET ROLE to the intermediate member, then that role
+        # inherits privileges from its parent. Cumulative all-edge flags can both
+        # be false even while the complete path is reachable.
         self.assertTrue(review.membership_paths_form_valid_chain(paths))
-        # Old recurrence used parent.reachable + the current INHERIT edge and
-        # incorrectly treated this mixed SET-then-INHERIT path as reachable.
-        paths[2]["reachable_via_membership_options"] = True
+        paths[2]["reachable_via_membership_options"] = False
         self.assertFalse(review.membership_paths_form_valid_chain(paths))
 
     def test_rejects_disconnected_or_impossible_membership_paths(self):
