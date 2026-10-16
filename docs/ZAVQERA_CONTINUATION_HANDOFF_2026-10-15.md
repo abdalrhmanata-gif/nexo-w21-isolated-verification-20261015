@@ -619,7 +619,7 @@ Do not reconstruct their SQL from names or neighboring versions. Historical prov
 
 - Audit/review branch: `codex/migration-ledger-provenance-20261015`; latest docs update commit: `9250bb24ec172f5c4a83ac721b5d3abb578a65e1`.
 - Audit PR: [isolated PR #2](https://github.com/abdalrhmanata-gif/nexo-w21-isolated-verification-20261015/pull/2) — OPEN / DRAFT / UNMERGED.
-- Query 13 is pinned to SHA-256 `ffdcc3f51ee20fb2ddb44e74f292df4767a76a9dff5e8cd30eef2adb8e9d4f64`; base queries 1–12 remain SHA-256 `a7aba3461786dbb5854f71dc4f87b7e0498d12509add535ab3df4a7ec231a284`.
+- Query 13 is pinned to SHA-256 `700939087d9708fc3d6a72ebe10064b4c0db7f5d26b08556c7e641e1aa09a919`; base queries 1–12 remain SHA-256 `a7aba3461786dbb5854f71dc4f87b7e0498d12509add535ab3df4a7ec231a284`.
 - A secure Windows PowerShell wrapper is checked in: `tools/run_zavqera_readonly_effect_audit.ps1`. The current authoritative run steps are the final section of `docs/ZAVQERA_HOSTED_MIGRATION_EFFECT_AUDIT_RUNBOOK_2026-10-15.md`; it supersedes earlier 12-query instructions.
 - Current workflow/runner local validation: [W80 run 38858755502](https://github.com/abdalrhmanata-gif/nexo-w21-isolated-verification-20261015/actions/runs/38858755502) — SUCCESS on `c6fae906f9f57efe11ec7f010afb48b66ac850dc`; Flutter CI [run 38858755489](https://github.com/abdalrhmanata-gif/nexo-w21-isolated-verification-20261015/actions/runs/38858755489) — SUCCESS on the same SHA. The later branch head only adds documentation.
 - **The supplied hosted ZIP is still the old 12-query capture.** No fresh 13-query Development capture has been received. Do not treat the disposable query-13 smoke or simulated inherited-role fixture as hosted evidence.
