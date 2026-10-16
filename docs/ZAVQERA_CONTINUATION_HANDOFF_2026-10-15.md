@@ -674,7 +674,7 @@ The previous uploaded hosted ZIP is a 12-query capture and does not include role
 - Offline reviewer: tools/review_hosted_migration_ledger.py
 - Base 12-query SQL hash: a7aba3461786dbb5854f71dc4f87b7e0498d12509add535ab3df4a7ec231a284
 - Query 13 SQL path: supabase/tests/hosted_readonly_w86_acl_provenance_query.sql
-- Query 13 SQL hash: ffdcc3f51ee20fb2ddb44e74f292df4767a76a9dff5e8cd30eef2adb8e9d4f64
+- Query 13 SQL hash: 700939087d9708fc3d6a72ebe10064b4c0db7f5d26b08556c7e641e1aa09a919
 - Local verification: W80 run 38858063330 PASS on f4d7fed423739db0d39ba576ca455c5d4a182169; artifact 12027554468 SHA-256 8147e0b3624b27bdd6dc83f566b665a8942a1b3aac3e3dd785de1a3fc45a483d. Flutter CI 38858068979 PASS on same SHA.
 
 To continue: use the new runbook section in [docs/ZAVQERA_HOSTED_MIGRATION_EFFECT_AUDIT_RUNBOOK_2026-10-15.md](https://github.com/abdalrhmanata-gif/nexo-w21-isolated-verification-20261015/blob/codex/migration-ledger-provenance-20261015/docs/ZAVQERA_HOSTED_MIGRATION_EFFECT_AUDIT_RUNBOOK_2026-10-15.md). First run the self-test (13 queries, no network), then run the guarded capture against the verified Development project using the scoped read-only Management API token only in local PowerShell. Never paste a token into chat. Upload the resulting evidence ZIP, then run the offline reviewer with that evidence folder and the exact source checkout used for the comparison.
