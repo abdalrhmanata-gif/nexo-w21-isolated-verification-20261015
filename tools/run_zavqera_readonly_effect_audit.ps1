@@ -32,15 +32,22 @@ try {
     $captureOutput = & py -3 $runner 2>&1
     $captureExitCode = $LASTEXITCODE
     $captureOutput | ForEach-Object { Write-Output $_ }
-    if ($captureExitCode -ne 0) {
-        throw "Read-only capture stopped with exit code $captureExitCode. Review its BLOCKED stage; do not retry by changing the SQL or role gate."
+    $match = [regex]::Match(($captureOutput -join [Environment]::NewLine), "(?m)^Evidence: (.+)$")
+    if ($match.Success) {
+        $auditDir = $match.Groups[1].Value.Trim()
     }
 
-    $match = [regex]::Match(($captureOutput -join [Environment]::NewLine), "(?m)^Evidence: (.+)$")
+    if ($captureExitCode -ne 0) {
+        if ($match.Success -and (Test-Path $auditDir)) {
+            $evidenceZip = "$($auditDir).zip"
+            Compress-Archive -Path (Join-Path $auditDir "*") -DestinationPath $evidenceZip -CompressionLevel Optimal
+            Write-Host "Partial evidence ZIP: $evidenceZip"
+        }
+        throw "Read-only capture stopped with exit code $captureExitCode. Review the BLOCKED stage; do not retry by changing the SQL or role gate."
+    }
     if (-not $match.Success) {
         throw "Capture completed but did not report its evidence folder. Inspect the output above."
     }
-    $auditDir = $match.Groups[1].Value.Trim()
 
     Write-Host "Running the offline reviewer against this exact source checkout..."
     & py -3 $reviewer --evidence-dir $auditDir
