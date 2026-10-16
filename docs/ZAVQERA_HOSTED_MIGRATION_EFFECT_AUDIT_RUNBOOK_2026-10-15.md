@@ -148,3 +148,12 @@ The 13-query runner, offline reviewer, and ACL provenance SQL passed W80 isolate
 From the isolated audit repository root, run: `.\tools\run_zavqera_readonly_effect_audit.ps1`.
 
 The helper first runs the no-network self-test, then prompts for the scoped token using hidden SecureString input, runs the pinned 13-query read-only capture, invokes the offline reviewer against the same checkout, and zips the evidence. It removes the token from the process environment and clears the temporary BSTR in a finally block. It performs no migrations or hosted writes. If the capture stops at a gate, it preserves partial evidence and reports the blocked stage; do not weaken the gate or change the SQL to make it pass.
+
+
+## Secure PowerShell wrapper validation — 2026-10-16
+
+The PowerShell helper is now covered by a static regression test. It requests the scoped token through hidden SecureString input, clears the token environment variable and temporary BSTR immediately after the read-only capture, then launches the offline reviewer without inheriting the token. It also zips successful evidence and preserves partial evidence if a read-only gate stops the capture.
+
+Latest exact-SHA validation: W80 isolated PostgreSQL 17 run 38858755502 — SUCCESS on c6fae906f9f57efe11ec7f010afb48b66ac850dc. The run reported 8 catalog-runner tests, 12 migration-effect runner/wrapper tests, and 10 offline-reviewer tests passing; self-test reported 13 queries with both pinned hashes and no network requests; the 13th query passed local PostgreSQL 17 smoke; full migration replay and cleanup verification passed. Artifact 12028448084, ZIP SHA-256 c7388aaa1d1ef85c9c70951db1c3c33cc46da376c2c7e0b1ebcd1e33aafd38f3. Flutter CI also passed on the same SHA: run 38858755489.
+
+This is local/disposable evidence only. The next required action is a fresh 13-query capture against the verified read-only Development session; do not paste the token into chat or apply any hosted repair.
