@@ -824,6 +824,7 @@ jobs:
 
             cat > "${fixture}" <<SQL
           CREATE ROLE ${role_name} NOLOGIN;
+          GRANT ${role_name} TO postgres WITH INHERIT TRUE, SET TRUE;
           ALTER TABLE public.agent_executions OWNER TO ${role_name};
           REVOKE ALL PRIVILEGES ON TABLE public.agent_executions FROM ${role_name}, authenticated;
           DO \$revoke_column_acl\$
@@ -893,6 +894,7 @@ jobs:
                 ALTER TABLE public.agent_executions OWNER TO postgres;
               END IF;
               EXECUTE 'REVOKE ${role_name} FROM service_role';
+              EXECUTE 'REVOKE ${role_name} FROM postgres';
               EXECUTE 'DROP ROLE ${role_name}';
             END IF;
           END
