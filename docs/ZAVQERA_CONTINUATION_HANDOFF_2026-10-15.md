@@ -654,7 +654,7 @@ The wrapper runs the self-test before asking for the scoped Development-only PAT
 
 This section supersedes earlier W86 notes that covered only automatic INHERIT paths.
 
-- Current W86 branch head: `aa034e47531da316e5f5c6e2d928f648c2d0a702`; W86 migration/workflow code was tested on `a5f899ffff202eb0eda7954cec9ad12d82d252dc`. Subsequent W86 branch commits were documentation-only.
+- Current W86 branch head: `bafd61297bcb2836e9962cfa1b45a2f37bc1d1ac`; W86 migration/workflow code was tested on `a5f899ffff202eb0eda7954cec9ad12d82d252dc`. Subsequent W86 branch commits were documentation-only.
 - W80 local PostgreSQL 17.11: [run 38865144782](https://github.com/abdalrhmanata-gif/nexo-w21-isolated-verification-20261015/actions/runs/38865144782) — SUCCESS. Evidence artifact [12031370300](https://github.com/abdalrhmanata-gif/nexo-w21-isolated-verification-20261015/actions/runs/38865144782/artifacts/12031370300), digest `8bccecd95878f0fa56309b01f0118d7f19fdc9eccbbdb5180ed5947f9775bc98`.
 - The disposable fixture grants a parent role to `service_role WITH INHERIT FALSE, SET TRUE`, then gives that parent table UPDATE and column SELECT. Query 13 proves `all_edges_inherit=false` and `all_edges_set_role=true`; W86 refuses before any ACL mutation with the expected fail-closed error. After fixture cleanup, W86 reapplies successfully and W66 11/11 plus W86 20/20 pass.
 - Full migration replay, W84 21/21 before/after reapply, W85 12/12, W44 17/17, W46 8/8, W80 49/49, local read-only query smoke and cleanup all pass. Flutter CI [run 38865152105](https://github.com/abdalrhmanata-gif/nexo-w21-isolated-verification-20261015/actions/runs/38865152105) also passed.
