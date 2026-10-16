@@ -280,6 +280,27 @@ class HostedLedgerReviewTests(unittest.TestCase):
         self.assertEqual(result["service_role_inherited_table_acl_rows"], 1)
         self.assertIs(result["hosted_write_authorized"], False)
 
+    def test_rejects_malformed_query13_acl_entry_fields(self):
+        cases = (
+            ("direct table grantor", "table_acl_entries", {"grantee": "PUBLIC", "privilege_type": "SELECT", "is_grantable": False, "grantor": "postgres"}, "grantor", 17),
+            ("direct column name", "column_acl_entries", {"column_name": "id", "grantee": "PUBLIC", "privilege_type": "SELECT", "is_grantable": False, "grantor": "postgres"}, "column_name", ""),
+            ("inherited table privilege", "service_role_inherited_table_acl_entries", None, "privilege_type", "UNKNOWN"),
+            ("inherited column grantability", "service_role_inherited_column_acl_entries", None, "is_grantable", "false"),
+        )
+        for label, key, row, field, value in cases:
+            with self.subTest(label=label):
+                payload = json.loads((self.evidence / "query_13.json").read_text(encoding="utf-8"))
+                provenance = payload["response"][0]["w86_acl_provenance"]
+                if row is not None:
+                    provenance[key].append(row)
+                    target = provenance[key][-1]
+                else:
+                    target = provenance[key][0]
+                target[field] = value
+                save(self.evidence / "query_13.json", payload)
+                with self.assertRaisesRegex(review.EvidenceError, "role/read-only/shape checks"):
+                    review.reconcile(self.evidence, self.repo)
+
     def test_rejects_membership_path_without_valid_depth(self):
         payload = json.loads((self.evidence / "query_13.json").read_text(encoding="utf-8"))
         provenance = payload["response"][0]["w86_acl_provenance"]
