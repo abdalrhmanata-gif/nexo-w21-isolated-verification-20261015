@@ -31,6 +31,18 @@ try {
     Write-Host "Running the pinned 13-query read-only Development capture..."
     $captureOutput = & py -3 $runner 2>&1
     $captureExitCode = $LASTEXITCODE
+
+    # The offline reviewer must not inherit the Management API token.
+    Remove-Item Env:\SUPABASE_ACCESS_TOKEN -ErrorAction SilentlyContinue
+    if ($tokenPointer -ne [IntPtr]::Zero) {
+        [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($tokenPointer)
+        $tokenPointer = [IntPtr]::Zero
+    }
+    if ($null -ne $secureToken) {
+        $secureToken.Dispose()
+        $secureToken = $null
+    }
+
     $captureOutput | ForEach-Object { Write-Output $_ }
     $match = [regex]::Match(($captureOutput -join [Environment]::NewLine), "(?m)^Evidence: (.+)$")
     if ($match.Success) {
