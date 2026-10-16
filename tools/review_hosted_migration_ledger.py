@@ -172,6 +172,7 @@ def reconcile(directory, repo_root):
         raise EvidenceError("query 13 ACL provenance result is missing or malformed")
     provenance = provenance_rows[0]["w86_acl_provenance"]
     relation = provenance.get("relation")
+    owner_role = relation.get("owner_role") if isinstance(relation, dict) else None
     membership_paths = provenance.get("service_role_membership_paths")
     effective_privileges = provenance.get("service_role_effective_privileges")
     inherited_table = provenance.get("service_role_inherited_table_acl_entries")
@@ -182,6 +183,7 @@ def reconcile(directory, repo_root):
         or provenance.get("session_user") != "supabase_read_only_user"
         or not truthy_db(provenance.get("transaction_read_only"))
         or not isinstance(relation, dict) or relation.get("exists") is not True
+        or not isinstance(owner_role, str) or not owner_role
         or not isinstance(membership_paths, list)
         or not all(
             isinstance(item, dict)
@@ -243,8 +245,18 @@ def reconcile(directory, repo_root):
         and (item.get("all_edges_inherit") is True or item.get("all_edges_set_role") is True)
     ]
     authenticated_grant_path_found = bool(authenticated_parent_paths)
+    relation_owner_paths = [
+        item for item in membership_paths
+        if item.get("role_name") == owner_role
+        and (
+            item.get("depth", 0) == 0
+            or (item.get("depth", 0) > 0 and item.get("all_edges_set_role") is True)
+        )
+    ]
+    relation_owner_path_found = bool(relation_owner_paths)
     w86_parent_acl_gate = (
-        "BLOCKED_PARENT_ROLE_ACL" if parent_acl_path_found
+        "BLOCKED_RELATION_OWNER_PATH" if relation_owner_path_found
+        else "BLOCKED_PARENT_ROLE_ACL" if parent_acl_path_found
         else "BLOCKED_AUTHENTICATED_ROLE_PATH" if authenticated_grant_path_found
         else "NO_PARENT_ROLE_ACL_OBSERVED"
     )
@@ -256,6 +268,11 @@ def reconcile(directory, repo_root):
         hosted_write_blockers.insert(
             0,
             "W86 direct revokes cannot remove privileges reachable through a parent role; do not apply this candidate as-is.",
+        )
+    if relation_owner_path_found:
+        hosted_write_blockers.insert(
+            0,
+            "service_role is the relation owner or can SET ROLE to the owner of public.agent_executions; owner authority can restore ACLs and is not safely handled by direct table/column revokes. Do not apply W86 as-is.",
         )
     if authenticated_grant_path_found:
         hosted_write_blockers.insert(
@@ -297,6 +314,8 @@ def reconcile(directory, repo_root):
             if isinstance(item, dict) and item.get("depth", 0) > 0 and item.get("all_edges_set_role") is True
         ),
         "service_role_authenticated_parent_path_count": len(authenticated_parent_paths),
+        "relation_owner_role": owner_role,
+        "service_role_relation_owner_path_count": len(relation_owner_paths),
         "service_role_inherited_table_acl_rows": len(inherited_table),
         "service_role_inherited_column_acl_rows": len(inherited_column),
         "service_role_parent_role_acl_path_semantics": "entries reachable through INHERIT or SET ROLE",
@@ -328,6 +347,7 @@ def reconcile(directory, repo_root):
             "The source checkout HEAD and dirty flag are local Git metadata; the manifest is required to identify the actual source bytes.",
             "Direct table/column revokes do not remove privileges inherited from parent roles; any inherited ACL row is a blocker for the current W86 candidate and requires owner-reviewed resolution.",
             "W86 grants SELECT to authenticated after its preflight; any reachable INHERIT/SET ROLE path from service_role to authenticated is independently a blocker, even if that role has no ACL entry in the current capture.",
+            "A service_role membership path to the relation owner with SET ROLE enabled, or service_role itself as relation owner, is a separate blocker because ownership authority can restore ACLs even when owner ACL rows are absent.",
             "Effective ACLs are a signal, not complete proof of reachability; review RLS, memberships, function ownership and trusted writers separately.",
             "The observed role has rolbypassrls=true; do not use this evidence credential for application-row reads.",
             "This is offline analysis only; it performs no SQL, hosted writes, migration repair, or deployment.",
@@ -353,6 +373,7 @@ def render_markdown(result):
         f"- service_role inherited table ACL rows: **{result['service_role_inherited_table_acl_rows']}**",
         f"- service_role inherited column ACL rows: **{result['service_role_inherited_column_acl_rows']}**",
         f"- service_role reachable authenticated parent paths: **{result['service_role_authenticated_parent_path_count']}**",
+        f"- Relation owner role: **{result['relation_owner_role']}**; service_role owner-role paths: **{result['service_role_relation_owner_path_count']}**",
         f"- W86 parent-role ACL gate: **{result['w86_candidate_parent_acl_gate']}**",
         f"- Hosted write authorized: **{result['hosted_write_authorized']}** (the offline reviewer never authorizes hosted writes)",
         f"- Stored ACL rows: **{result['stored_table_acl_rows']}**",
