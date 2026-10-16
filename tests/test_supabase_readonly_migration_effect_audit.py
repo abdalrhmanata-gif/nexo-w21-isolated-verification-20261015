@@ -123,8 +123,19 @@ class ReadOnlyEffectAuditTests(unittest.TestCase):
         self.assertEqual(len(statements), 13)
         self.assertEqual(digest, audit.PACK_SHA256)
         self.assertEqual(audit.ACL_PROVENANCE_SHA256,
-                         "700939087d9708fc3d6a72ebe10064b4c0db7f5d26b08556c7e641e1aa09a919")
+                         "643ba4acaea2e72448b42e19f974b7e888f5857d3998a6c83f4473238d78259f")
         self.assertTrue(all(re.match(r"(?is)^\s*SELECT\b", audit.no_comments(s).strip()) for s in statements))
+
+    def test_acl_provenance_query_excludes_direct_grants_from_parent_acl_rows(self):
+        root = Path(__file__).resolve().parents[1]
+        sql_path = root / "supabase" / "tests" / "hosted_readonly_w86_acl_provenance_query.sql"
+        sql = sql_path.read_text(encoding="utf-8")
+        self.assertEqual(sql.count("AND rp.depth > 0"), 2)
+        self.assertNotIn("rp.depth = 0 OR rp.inherits_all OR rp.can_set_role", sql)
+        self.assertIn("'service_role_effective_privileges'", sql)
+        self.assertIn("'table_acl_entries'", sql)
+        self.assertIn("'service_role_inherited_table_acl_entries'", sql)
+        self.assertIn("'service_role_inherited_column_acl_entries'", sql)
 
     def test_powershell_wrapper_handles_token_locally_and_cleans_environment(self):
         wrapper_path = SCRIPT.parent / "run_zavqera_readonly_effect_audit.ps1"
