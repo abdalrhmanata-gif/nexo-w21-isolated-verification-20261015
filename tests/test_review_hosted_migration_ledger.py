@@ -80,8 +80,8 @@ class HostedLedgerReviewTests(unittest.TestCase):
                 "TRUNCATE": True, "REFERENCES": False, "TRIGGER": False, "MAINTAIN": False
             },
             "service_role_membership_paths": [
-                {"role_name": "service_role", "depth": 0, "member_of_role": None, "all_edges_inherit": True},
-                {"role_name": "w86_acl_probe_parent", "depth": 1, "member_of_role": "service_role", "all_edges_inherit": True}
+                {"role_name": "service_role", "depth": 0, "member_of_role": None, "all_edges_inherit": True, "all_edges_set_role": True},
+                {"role_name": "w86_acl_probe_parent", "depth": 1, "member_of_role": "service_role", "all_edges_inherit": True, "all_edges_set_role": True}
             ],
             "table_acl_entries": [],
             "column_acl_entries": [],
