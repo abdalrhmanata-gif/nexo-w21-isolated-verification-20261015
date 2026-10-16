@@ -17,9 +17,9 @@ declare
   reachable_owner_role_path text;
 begin
   with recursive role_path (
-    role_oid, role_name, depth, oid_path, inherits_all, can_set_role
+    role_oid, role_name, depth, oid_path, inherits_all, can_set_role, reachable_via_membership_options
   ) as (
-    select r.oid, r.rolname, 0, array[r.oid]::oid[], true, true
+    select r.oid, r.rolname, 0, array[r.oid]::oid[], true, true, true
       from pg_roles r
      where r.rolname = 'service_role'
     union all
@@ -28,7 +28,9 @@ begin
            child.depth + 1,
            child.oid_path || parent.oid,
            child.inherits_all and membership.inherit_option,
-           child.can_set_role and membership.set_option
+           child.can_set_role and membership.set_option,
+           (child.reachable_via_membership_options and membership.inherit_option)
+             or (child.can_set_role and membership.set_option)
       from role_path child
       join pg_auth_members membership on membership.member = child.role_oid
       join pg_roles parent on parent.oid = membership.roleid
@@ -41,7 +43,7 @@ begin
       join pg_class c on c.oid = 'public.agent_executions'::regclass
       cross join lateral aclexplode(coalesce(c.relacl, acldefault('r', c.relowner))) acl
      where rp.depth > 0
-       and (rp.inherits_all or rp.can_set_role)
+       and rp.reachable_via_membership_options
        and acl.grantee = rp.role_oid
   ),
   inherited_column_acl as (
@@ -53,7 +55,7 @@ begin
      where a.attnum > 0
        and not a.attisdropped
        and rp.depth > 0
-       and (rp.inherits_all or rp.can_set_role)
+       and rp.reachable_via_membership_options
        and acl.grantee = rp.role_oid
   ),
   inherited_acl as (
@@ -66,7 +68,7 @@ begin
       from role_path rp
      where rp.depth > 0
        and rp.role_name = 'authenticated'
-       and (rp.inherits_all or rp.can_set_role)
+       and rp.reachable_via_membership_options
   )
   select
     (select string_agg(
@@ -78,7 +80,7 @@ begin
        from role_path rp
        join pg_class c on c.oid = 'public.agent_executions'::regclass
       where rp.role_name = pg_get_userbyid(c.relowner)
-        and (rp.depth = 0 or rp.inherits_all or rp.can_set_role))
+        and (rp.depth = 0 or rp.reachable_via_membership_options))
     into inherited_entries, reachable_authenticated_parent, reachable_owner_role_path;
 
   -- Ownership carries powers that are not reliably represented by grant rows:
