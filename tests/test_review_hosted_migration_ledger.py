@@ -168,7 +168,7 @@ class HostedLedgerReviewTests(unittest.TestCase):
             result["hosted_write_authorization_status"],
             "NOT_AUTHORIZED_BY_OFFLINE_REVIEWER",
         )
-        self.assertTrue(any("historical migration SQL provenance" in item.lower()
+        self.assertTrue(any("historical migration sql provenance" in item.lower()
                             for item in result["hosted_write_blockers"]))
         rendered = review.render_markdown(result)
         self.assertIn("NO_PARENT_ROLE_ACL_OBSERVED", rendered)
