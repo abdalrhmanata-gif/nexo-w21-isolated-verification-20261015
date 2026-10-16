@@ -853,6 +853,7 @@ jobs:
             echo "${prefix,,}_fixture_exit_code=${fixture_status}" >> "${RUNNER_TEMP}/W80_EVIDENCE.txt"
             if [ "${fixture_status}" -ne 0 ]; then
               status=1
+              owner_path_guard_status=1
             else
               set +e
               docker exec "${db_container}" psql -U postgres -d postgres -X -v ON_ERROR_STOP=1 -f /tmp/w86_agent_executions_acl_correction.sql 2>&1 | tee "${RUNNER_TEMP}/${prefix}_CHECK.txt"
@@ -862,6 +863,7 @@ jobs:
               if [ "${guard_exit}" -eq 0 ] || ! grep -q "W86 refused: service_role is, inherits from, or can SET ROLE to owner of public.agent_executions" "${RUNNER_TEMP}/${prefix}_CHECK.txt"; then
                 echo "::error::W86 did not fail closed on the ${kind} table-owner membership path."
                 status=1
+                owner_path_guard_status=1
               else
                 echo "${prefix}_PASS" >> "${RUNNER_TEMP}/W80_EVIDENCE.txt"
                 set +e
@@ -871,6 +873,7 @@ jobs:
                 if [ "${no_mutation_status}" -ne 0 ] || ! grep -q "^${pass_marker}$" "${RUNNER_TEMP}/${prefix}_NO_MUTATION_CHECK.txt"; then
                   echo "::error::W86 mutated privileges before rejecting the ${kind} table-owner path."
                   status=1
+                  owner_path_guard_status=1
                 fi
               fi
             fi
@@ -908,6 +911,7 @@ jobs:
             echo "${prefix,,}_cleanup_exit_code=${cleanup_status}" >> "${RUNNER_TEMP}/W80_EVIDENCE.txt"
             if [ "${cleanup_status}" -ne 0 ]; then
               status=1
+              owner_path_guard_status=1
             else
               set +e
               docker exec "${db_container}" psql -U postgres -d postgres -X -v ON_ERROR_STOP=1 -f /tmp/w86_agent_executions_acl_correction.sql 2>&1 | tee "${RUNNER_TEMP}/${prefix}_REAPPLY.txt"
@@ -916,17 +920,20 @@ jobs:
               echo "${prefix,,}_reapply_exit_code=${reapply_status}" >> "${RUNNER_TEMP}/W80_EVIDENCE.txt"
               if [ "${reapply_status}" -ne 0 ]; then
                 status=1
+                owner_path_guard_status=1
               else
                 run_pgtap W66_AFTER_${kind^^}_OWNER_GUARD_REAPPLY supabase/tests/w66_service_role_table_privilege_hardening.sql 11 || status=1
                 run_pgtap W86_AFTER_${kind^^}_OWNER_GUARD_REAPPLY supabase/tests/w86_agent_executions_acl_correction.sql 21 || status=1
               fi
             fi
             echo "${prefix,,}_status=${status}" >> "${RUNNER_TEMP}/W80_EVIDENCE.txt"
+            if [ "${status}" -ne 0 ]; then owner_path_guard_status=1; fi
             return "${status}"
           }
 
           run_owner_path_negative_control role "INHERIT FALSE, SET TRUE" || owner_path_guard_status=1
           run_owner_path_negative_control inherit "INHERIT TRUE, SET FALSE" || owner_path_guard_status=1
+          echo "owner_path_guard_status=${owner_path_guard_status}" >> "${RUNNER_TEMP}/W80_EVIDENCE.txt"
           if [ "${regression_status}" -ne 0 ] || [ "${later_status}" -ne 0 ] || [ "${w84_status}" -ne 0 ] || [ "${w85_status}" -ne 0 ] || [ "${w86_status}" -ne 0 ] || [ "${query_pack_status}" -ne 0 ] || [ "${w86_authenticated_parent_guard_status}" -ne 0 ] || [ "${owner_path_guard_status}" -ne 0 ]; then exit 1; fi
 
       - name: Stop and prove disposable resource cleanup
