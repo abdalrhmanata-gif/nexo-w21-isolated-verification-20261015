@@ -226,6 +226,19 @@ def reconcile(directory, repo_root):
                               "classification": "NOT_PROOF_OF_EQUAL_SQL"})
 
     effective = [row for row in acl_rows if row.get("evidence_kind") == "EFFECTIVE_PRIVILEGE"]
+    parent_acl_path_found = bool(inherited_table or inherited_column)
+    w86_parent_acl_gate = (
+        "BLOCKED_PARENT_ROLE_ACL" if parent_acl_path_found else "NO_PARENT_ROLE_ACL_OBSERVED"
+    )
+    hosted_write_blockers = [
+        "Historical migration SQL provenance remains unresolved; version/name ledger comparison does not prove deployed SQL equality.",
+        "An independent database-owner review and separate explicit authorization are required before any hosted mutation.",
+    ]
+    if parent_acl_path_found:
+        hosted_write_blockers.insert(
+            0,
+            "W86 direct revokes cannot remove privileges reachable through a parent role; do not apply this candidate as-is.",
+        )
     stored = [row for row in acl_rows if row.get("evidence_kind") == "STORED_ACL"]
     actual_matrix = {(row.get("grantee"), row.get("privilege_type")) for row in effective}
     expected_matrix = {(role, privilege) for role in ROLES for privilege in PRIVILEGES}
@@ -263,6 +276,10 @@ def reconcile(directory, repo_root):
         "service_role_inherited_table_acl_rows": len(inherited_table),
         "service_role_inherited_column_acl_rows": len(inherited_column),
         "service_role_parent_role_acl_path_semantics": "entries reachable through INHERIT or SET ROLE",
+        "w86_candidate_parent_acl_gate": w86_parent_acl_gate,
+        "hosted_write_authorized": False,
+        "hosted_write_authorization_status": "NOT_AUTHORIZED_BY_OFFLINE_REVIEWER",
+        "hosted_write_blockers": hosted_write_blockers,
         "service_role_inherited_table_acl_entries": inherited_table,
         "service_role_inherited_column_acl_entries": inherited_column,
         "source_checkout_head_sha": source_identity["source_checkout_head_sha"],
@@ -310,11 +327,16 @@ def render_markdown(result):
         f"- Effective ACL rows on public.agent_executions: **{result['effective_table_privilege_rows']}**",
         f"- service_role inherited table ACL rows: **{result['service_role_inherited_table_acl_rows']}**",
         f"- service_role inherited column ACL rows: **{result['service_role_inherited_column_acl_rows']}**",
+        f"- W86 parent-role ACL gate: **{result['w86_candidate_parent_acl_gate']}**",
+        f"- Hosted write authorized: **{result['hosted_write_authorized']}** (the offline reviewer never authorizes hosted writes)",
         f"- Stored ACL rows: **{result['stored_table_acl_rows']}**",
         "",
         "## Same-name/different-version candidates",
         "",
     ]
+    lines.extend(["", "## W86 candidate preflight — not deployment authorization", ""])
+    lines.extend([f"- {item}" for item in result["hosted_write_blockers"]])
+    lines.extend(["", "This preflight is only a safety signal. Even when no parent-role ACL is observed, hosted writes remain unauthorized until historical migration provenance and owner approval are resolved.", ""])
     for row in result["same_name_different_version"]:
         lines.append(f"- {row['name']}: source={','.join(row['local_versions'])}; hosted={','.join(row['hosted_versions'])}")
     if not result["same_name_different_version"]:
@@ -336,7 +358,7 @@ def render_markdown(result):
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--evidence-dir", type=Path, required=True, help="12-query audit output folder")
+    parser.add_argument("--evidence-dir", type=Path, required=True, help="13-query audit output folder")
     parser.add_argument("--repo-root", type=Path, default=Path(__file__).resolve().parents[1], help="checkout containing supabase/migrations")
     args = parser.parse_args(argv)
     try:
@@ -360,6 +382,9 @@ def main(argv=None):
         "source_migration_manifest_sha256": result["source_migration_manifest_sha256"],
         "source_migrations_worktree_clean": result["source_migrations_worktree_clean"],
         "effective_nonowner_write_grants": len(result["effective_nonowner_write_grants"]),
+        "w86_candidate_parent_acl_gate": result["w86_candidate_parent_acl_gate"],
+        "hosted_write_authorized": result["hosted_write_authorized"],
+        "hosted_write_blocker_count": len(result["hosted_write_blockers"]),
         "output_json": str(out_json), "output_markdown": str(out_md),
     }, indent=2))
     return 0
