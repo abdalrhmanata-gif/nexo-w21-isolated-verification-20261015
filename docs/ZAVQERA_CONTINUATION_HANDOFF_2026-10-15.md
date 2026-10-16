@@ -682,3 +682,16 @@ The pinned ACL provenance query was corrected so `service_role_inherited_table_a
 - Query 13 SHA-256: `f9f56944ddd04dd135329ff930cf5259e215eb89f30784b75e03a93f221ff38e`.
 - Offline reviewer and self-test pin this hash, and a regression test asserts that depth-zero direct ACLs are excluded from parent-role result arrays.
 - The previously uploaded hosted evidence ZIP contains 12 queries and is not evidence for this corrected 13-query probe. No fresh hosted capture is recorded here. No hosted write is authorized; historical migration provenance and independent owner approval remain required.
+
+## Latest exact-SHA audit runner proof — 2026-10-16
+
+**Validated code/test SHA:** `438dc482863468798bfe1a108fcb1d9b7e836ac2`. Subsequent changes on this audit branch are documentation/PR metadata only.
+
+- Query 13 SHA-256: `f9f56944ddd04dd135329ff930cf5259e215eb89f30784b75e03a93f221ff38e`. The 12-query base pack remains `a7aba3461786dbb5854f71dc4f87b7e0498d12509add535ab3df4a7ec231a284`.
+- Parent-role ACL arrays include only `membership_depth > 0`; each parent table/column grant records both `all_membership_edges_inherit` and `all_membership_edges_set_role`. Direct role ACLs remain in the separate direct/effective result fields.
+- W80/PostgreSQL 17.11: [run 38878829978](https://github.com/abdalrhmanata-gif/nexo-w21-isolated-verification-20261015/actions/runs/38878829978) — **SUCCESS**. Flutter CI: [run 38878829957](https://github.com/abdalrhmanata-gif/nexo-w21-isolated-verification-20261015/actions/runs/38878829957) — **SUCCESS** on the same SHA.
+- Tests: catalog runner 8/8; read-only migration-effect runner and PowerShell wrapper 13/13; offline ledger/ACL reviewer 13/13. Self-test: `queries=13`, both pinned hashes, no network requests.
+- Disposable database: 89 checked-in migration files replayed with only the documented local compatibility fixture; W44 17/17, W46 8/8, W80 49/49 before/after W83 reapply, W84 21/21 before/after reapply, W85 12/12; query13 local smoke passed and cleanup verified.
+- Evidence artifact [12036577429](https://github.com/abdalrhmanata-gif/nexo-w21-isolated-verification-20261015/actions/runs/38878829978/artifacts/12036577429), digest `sha256:bdc92bfda664dfaca535f475c4666ca042ffed52622dd1754d40a946324817bc`.
+
+**Still blocked on fresh hosted evidence:** the supplied evidence ZIP has only 12 queries; this run is local/disposable and is not a hosted capture. Run `powershell -NoProfile -ExecutionPolicy Bypass -File .\\tools\\run_zavqera_readonly_effect_audit.ps1` locally from the isolated repository checkout on `codex/migration-ledger-provenance-20261015`, using the hidden prompt for a scoped Development-only read-only token. Do not paste or upload the token; upload only the resulting evidence ZIP containing `query_13.json`. The reviewer never authorizes hosted writes (`hosted_write_authorized=false`), even if no parent-role ACL is observed. Historical migration SQL provenance and independent owner authorization remain required. No hosted write, migration repair, deployment, secret, billing, or DNS change was performed; release remains **NO-GO**.
