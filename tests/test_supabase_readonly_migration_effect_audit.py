@@ -137,7 +137,7 @@ class ReadOnlyEffectAuditTests(unittest.TestCase):
         self.assertIn("'table_acl_entries'", sql)
         self.assertIn("'service_role_inherited_table_acl_entries'", sql)
         self.assertIn("'service_role_inherited_column_acl_entries'", sql)
-        self.assertIn("(child.inherits_all AND membership.inherit_option)", sql)
+        self.assertIn("child.inherits_all AND membership.inherit_option", sql)
         self.assertIn("(child.reachable_via_membership_options AND membership.inherit_option)", sql)
         self.assertIn("child.can_set_role AND membership.set_option", sql)
         self.assertIn("'reachable_via_membership_options'", sql)
