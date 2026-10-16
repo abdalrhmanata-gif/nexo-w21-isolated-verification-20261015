@@ -534,8 +534,10 @@ jobs:
               if [ "${label}" = "w86_acl_provenance" ]; then
                 cat > "${RUNNER_TEMP}/W86_ACL_PROVENANCE_ROLE_FIXTURE.sql" <<'SQL'
           CREATE ROLE w86_acl_probe_parent NOLOGIN;
+          CREATE ROLE w86_acl_probe_grandparent NOLOGIN;
           GRANT w86_acl_probe_parent TO service_role WITH INHERIT FALSE, SET TRUE;
-          GRANT UPDATE ON TABLE public.agent_executions TO w86_acl_probe_parent;
+          GRANT w86_acl_probe_grandparent TO w86_acl_probe_parent WITH INHERIT TRUE, SET FALSE;
+          GRANT UPDATE ON TABLE public.agent_executions TO w86_acl_probe_grandparent;
           DO $fixture$
           DECLARE first_column text;
           BEGIN
@@ -549,7 +551,7 @@ jobs:
               RAISE EXCEPTION 'W86 ACL fixture could not locate an agent_executions column';
             END IF;
             EXECUTE format(
-              'GRANT SELECT (%I) ON TABLE public.agent_executions TO w86_acl_probe_parent',
+              'GRANT SELECT (%I) ON TABLE public.agent_executions TO w86_acl_probe_grandparent',
               first_column
             );
           END
@@ -601,32 +603,46 @@ jobs:
               "service_role_inherited_column_acl_entries",
           }
           assert required <= payload.keys(), f"missing result keys: {sorted(required - payload.keys())}"
-          assert payload["service_role_effective_privileges"].get("UPDATE") is False, "SET ROLE-only ACL must not appear as automatically inherited"
+          assert payload["service_role_effective_privileges"].get("UPDATE") is False, "mixed parent ACL must not look like automatic direct inheritance"
           assert any(
               item.get("role_name") == "w86_acl_probe_parent"
               and item.get("depth") == 1
               and item.get("all_edges_inherit") is False
               and item.get("all_edges_set_role") is True
+              and item.get("reachable_via_membership_options") is True
               for item in payload["service_role_membership_paths"]
-          ), "SET ROLE-only membership path not visible"
+          ), "SET ROLE intermediate path not visible"
           assert any(
-              item.get("grantee_role") == "w86_acl_probe_parent"
+              item.get("role_name") == "w86_acl_probe_grandparent"
+              and item.get("depth") == 2
+              and item.get("all_edges_inherit") is False
+              and item.get("all_edges_set_role") is False
+              and item.get("reachable_via_membership_options") is True
+              and item.get("member_of_role") == "w86_acl_probe_parent"
+              for item in payload["service_role_membership_paths"]
+          ), "mixed SET ROLE then INHERIT ancestry not identified as reachable"
+          assert any(
+              item.get("grantee_role") == "w86_acl_probe_grandparent"
+              and item.get("membership_depth") == 2
               and item.get("privilege_type") == "UPDATE"
+              and item.get("reachable_via_membership_options") is True
               for item in payload["service_role_inherited_table_acl_entries"]
-          ), "inherited table ACL entry not visible"
+          ), "mixed-path inherited table ACL entry not visible"
           assert any(
-              item.get("grantee_role") == "w86_acl_probe_parent"
+              item.get("grantee_role") == "w86_acl_probe_grandparent"
+              and item.get("membership_depth") == 2
               and item.get("privilege_type") == "SELECT"
+              and item.get("reachable_via_membership_options") is True
               for item in payload["service_role_inherited_column_acl_entries"]
-          ), "inherited column ACL entry not visible"
-          print("W86_ACL_PROVENANCE_SET_ROLE_ACL_PASS")
+          ), "mixed-path inherited column ACL entry not visible"
+          print("W86_ACL_PROVENANCE_MIXED_PATH_ACL_PASS")
           PY
                 assertion_status=$?
                 set -e
                 cat "${RUNNER_TEMP}/W86_ACL_PROVENANCE_JSON_ASSERTION.txt"
                 cat "${RUNNER_TEMP}/W86_ACL_PROVENANCE_JSON_ASSERTION.txt" >> "${RUNNER_TEMP}/W80_EVIDENCE.txt"
                 echo "w86_acl_provenance_json_assertion_exit_code=${assertion_status}" >> "${RUNNER_TEMP}/W80_EVIDENCE.txt"
-                if [ "${assertion_status}" -ne 0 ] || ! grep -q '^W86_ACL_PROVENANCE_SET_ROLE_ACL_PASS$' "${RUNNER_TEMP}/W86_ACL_PROVENANCE_JSON_ASSERTION.txt"; then
+                if [ "${assertion_status}" -ne 0 ] || ! grep -q '^W86_ACL_PROVENANCE_MIXED_PATH_ACL_PASS$' "${RUNNER_TEMP}/W86_ACL_PROVENANCE_JSON_ASSERTION.txt"; then
                   pack_status=1
                 fi
               fi
@@ -644,11 +660,11 @@ jobs:
                   echo "::error::W86 did not fail closed on inherited service_role ACLs."
                   pack_status=1
                 else
-                  echo "W86_SET_ROLE_GUARD_PASS" > "${RUNNER_TEMP}/W86_INHERITED_ACL_GUARD_ASSERTION.txt"
+                  echo "W86_MIXED_PATH_GUARD_PASS" > "${RUNNER_TEMP}/W86_INHERITED_ACL_GUARD_ASSERTION.txt"
                 fi
 
                 cat > "${RUNNER_TEMP}/W86_ACL_PROVENANCE_ROLE_CLEANUP.sql" <<'SQL'
-          REVOKE ALL PRIVILEGES ON TABLE public.agent_executions FROM w86_acl_probe_parent;
+          REVOKE ALL PRIVILEGES ON TABLE public.agent_executions FROM w86_acl_probe_grandparent, w86_acl_probe_parent;
           DO $cleanup$
           DECLARE column_names text;
           BEGIN
@@ -659,13 +675,15 @@ jobs:
                AND a.attnum > 0 AND NOT a.attisdropped;
             IF column_names IS NOT NULL THEN
               EXECUTE format(
-                'REVOKE ALL PRIVILEGES (%s) ON TABLE public.agent_executions FROM w86_acl_probe_parent',
+                'REVOKE ALL PRIVILEGES (%s) ON TABLE public.agent_executions FROM w86_acl_probe_grandparent, w86_acl_probe_parent',
                 column_names
               );
             END IF;
           END
           $cleanup$;
+          REVOKE w86_acl_probe_grandparent FROM w86_acl_probe_parent;
           REVOKE w86_acl_probe_parent FROM service_role;
+          DROP ROLE w86_acl_probe_grandparent;
           DROP ROLE w86_acl_probe_parent;
           SQL
                 docker cp "${RUNNER_TEMP}/W86_ACL_PROVENANCE_ROLE_CLEANUP.sql" "${db_container}:/tmp/W86_ACL_PROVENANCE_ROLE_CLEANUP.sql"
