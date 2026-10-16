@@ -118,3 +118,26 @@ This is syntax/catalog compatibility evidence on a disposable database only. It 
 The user has now run the updated pack against Development and supplied evidence. ZIP SHA-256: `fff6f88aca42c73dc691ead099e969f3cfc911fea5504ce1291b6e04ae0320f6`; capture UTC `2026-10-15T18:45:25.121761+00:00`; query-pack SHA-256 `a7aba3461786dbb5854f71dc4f87b7e0498d12509add535ab3df4a7ec231a284`.
 
 Queries 11/12 provide 74 hosted ledger tuples and direct W66 relation ACL evidence. The key finding is that `service_role` has all eight queried effective/stored privileges on `public.agent_executions`, including direct INSERT/UPDATE/DELETE/TRUNCATE, contrary to the checked-in W66 `REVOKE ALL`. Full review and counts are in `docs/ZAVQERA_HOSTED_12_QUERY_AUDIT_REVIEW_2026-10-15.md`. The tool status remains `CAPTURED_FOR_MANUAL_REVIEW`, not a release pass. Do not run hosted repair SQL or migrations.
+
+
+## Updated Development capture — 13 queries, including inherited ACL provenance (2026-10-16)
+
+The previous 12-query capture remains valid evidence for the 2026-10-15 observation, but it does not include role-membership inheritance paths. A fresh capture is required before any W86 hosted repair proposal.
+
+The guarded runner now pins two files independently:
+- Base 12-query pack SHA-256: a7aba3461786dbb5854f71dc4f87b7e0498d12509add535ab3df4a7ec231a284
+- Query 13, supabase/tests/hosted_readonly_w86_acl_provenance_query.sql, SHA-256: ffdcc3f51ee20fb2ddb44e74f292df4767a76a9dff5e8cd30eef2adb8e9d4f64
+
+From the repository root in PowerShell, first run: py -3 tools/supabase_readonly_migration_effect_audit.py --self-test
+
+Expected self-test output: SELF_TEST=PASS; queries=13; base_sha256=a7aba3461786dbb5854f71dc4f87b7e0498d12509add535ab3df4a7ec231a284; acl_provenance_sha256=ffdcc3f51ee20fb2ddb44e74f292df4767a76a9dff5e8cd30eef2adb8e9d4f64; no network requests.
+
+Then run the same guarded Development capture procedure described earlier in this runbook, using the verified Development project ref, explicit DEVELOPMENT_ONLY_READ_ONLY confirmation, and the scoped read-only Management API token locally. The runner verifies both SQL hashes, validates project identity and the read-only role before proceeding, sends only Management API database/query/read-only requests, saves query outputs 01–13, and never saves or prints the token. Do not paste a token into chat. Inspect the evidence ZIP for secrets before uploading it.
+
+After capture, run the offline reviewer against the new evidence folder with: py -3 tools/review_hosted_migration_ledger.py --evidence-dir <new-evidence-folder>
+
+The reviewer now requires query_13.json and the exact ACL provenance query hash. Review service_role_inherited_table_acl_rows, service_role_inherited_column_acl_rows, and the role-path entries in ledger_acl_review.json/.md. Any inherited ACL entry blocks the current W86 candidate; do not apply W86 as-is if one is present. The report remains REVIEW REQUIRED / NO-GO regardless of zero inherited rows.
+
+## Verified local runner and query smoke — 2026-10-16
+
+The 13-query runner, offline reviewer, and ACL provenance SQL passed W80 isolated PostgreSQL 17 validation on run 38858063330, source SHA f4d7fed423739db0d39ba576ca455c5d4a182169. Evidence artifact 12027554468, ZIP SHA-256 8147e0b3624b27bdd6dc83f566b665a8942a1b3aac3e3dd785de1a3fc45a483d; cleanup was verified. Flutter CI passed on the same SHA in run 38858068979. This is local/disposable validation only; a new hosted capture is still outstanding.
