@@ -130,6 +130,8 @@ class ReadOnlyEffectAuditTests(unittest.TestCase):
         self.assertIn("SecureStringToBSTR", wrapper)
         self.assertIn("ZeroFreeBSTR", wrapper)
         self.assertIn(r"Remove-Item Env:\SUPABASE_ACCESS_TOKEN", wrapper)
+        self.assertLess(wrapper.index(r"Remove-Item Env:\SUPABASE_ACCESS_TOKEN"),
+                        wrapper.index("py -3 $reviewer"))
         self.assertIn("DEVELOPMENT_ONLY_READ_ONLY", wrapper)
         self.assertIn("py -3 $runner --self-test", wrapper)
         self.assertIn("py -3 $runner 2>&1", wrapper)
