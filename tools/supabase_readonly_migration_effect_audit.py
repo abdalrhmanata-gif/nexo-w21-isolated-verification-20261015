@@ -217,6 +217,47 @@ def rows_from(payload):
     return None
 
 
+def membership_paths_form_valid_chain(paths):
+    """Reject broken, duplicate, or impossible recursive role-membership paths."""
+    if not isinstance(paths, list) or not paths:
+        return False
+    roots = []
+    seen = set()
+    for item in paths:
+        if not isinstance(item, dict):
+            return False
+        name, depth = item.get("role_name"), item.get("depth")
+        member = item.get("member_of_role")
+        inherits, can_set = item.get("all_edges_inherit"), item.get("all_edges_set_role")
+        if not isinstance(name, str) or not name or type(depth) is not int or depth < 0:
+            return False
+        if type(inherits) is not bool or type(can_set) is not bool:
+            return False
+        key = (name, depth, member, inherits, can_set)
+        if key in seen:
+            return False
+        seen.add(key)
+        if depth == 0:
+            roots.append(item)
+            if name != "service_role" or member is not None or inherits is not True or can_set is not True:
+                return False
+        elif not isinstance(member, str) or not member:
+            return False
+    if len(roots) != 1:
+        return False
+    for item in paths:
+        if item["depth"] == 0:
+            continue
+        if not any(
+            parent["role_name"] == item["member_of_role"]
+            and parent["depth"] == item["depth"] - 1
+            and (not item["all_edges_inherit"] or parent["all_edges_inherit"])
+            and (not item["all_edges_set_role"] or parent["all_edges_set_role"])
+            for parent in paths
+        ):
+            return False
+    return True
+
 def as_bool(value) -> bool | None:
     if value is True or (isinstance(value, str) and value.strip().lower() in {"true", "t", "on", "1"}):
         return True
@@ -401,6 +442,7 @@ def main() -> int:
                 or type(relation.get("row_level_security_forced")) is not bool
                 or type(relation.get("stored_acl_is_null")) is not bool
                 or not isinstance(memberships, list)
+                or not membership_paths_form_valid_chain(memberships)
                 or not any(item.get("role_name") == "service_role" and item.get("depth") == 0 for item in memberships if isinstance(item, dict))
                 or not all(
                     isinstance(item, dict)
