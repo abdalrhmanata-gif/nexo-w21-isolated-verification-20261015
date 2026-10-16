@@ -58,7 +58,8 @@ class HostedLedgerReviewTests(unittest.TestCase):
                     "relation_name": "agent_executions", "owner_role": "postgres",
                     "row_level_security_enabled": True, "row_level_security_forced": False,
                     "grantee": role, "privilege_type": privilege,
-                    "effective_privilege": role == "postgres", "is_grantable": None, "grantor": None
+                    "effective_privilege": role == "postgres" or (role == "service_role" and privilege == "UPDATE"),
+                    "is_grantable": None, "grantor": None
                 })
         rows.append({
             "evidence_kind": "STORED_ACL", "schema_name": "public", "relation_name": "agent_executions",
@@ -76,8 +77,8 @@ class HostedLedgerReviewTests(unittest.TestCase):
                          "owner_role": "postgres", "row_level_security_enabled": True,
                          "row_level_security_forced": False, "stored_acl_is_null": False},
             "service_role_effective_privileges": {
-                "SELECT": False, "INSERT": True, "UPDATE": True, "DELETE": True,
-                "TRUNCATE": True, "REFERENCES": False, "TRIGGER": False, "MAINTAIN": False
+                "SELECT": False, "INSERT": False, "UPDATE": True, "DELETE": False,
+                "TRUNCATE": False, "REFERENCES": False, "TRIGGER": False, "MAINTAIN": False
             },
             "service_role_membership_paths": [
                 {"role_name": "service_role", "depth": 0, "member_of_role": None, "all_edges_inherit": True, "all_edges_set_role": True},
@@ -111,7 +112,7 @@ class HostedLedgerReviewTests(unittest.TestCase):
         self.assertEqual(len(result["same_name_different_version"]), 1)
         self.assertIn("hosted_only", result["hosted_names_absent_from_source"])
         self.assertEqual(result["effective_table_privilege_rows"], 32)
-        self.assertEqual(len(result["effective_nonowner_write_grants"]), 0)
+        self.assertEqual(len(result["effective_nonowner_write_grants"]), 1)
         self.assertEqual(len(result["stored_nonowner_write_acl_rows"]), 1)
         self.assertEqual(result["service_role_inherited_table_acl_rows"], 1)
         self.assertEqual(result["service_role_inherited_column_acl_rows"], 1)
@@ -125,6 +126,19 @@ class HostedLedgerReviewTests(unittest.TestCase):
         self.assertIsNone(result["source_checkout_head_sha"])
         self.assertIsNone(result["source_migrations_worktree_clean"])
         self.assertRegex(result["source_migration_manifest_sha256"], r"^[0-9a-f]{64}$")
+
+    def test_rejects_query12_privilege_mismatch_against_query13(self):
+        payload = json.loads((self.evidence / "query_12.json").read_text(encoding="utf-8"))
+        service_update = next(
+            row for row in payload["response"]
+            if row.get("evidence_kind") == "EFFECTIVE_PRIVILEGE"
+            and row.get("grantee") == "service_role"
+            and row.get("privilege_type") == "UPDATE"
+        )
+        service_update["effective_privilege"] = False
+        save(self.evidence / "query_12.json", payload)
+        with self.assertRaisesRegex(review.EvidenceError, "query 12 and query 13 service_role effective privilege maps disagree"):
+            review.reconcile(self.evidence, self.repo)
 
     def test_rejects_query12_owner_mismatch_against_query13(self):
         payload = json.loads((self.evidence / "query_12.json").read_text(encoding="utf-8"))
@@ -176,6 +190,15 @@ class HostedLedgerReviewTests(unittest.TestCase):
         payload = json.loads((self.evidence / "query_13.json").read_text(encoding="utf-8"))
         provenance = payload["response"][0]["w86_acl_provenance"]
         provenance["service_role_effective_privileges"]["UPDATE"] = False
+        acl_payload = json.loads((self.evidence / "query_12.json").read_text(encoding="utf-8"))
+        service_update = next(
+            row for row in acl_payload["response"]
+            if row.get("evidence_kind") == "EFFECTIVE_PRIVILEGE"
+            and row.get("grantee") == "service_role"
+            and row.get("privilege_type") == "UPDATE"
+        )
+        service_update["effective_privilege"] = False
+        save(self.evidence / "query_12.json", acl_payload)
         provenance["service_role_membership_paths"][1]["all_edges_inherit"] = False
         provenance["service_role_membership_paths"][1]["all_edges_set_role"] = True
         provenance["service_role_inherited_table_acl_entries"][0]["all_membership_edges_inherit"] = False
@@ -270,6 +293,13 @@ class HostedLedgerReviewTests(unittest.TestCase):
         ]
         provenance["service_role_inherited_table_acl_entries"] = []
         provenance["service_role_inherited_column_acl_entries"] = []
+        provenance["service_role_effective_privileges"] = {
+            privilege: True for privilege in review.PRIVILEGES
+        }
+        for acl_row in acl_payload["response"]:
+            if acl_row.get("evidence_kind") == "EFFECTIVE_PRIVILEGE" and acl_row.get("grantee") == "service_role":
+                acl_row["effective_privilege"] = True
+        save(self.evidence / "query_12.json", acl_payload)
         save(self.evidence / "query_13.json", payload)
 
         result = review.reconcile(self.evidence, self.repo)
@@ -292,6 +322,13 @@ class HostedLedgerReviewTests(unittest.TestCase):
         ]
         provenance["service_role_inherited_table_acl_entries"] = []
         provenance["service_role_inherited_column_acl_entries"] = []
+        provenance["service_role_effective_privileges"] = {
+            privilege: True for privilege in review.PRIVILEGES
+        }
+        for acl_row in acl_payload["response"]:
+            if acl_row.get("evidence_kind") == "EFFECTIVE_PRIVILEGE" and acl_row.get("grantee") == "service_role":
+                acl_row["effective_privilege"] = True
+        save(self.evidence / "query_12.json", acl_payload)
         save(self.evidence / "query_13.json", payload)
 
         result = review.reconcile(self.evidence, self.repo)

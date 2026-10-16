@@ -466,6 +466,18 @@ def main() -> int:
             len(queries),
         )
     effective_acl_rows = [row for row in acl_rows if row.get("evidence_kind") == "EFFECTIVE_PRIVILEGE"]
+    query12_service_role_effective = {
+        row["privilege_type"]: row["effective_privilege"]
+        for row in effective_acl_rows
+        if row["grantee"] == "service_role"
+    }
+    if query12_service_role_effective != provenance["service_role_effective_privileges"]:
+        return stop(
+            "w66_w86_privilege_consistency",
+            "query 12 and query 13 service_role effective privilege maps disagree",
+            5,
+            len(queries),
+        )
     summary = {
         "status": "CAPTURED_FOR_MANUAL_REVIEW",
         "queries_completed": len(queries),

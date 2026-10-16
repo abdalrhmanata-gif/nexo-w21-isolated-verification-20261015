@@ -354,6 +354,13 @@ def reconcile(directory, repo_root):
     )
     if query12_metadata != {expected_relation_metadata}:
         raise EvidenceError("query 12 and query 13 relation identity/RLS metadata disagree")
+    query12_service_role_effective = {
+        row["privilege_type"]: row["effective_privilege"]
+        for row in effective
+        if row["grantee"] == "service_role"
+    }
+    if query12_service_role_effective != effective_privileges:
+        raise EvidenceError("query 12 and query 13 service_role effective privilege maps disagree")
 
     effective_write = [
         {key: row.get(key) for key in ("grantee", "privilege_type", "effective_privilege", "owner_role",
