@@ -126,6 +126,20 @@ class HostedLedgerReviewTests(unittest.TestCase):
         self.assertIsNone(result["source_migrations_worktree_clean"])
         self.assertRegex(result["source_migration_manifest_sha256"], r"^[0-9a-f]{64}$")
 
+    def test_rejects_query12_owner_mismatch_against_query13(self):
+        payload = json.loads((self.evidence / "query_12.json").read_text(encoding="utf-8"))
+        row = next(
+            row for row in payload["response"]
+            if row.get("evidence_kind") == "EFFECTIVE_PRIVILEGE"
+            and row.get("grantee") == "service_role"
+            and row.get("privilege_type") == "UPDATE"
+        )
+        row["owner_role"] = "service_role"
+        row["effective_privilege"] = True
+        save(self.evidence / "query_12.json", payload)
+        with self.assertRaisesRegex(review.EvidenceError, "query 12 and query 13 relation identity/RLS metadata disagree"):
+            review.reconcile(self.evidence, self.repo)
+
     def test_rejects_duplicate_query12_effective_privilege(self):
         payload = json.loads((self.evidence / "query_12.json").read_text(encoding="utf-8"))
         effective = next(row for row in payload["response"] if row.get("evidence_kind") == "EFFECTIVE_PRIVILEGE")

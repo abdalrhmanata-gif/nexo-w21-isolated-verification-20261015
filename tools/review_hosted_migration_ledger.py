@@ -183,7 +183,12 @@ def reconcile(directory, repo_root):
         or provenance.get("session_user") != "supabase_read_only_user"
         or not truthy_db(provenance.get("transaction_read_only"))
         or not isinstance(relation, dict) or relation.get("exists") is not True
+        or relation.get("schema_name") != "public"
+        or relation.get("relation_name") != "agent_executions"
         or not isinstance(owner_role, str) or not owner_role
+        or type(relation.get("row_level_security_enabled")) is not bool
+        or type(relation.get("row_level_security_forced")) is not bool
+        or type(relation.get("stored_acl_is_null")) is not bool
         or not isinstance(membership_paths, list)
         or not any(
             isinstance(item, dict)
@@ -336,6 +341,19 @@ def reconcile(directory, repo_root):
         for row in stored
     ):
         raise EvidenceError("stored ACL row has malformed grantee, privilege, grantor or grantability fields")
+    query12_metadata = {
+        (
+            row.get("schema_name"), row.get("relation_name"), row.get("owner_role"),
+            row.get("row_level_security_enabled"), row.get("row_level_security_forced"),
+        )
+        for row in acl_rows
+    }
+    expected_relation_metadata = (
+        relation["schema_name"], relation["relation_name"], owner_role,
+        relation["row_level_security_enabled"], relation["row_level_security_forced"],
+    )
+    if query12_metadata != {expected_relation_metadata}:
+        raise EvidenceError("query 12 and query 13 relation identity/RLS metadata disagree")
 
     effective_write = [
         {key: row.get(key) for key in ("grantee", "privilege_type", "effective_privilege", "owner_role",

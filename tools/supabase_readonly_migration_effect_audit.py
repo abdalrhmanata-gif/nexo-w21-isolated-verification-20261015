@@ -394,7 +394,12 @@ def main() -> int:
                 or provenance.get("session_user") != READ_ONLY_ROLE
                 or as_bool(provenance.get("transaction_read_only")) is not True
                 or not isinstance(relation, dict) or relation.get("exists") is not True
+                or relation.get("schema_name") != "public"
+                or relation.get("relation_name") != "agent_executions"
                 or not isinstance(relation.get("owner_role"), str) or not relation.get("owner_role")
+                or type(relation.get("row_level_security_enabled")) is not bool
+                or type(relation.get("row_level_security_forced")) is not bool
+                or type(relation.get("stored_acl_is_null")) is not bool
                 or not isinstance(memberships, list)
                 or not any(item.get("role_name") == "service_role" and item.get("depth") == 0 for item in memberships if isinstance(item, dict))
                 or not all(
@@ -441,6 +446,25 @@ def main() -> int:
     acl_rows = rows_from(json.loads((out / "query_12.json").read_text(encoding="utf-8"))["response"])
     provenance_rows = rows_from(json.loads((out / "query_13.json").read_text(encoding="utf-8"))["response"])
     provenance = provenance_rows[0]["w86_acl_provenance"]
+    relation = provenance["relation"]
+    query12_metadata = {
+        (
+            row.get("schema_name"), row.get("relation_name"), row.get("owner_role"),
+            row.get("row_level_security_enabled"), row.get("row_level_security_forced"),
+        )
+        for row in acl_rows
+    }
+    expected_relation_metadata = (
+        relation["schema_name"], relation["relation_name"], relation["owner_role"],
+        relation["row_level_security_enabled"], relation["row_level_security_forced"],
+    )
+    if query12_metadata != {expected_relation_metadata}:
+        return stop(
+            "w66_w86_relation_metadata",
+            "query 12 and query 13 relation identity/RLS metadata disagree",
+            5,
+            len(queries),
+        )
     effective_acl_rows = [row for row in acl_rows if row.get("evidence_kind") == "EFFECTIVE_PRIVILEGE"]
     summary = {
         "status": "CAPTURED_FOR_MANUAL_REVIEW",
