@@ -11,7 +11,7 @@
 - Runner: `tools/supabase_readonly_migration_effect_audit.py`
 - Tests: `tests/test_supabase_readonly_migration_effect_audit.py`
 - Base pack SHA-256 (12 SELECT statements): `a7aba3461786dbb5854f71dc4f87b7e0498d12509add535ab3df4a7ec231a284`
-- Query 13 SHA-256 (role-path ACL provenance): `8c0815b19ed3eaa09b9da7c3eee0aca72082e2fd92a7fcf1121bf7ac1da0d7e0`
+- Query 13 SHA-256 (role-path ACL provenance): `806c1fbc1842860387dea71cdcefc6d02edf8e4f23ad1aa07ece96c1a1a8312b`
 - The current runner executes 13 fixed SELECT statements. It pins both hashes, validates the target project before SQL, and requires the effective session to be `supabase_read_only_user` in a read-only transaction before accepting evidence.
 - Only `POST /v1/projects/{ref}/database/query/read-only` is allowed for SQL. The normal SQL endpoint is never used.
 - The observed read-only role has `rolbypassrls=true`; the pack is limited to catalog/ledger metadata. Do not add application-row queries.
@@ -95,11 +95,11 @@ The previous 12-query capture remains valid evidence for the 2026-10-15 observat
 
 The guarded runner now pins two files independently:
 - Base 12-query pack SHA-256: a7aba3461786dbb5854f71dc4f87b7e0498d12509add535ab3df4a7ec231a284
-- Query 13, supabase/tests/hosted_readonly_w86_acl_provenance_query.sql, SHA-256: 8c0815b19ed3eaa09b9da7c3eee0aca72082e2fd92a7fcf1121bf7ac1da0d7e0
+- Query 13, supabase/tests/hosted_readonly_w86_acl_provenance_query.sql, SHA-256: 806c1fbc1842860387dea71cdcefc6d02edf8e4f23ad1aa07ece96c1a1a8312b
 
 Use the secure wrapper in the **Current authoritative capture procedure — 13 queries** section below; it performs the no-network self-test before prompting. For a manual self-test without any token or network, run `py -3 tools/supabase_readonly_migration_effect_audit.py --self-test` from the audit repository root.
 
-Expected self-test output: SELF_TEST=PASS; queries=13; base_sha256=a7aba3461786dbb5854f71dc4f87b7e0498d12509add535ab3df4a7ec231a284; acl_provenance_sha256=8c0815b19ed3eaa09b9da7c3eee0aca72082e2fd92a7fcf1121bf7ac1da0d7e0; no network requests.
+Expected self-test output: SELF_TEST=PASS; queries=13; base_sha256=a7aba3461786dbb5854f71dc4f87b7e0498d12509add535ab3df4a7ec231a284; acl_provenance_sha256=806c1fbc1842860387dea71cdcefc6d02edf8e4f23ad1aa07ece96c1a1a8312b; no network requests.
 
 Then run the current secure PowerShell wrapper below using the verified Development project ref and scoped read-only Management API token locally. Do not recreate the older inline-token instructions. The runner verifies both SQL hashes, validates project identity and the read-only role before proceeding, sends only Management API database/query/read-only requests, saves query outputs 01–13, and never saves or prints the token. Do not paste a token into chat. Inspect the evidence ZIP for secrets before uploading it.
 
@@ -159,7 +159,7 @@ if ($LASTEXITCODE -ne 0) { throw "Offline reviewer tests failed; do not connect.
 
 The self-test must identify **13 SELECT-only queries** and these pinned SHA-256 values:
 - Base query pack (queries 1–12): `a7aba3461786dbb5854f71dc4f87b7e0498d12509add535ab3df4a7ec231a284`
-- Query 13 inherited-ACL provenance: `8c0815b19ed3eaa09b9da7c3eee0aca72082e2fd92a7fcf1121bf7ac1da0d7e0`
+- Query 13 inherited-ACL provenance: `806c1fbc1842860387dea71cdcefc6d02edf8e4f23ad1aa07ece96c1a1a8312b`
 
 If any command fails, stop. Do not edit the query pack, bypass a gate, or use the unrestricted SQL endpoint.
 
@@ -249,17 +249,19 @@ PostgreSQL permits a session to `SET ROLE` to an intermediate member and then in
 
 The collector and offline reviewer validate this recurrence and use the reachability flag for inherited ACLs, the future `authenticated` grant target, and table-owner authority. Regression cases cover `service_role --SET ROLE--> intermediate --INHERIT--> parent` where both cumulative flags on the final parent are false.
 
-Query 13 SHA-256 is now `8c0815b19ed3eaa09b9da7c3eee0aca72082e2fd92a7fcf1121bf7ac1da0d7e0`. SHA values and runs in earlier dated sections refer to historic versions of the query. This remains isolated validation only; it is not a fresh hosted Development capture and never authorizes hosted writes.
+Query 13 SHA-256 is now `806c1fbc1842860387dea71cdcefc6d02edf8e4f23ad1aa07ece96c1a1a8312b`. SHA values and runs in earlier dated sections refer to historic versions of the query. This remains isolated validation only; it is not a fresh hosted Development capture and never authorizes hosted writes.
 
 
-## Homogeneous membership reachability correction — 2026-10-16
+## Correction: mixed SET ROLE then INHERIT path reachability — 2026-10-16
 
-The current query-13 recursion now computes the "reachable via membership options" flag from the two homogeneous end-to-end paths only:
+Review against the official PostgreSQL 17 role-membership documentation confirms that **a parent role reached by SET ROLE may itself inherit privileges from roles above it**. Consequently, a path can be reachable even when its cumulative `all_edges_inherit` and `all_edges_set_role` flags are both false. The immediately preceding homogeneous-only interpretation was incorrect and has been withdrawn; that proposed formula was reverted before any fresh hosted capture was made.
 
-- cumulative `INHERIT`: previous `all_edges_inherit` AND this edge's `inherit_option`;
-- cumulative `SET ROLE`: previous `all_edges_set_role` AND this edge's `set_option`;
-- reachable: the current cumulative `INHERIT` path OR the current cumulative `SET ROLE` path.
+The validated recurrence is:
 
-It must **not** use a prior generic reachability flag followed by an INHERIT edge. That would incorrectly combine a SET-ROLE-only prefix with an INHERIT-only suffix into a path that is not end-to-end reachable by either mechanism. The runner and offline reviewer now independently validate the cumulative flags and reachability result. A three-level regression reproduces the mixed-edge case and requires rejection when a forged result claims the grandparent is reachable.
+- `all_edges_inherit`: previous `all_edges_inherit` AND this membership's `inherit_option`;
+- `all_edges_set_role`: previous `all_edges_set_role` AND this membership's `set_option`;
+- `reachable_via_membership_options`: (`parent.reachable_via_membership_options` AND current `inherit_option`) OR (`parent.all_edges_set_role` AND current `set_option`).
 
-Current query-13 SHA-256: `8c0815b19ed3eaa09b9da7c3eee0aca72082e2fd92a7fcf1121bf7ac1da0d7e0`. This pin supersedes the previous current pin `806c1fbc...`; earlier dated hash values in this file remain historical records. No hosted evidence was generated by this correction. Release remains **NO-GO** until a fresh Development-only 13-query capture, migration-source reconciliation, independent owner review, and separate explicit authorization.
+This lets an already reachable intermediate role pass inherited privileges upward, while the SET ROLE branch still requires every edge of that prefix to permit SET ROLE. The collector and offline reviewer now enforce that recurrence, and their three-level regression requires the mixed SET-then-INHERIT grandparent to be reachable; a forged `false` result fails validation.
+
+PostgreSQL 17 reference: [Role Membership](https://www.postgresql.org/docs/17/role-membership.html). Current query-13 SHA-256: `806c1fbc1842860387dea71cdcefc6d02edf8e4f23ad1aa07ece96c1a1a8312b`. No hosted capture or write was performed for this code correction. A fresh Development-only 13-query capture, historical migration-source reconciliation, independent database-owner review, and separate explicit authorization remain mandatory. Release remains **NO-GO**.
