@@ -148,3 +148,21 @@ The current capture procedure is documented in [the 13-query audit runbook](http
 - Flutter CI: [run 38865152105](https://github.com/abdalrhmanata-gif/nexo-w21-isolated-verification-20261015/actions/runs/38865152105) — **SUCCESS**.
 
 The hosted query 13 now also reports whether each membership path supports `SET ROLE`. Updated query digest in the audit branch: `700939087d9708fc3d6a72ebe10064b4c0db7f5d26b08556c7e641e1aa09a919`. The old hosted evidence remains a 12-query capture; a fresh 13-query capture is still mandatory.
+
+
+## Additional fail-closed guard: migration-created authenticated SELECT path — 2026-10-16
+
+A further code review found that checking only currently existing inherited ACL rows was insufficient for one edge case: W86 itself grants table SELECT to `authenticated` after its preflight. If `service_role` can reach `authenticated` through an `INHERIT` or `SET ROLE` path while `authenticated` currently has no ACL entry, the migration's own grant could create a new access path after the check.
+
+The candidate now fails closed **before any ACL mutation** whenever such a path to `authenticated` exists, even if the parent currently has no table/column ACL row. The regression suite includes a new 21st assertion that successful W86 state has no reachable `authenticated` parent path. The isolated W80 workflow seeds the edge `GRANT authenticated TO service_role WITH INHERIT FALSE, SET TRUE` with authenticated table/column privileges first revoked, requires W86 to stop before changing ACLs, checks that authenticated SELECT remains absent, then removes the fixture and re-applies W86.
+
+### Exact-SHA verification — PASS
+
+- Source/test/workflow SHA: `a94d104f71a4a6ba57233b92ba797b96aa7f3120`.
+- W80 PostgreSQL 17.11: [run 38889778593](https://github.com/abdalrhmanata-gif/nexo-w21-isolated-verification-20261015/actions/runs/38889778593) — **SUCCESS**.
+- Evidence artifact [12041540640](https://github.com/abdalrhmanata-gif/nexo-w21-isolated-verification-20261015/actions/runs/38889778593/artifacts/12041540640), ZIP SHA-256 `2601c4c5a01a9120bd646875b42da8c2395cf241b3e130a202012e21b9923ee6`.
+- Expected W86 guard rejection exit code 3; marker `W86_AUTHENTICATED_PARENT_GUARD_PASS`; no-mutation marker `W86_AUTHENTICATED_PARENT_NO_MUTATION_PASS`; fixture cleanup exit code 0; W86 reapply exit code 0.
+- After cleanup/reapply: W66 11/11 and W86 21/21; W84 21/21; W85 12/12; W44 17/17; W46 8/8; W80 49/49; full checked-in migration replay passed; disposable cleanup `VERIFIED`.
+- Flutter CI: [run 38889786282](https://github.com/abdalrhmanata-gif/nexo-w21-isolated-verification-20261015/actions/runs/38889786282) — **SUCCESS** on the same SHA.
+
+This remains disposable/local verification only. It is not evidence of hosted Development parity or permission to apply W86. Fresh 13-query Development evidence, historical SQL provenance reconciliation, independent owner review, and separate explicit authorization remain mandatory. Hosted release remains **NO-GO**.
