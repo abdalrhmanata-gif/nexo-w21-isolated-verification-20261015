@@ -343,12 +343,42 @@ def main() -> int:
                 return stop("migration_ledger", "ledger response lacks nonempty version/name strings", 5, index)
         elif index == 12:
             effective = [row for row in rows if row.get("evidence_kind") == "EFFECTIVE_PRIVILEGE"]
+            stored = [row for row in rows if row.get("evidence_kind") == "STORED_ACL"]
             actual = {(row.get("grantee"), row.get("privilege_type")) for row in effective}
             roles = ("anon", "authenticated", "service_role", "postgres")
             privileges = ("SELECT", "INSERT", "UPDATE", "DELETE", "TRUNCATE", "REFERENCES", "TRIGGER", "MAINTAIN")
             expected = {(role, privilege) for role in roles for privilege in privileges}
-            if actual != expected or any(row.get("relation_name") != "agent_executions" for row in effective):
-                return stop("w66_table_acl", "effective ACL result set incomplete or unrecognized", 5, index)
+            base_shape_ok = all(
+                row.get("schema_name") == "public"
+                and row.get("relation_name") == "agent_executions"
+                and isinstance(row.get("owner_role"), str) and bool(row.get("owner_role"))
+                and type(row.get("row_level_security_enabled")) is bool
+                and type(row.get("row_level_security_forced")) is bool
+                for row in rows
+            )
+            effective_shape_ok = all(
+                type(row.get("effective_privilege")) is bool
+                and row.get("is_grantable") is None
+                and row.get("grantor") is None
+                for row in effective
+            )
+            stored_shape_ok = all(
+                isinstance(row.get("grantee"), str) and bool(row.get("grantee"))
+                and row.get("privilege_type") in privileges
+                and row.get("effective_privilege") is None
+                and type(row.get("is_grantable")) is bool
+                and isinstance(row.get("grantor"), str) and bool(row.get("grantor"))
+                for row in stored
+            )
+            if (
+                len(effective) != len(expected)
+                or actual != expected
+                or len(rows) != len(effective) + len(stored)
+                or not base_shape_ok
+                or not effective_shape_ok
+                or not stored_shape_ok
+            ):
+                return stop("w66_table_acl", "effective/stored ACL result set incomplete, duplicated, or malformed", 5, index)
         elif index == 13:
             if len(rows) != 1 or not isinstance(rows[0].get("w86_acl_provenance"), dict):
                 return stop("w86_acl_provenance", "expected one structured ACL provenance result", 5, index)

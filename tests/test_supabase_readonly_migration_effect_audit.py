@@ -258,6 +258,72 @@ class ReadOnlyEffectAuditTests(unittest.TestCase):
         metadata = json.loads((evidence / "run_metadata.json").read_text(encoding="utf-8"))
         self.assertFalse(metadata["token_saved"])
 
+    def test_w66_acl_non_boolean_effective_privilege_fails_closed(self):
+        calls = []
+        def fake_api(token, method, path, body=None):
+            calls.append((method, path, body))
+            if method == "GET":
+                return valid_project()
+            number = sum(1 for verb, _, _ in calls if verb == "POST")
+            if number == 1:
+                return {"result": [valid_role_row()]}
+            if number == 11:
+                return {"result": [
+                    {"version": "20261013100000", "name": "w80_fail_closed_workspace_role_checks"},
+                    {"version": "20261015100000", "name": "w83_workspace_invitation_privilege_correction"},
+                ]}
+            if number == 12:
+                rows = []
+                for role in ("anon", "authenticated", "service_role", "postgres"):
+                    for privilege in ("SELECT", "INSERT", "UPDATE", "DELETE", "TRUNCATE", "REFERENCES", "TRIGGER", "MAINTAIN"):
+                        rows.append({
+                            "evidence_kind": "EFFECTIVE_PRIVILEGE", "schema_name": "public",
+                            "relation_name": "agent_executions", "owner_role": "postgres",
+                            "row_level_security_enabled": True, "row_level_security_forced": False,
+                            "grantee": role, "privilege_type": privilege,
+                            "effective_privilege": False, "is_grantable": None, "grantor": None,
+                        })
+                rows[0]["effective_privilege"] = "false"
+                return {"result": rows}
+            self.fail("query 13 must not run after malformed query 12")
+        code, output = self._run_with_fake_api(fake_api)
+        self.assertEqual(code, 5)
+        self.assertIn("effective/stored ACL result set incomplete, duplicated, or malformed", output)
+        self.assertEqual(len([call for call in calls if call[0] == "POST"]), 12)
+
+    def test_w66_acl_duplicate_effective_privilege_fails_closed(self):
+        calls = []
+        def fake_api(token, method, path, body=None):
+            calls.append((method, path, body))
+            if method == "GET":
+                return valid_project()
+            number = sum(1 for verb, _, _ in calls if verb == "POST")
+            if number == 1:
+                return {"result": [valid_role_row()]}
+            if number == 11:
+                return {"result": [
+                    {"version": "20261013100000", "name": "w80_fail_closed_workspace_role_checks"},
+                    {"version": "20261015100000", "name": "w83_workspace_invitation_privilege_correction"},
+                ]}
+            if number == 12:
+                rows = []
+                for role in ("anon", "authenticated", "service_role", "postgres"):
+                    for privilege in ("SELECT", "INSERT", "UPDATE", "DELETE", "TRUNCATE", "REFERENCES", "TRIGGER", "MAINTAIN"):
+                        rows.append({
+                            "evidence_kind": "EFFECTIVE_PRIVILEGE", "schema_name": "public",
+                            "relation_name": "agent_executions", "owner_role": "postgres",
+                            "row_level_security_enabled": True, "row_level_security_forced": False,
+                            "grantee": role, "privilege_type": privilege,
+                            "effective_privilege": False, "is_grantable": None, "grantor": None,
+                        })
+                rows.append(dict(rows[0]))
+                return {"result": rows}
+            self.fail("query 13 must not run after duplicated query 12")
+        code, output = self._run_with_fake_api(fake_api)
+        self.assertEqual(code, 5)
+        self.assertIn("effective/stored ACL result set incomplete, duplicated, or malformed", output)
+        self.assertEqual(len([call for call in calls if call[0] == "POST"]), 12)
+
     def test_w86_provenance_non_boolean_effective_privilege_fails_closed(self):
         calls = []
         def fake_api(token, method, path, body=None):

@@ -308,9 +308,34 @@ def reconcile(directory, repo_root):
     actual_matrix = {(row.get("grantee"), row.get("privilege_type")) for row in effective}
     expected_matrix = {(role, privilege) for role in ROLES for privilege in PRIVILEGES}
     if len(effective) != len(expected_matrix) or actual_matrix != expected_matrix:
-        raise EvidenceError("effective table ACL matrix incomplete or unexpected")
-    if any(row.get("schema_name") != "public" or row.get("relation_name") != "agent_executions" for row in effective):
-        raise EvidenceError("effective ACL rows refer to an unexpected relation")
+        raise EvidenceError("effective table ACL matrix incomplete, duplicated or unexpected")
+    if len(acl_rows) != len(effective) + len(stored):
+        raise EvidenceError("ACL evidence contains an unrecognized row kind")
+    if any(
+        row.get("schema_name") != "public"
+        or row.get("relation_name") != "agent_executions"
+        or not isinstance(row.get("owner_role"), str) or not row.get("owner_role")
+        or type(row.get("row_level_security_enabled")) is not bool
+        or type(row.get("row_level_security_forced")) is not bool
+        for row in acl_rows
+    ):
+        raise EvidenceError("ACL rows have malformed relation-owner or RLS metadata")
+    if any(
+        type(row.get("effective_privilege")) is not bool
+        or row.get("is_grantable") is not None
+        or row.get("grantor") is not None
+        for row in effective
+    ):
+        raise EvidenceError("effective ACL row has malformed boolean or privilege-source fields")
+    if any(
+        not isinstance(row.get("grantee"), str) or not row.get("grantee")
+        or row.get("privilege_type") not in PRIVILEGES
+        or row.get("effective_privilege") is not None
+        or type(row.get("is_grantable")) is not bool
+        or not isinstance(row.get("grantor"), str) or not row.get("grantor")
+        for row in stored
+    ):
+        raise EvidenceError("stored ACL row has malformed grantee, privilege, grantor or grantability fields")
 
     effective_write = [
         {key: row.get(key) for key in ("grantee", "privilege_type", "effective_privilege", "owner_role",
