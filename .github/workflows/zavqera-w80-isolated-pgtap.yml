@@ -825,6 +825,7 @@ jobs:
             cat > "${fixture}" <<SQL
           CREATE ROLE ${role_name} NOLOGIN;
           GRANT ${role_name} TO postgres WITH INHERIT TRUE, SET TRUE;
+          GRANT CREATE ON SCHEMA public TO ${role_name};
           ALTER TABLE public.agent_executions OWNER TO ${role_name};
           REVOKE ALL PRIVILEGES ON TABLE public.agent_executions FROM ${role_name}, authenticated;
           DO \$revoke_column_acl\$
@@ -885,6 +886,7 @@ jobs:
           BEGIN
             IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = '${role_name}') THEN
               EXECUTE 'REVOKE ALL PRIVILEGES ON TABLE public.agent_executions FROM ${role_name}, authenticated';
+              EXECUTE 'REVOKE CREATE ON SCHEMA public FROM ${role_name}';
               SELECT string_agg(format('%I', a.attname), ', ' ORDER BY a.attnum)
                 INTO column_names
                 FROM pg_attribute a
