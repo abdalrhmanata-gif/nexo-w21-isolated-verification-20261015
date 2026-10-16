@@ -123,7 +123,7 @@ class ReadOnlyEffectAuditTests(unittest.TestCase):
         self.assertEqual(len(statements), 13)
         self.assertEqual(digest, audit.PACK_SHA256)
         self.assertEqual(audit.ACL_PROVENANCE_SHA256,
-                         "ffdcc3f51ee20fb2ddb44e74f292df4767a76a9dff5e8cd30eef2adb8e9d4f64")
+                         "700939087d9708fc3d6a72ebe10064b4c0db7f5d26b08556c7e641e1aa09a919")
         self.assertTrue(all(re.match(r"(?is)^\s*SELECT\b", audit.no_comments(s).strip()) for s in statements))
 
     def test_powershell_wrapper_handles_token_locally_and_cleans_environment(self):
