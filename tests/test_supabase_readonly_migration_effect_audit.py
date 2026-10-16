@@ -715,6 +715,10 @@ class ReadOnlyEffectAuditTests(unittest.TestCase):
         self.assertIn("Membership-path ancestry validation", runbook)
         self.assertIn("preceding depth", runbook)
         self.assertIn("Repeated projected tuples can occur", runbook)
+        self.assertIn("ACL row field-shape validation", runbook)
+        self.assertIn("non-empty grantee/grantee-role and grantor name", runbook)
+        self.assertIn("actual boolean `is_grantable`", runbook)
+        self.assertIn("non-empty `column_name`", runbook)
         self.assertIn("do not change the reachability facts", runbook)
         current = runbook.split("## Current Windows PowerShell procedure — use only this procedure", 1)[1]
         current = current.split("## Expected output and interpretation", 1)[0]

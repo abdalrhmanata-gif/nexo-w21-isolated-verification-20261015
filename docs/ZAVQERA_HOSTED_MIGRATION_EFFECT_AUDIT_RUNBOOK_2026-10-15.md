@@ -234,3 +234,8 @@ The two queries are separate read-only API requests, not a single atomic catalog
 ### Membership-path ancestry validation
 
 The collector and offline reviewer validate that each query-13 membership row belongs to a connected chain rooted at a single `service_role` row at depth 0. A non-root `member_of_role` must identify a row at the preceding depth, and cumulative `INHERIT` / `SET ROLE` flags may transition from true to false but cannot become true again after a false edge. Repeated projected tuples can occur when distinct ancestry branches converge to the same observable role/depth/parent/flag tuple; such exact duplicates are tolerated because they do not change the reachability facts encoded by the tuple. Root rows with a parent, missing parent rows, malformed flags, or disconnected paths are rejected before role-path conclusions are emitted.
+
+
+### ACL row field-shape validation
+
+Query 13's direct table ACL, direct column ACL, inherited table ACL, and inherited column ACL arrays are rejected if their row fields are missing or malformed. Each row must use a non-empty grantee/grantee-role and grantor name, a privilege name from the pinned PostgreSQL privilege set, and an actual boolean `is_grantable` value. Column ACL rows also require a non-empty `column_name`. Inherited rows additionally require an exact integer membership depth greater than zero and actual boolean `INHERIT` / `SET ROLE` flags. These checks validate evidence shape; they do not authorize changes or replace the hosted review gates.

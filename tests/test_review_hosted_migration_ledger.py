@@ -287,9 +287,10 @@ class HostedLedgerReviewTests(unittest.TestCase):
             ("inherited table privilege", "service_role_inherited_table_acl_entries", None, "privilege_type", "UNKNOWN"),
             ("inherited column grantability", "service_role_inherited_column_acl_entries", None, "is_grantable", "false"),
         )
+        original = json.loads((self.evidence / "query_13.json").read_text(encoding="utf-8"))
         for label, key, row, field, value in cases:
             with self.subTest(label=label):
-                payload = json.loads((self.evidence / "query_13.json").read_text(encoding="utf-8"))
+                payload = json.loads(json.dumps(original))
                 provenance = payload["response"][0]["w86_acl_provenance"]
                 if row is not None:
                     provenance[key].append(row)
