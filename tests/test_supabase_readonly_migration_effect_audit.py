@@ -293,7 +293,7 @@ class ReadOnlyEffectAuditTests(unittest.TestCase):
         self.assertIn("query 12 and query 13 service_role effective privilege maps disagree", output)
         self.assertEqual(len([call for call in calls if call[0] == "POST"]), 13)
 
-    def test_w86_provenance_disconnected_membership_chain_fails_closed(self):
+    def test_w86_provenance_malformed_membership_parent_fails_closed(self):
         calls = []
         def fake_api(token, method, path, body=None):
             calls.append((method, path, body))
@@ -323,7 +323,7 @@ class ReadOnlyEffectAuditTests(unittest.TestCase):
                         })
                 return {"result": rows}
             provenance = valid_provenance_payload(inherited=True)
-            provenance["service_role_membership_paths"][1]["member_of_role"] = "unobserved_parent"
+            provenance["service_role_membership_paths"][1]["member_of_role"] = 17
             return {"result": [{"w86_acl_provenance": provenance}]}
 
         code, output = self._run_with_fake_api(fake_api)
