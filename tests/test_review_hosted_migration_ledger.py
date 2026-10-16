@@ -115,6 +115,12 @@ class HostedLedgerReviewTests(unittest.TestCase):
         self.assertEqual(len(result["stored_nonowner_write_acl_rows"]), 1)
         self.assertEqual(result["service_role_inherited_table_acl_rows"], 1)
         self.assertEqual(result["service_role_inherited_column_acl_rows"], 1)
+        self.assertEqual(result["w86_candidate_parent_acl_gate"], "BLOCKED_PARENT_ROLE_ACL")
+        self.assertIs(result["hosted_write_authorized"], False)
+        self.assertEqual(
+            result["hosted_write_authorization_status"],
+            "NOT_AUTHORIZED_BY_OFFLINE_REVIEWER",
+        )
         self.assertIn("w86_acl_probe_parent", result["service_role_inherited_table_acl_entries"][0]["grantee_role"])
         self.assertIsNone(result["source_checkout_head_sha"])
         self.assertIsNone(result["source_migrations_worktree_clean"])
@@ -136,10 +142,37 @@ class HostedLedgerReviewTests(unittest.TestCase):
         self.assertEqual(result["service_role_set_role_path_count"], 1)
         self.assertEqual(result["service_role_inherited_table_acl_rows"], 1)
         self.assertEqual(result["service_role_inherited_column_acl_rows"], 1)
+        self.assertEqual(result["w86_candidate_parent_acl_gate"], "BLOCKED_PARENT_ROLE_ACL")
+        self.assertIs(result["hosted_write_authorized"], False)
         self.assertEqual(
             result["service_role_parent_role_acl_path_semantics"],
             "entries reachable through INHERIT or SET ROLE",
         )
+
+    def test_no_parent_acl_observed_still_never_authorizes_hosted_write(self):
+        payload = json.loads((self.evidence / "query_13.json").read_text(encoding="utf-8"))
+        provenance = payload["response"][0]["w86_acl_provenance"]
+        provenance["service_role_effective_privileges"]["UPDATE"] = True
+        provenance["service_role_membership_paths"] = [
+            item for item in provenance["service_role_membership_paths"]
+            if item.get("depth") == 0
+        ]
+        provenance["service_role_inherited_table_acl_entries"] = []
+        provenance["service_role_inherited_column_acl_entries"] = []
+        save(self.evidence / "query_13.json", payload)
+
+        result = review.reconcile(self.evidence, self.repo)
+        self.assertEqual(result["w86_candidate_parent_acl_gate"], "NO_PARENT_ROLE_ACL_OBSERVED")
+        self.assertIs(result["hosted_write_authorized"], False)
+        self.assertEqual(
+            result["hosted_write_authorization_status"],
+            "NOT_AUTHORIZED_BY_OFFLINE_REVIEWER",
+        )
+        self.assertTrue(any("historical migration SQL provenance" in item
+                            for item in result["hosted_write_blockers"]))
+        rendered = review.render_markdown(result)
+        self.assertIn("NO_PARENT_ROLE_ACL_OBSERVED", rendered)
+        self.assertIn("Hosted writes remain unauthorized", rendered)
 
     def test_source_migration_manifest_is_deterministic_and_content_sensitive(self):
         first = review.reconcile(self.evidence, self.repo)
@@ -234,6 +267,8 @@ class HostedLedgerReviewTests(unittest.TestCase):
         self.assertIn("Source checkout HEAD", rendered)
         self.assertIn("Source migration manifest SHA-256", rendered)
         self.assertIn("service_role inherited table ACL rows: **1**", rendered)
+        self.assertIn("W86 parent-role ACL gate: **BLOCKED_PARENT_ROLE_ACL**", rendered)
+        self.assertIn("Hosted write authorized: **False**", rendered)
         self.assertIn("inherited ACL row is a blocker", rendered)
         self.assertIn("not a full authorization proof", rendered)
 
