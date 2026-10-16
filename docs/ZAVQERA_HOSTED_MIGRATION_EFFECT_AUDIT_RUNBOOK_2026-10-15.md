@@ -157,3 +157,63 @@ The PowerShell helper is now covered by a static regression test. It requests th
 Latest exact-SHA validation: W80 isolated PostgreSQL 17 run 38858755502 — SUCCESS on c6fae906f9f57efe11ec7f010afb48b66ac850dc. The run reported 8 catalog-runner tests, 12 migration-effect runner/wrapper tests, and 10 offline-reviewer tests passing; self-test reported 13 queries with both pinned hashes and no network requests; the 13th query passed local PostgreSQL 17 smoke; full migration replay and cleanup verification passed. Artifact 12028448084, ZIP SHA-256 c7388aaa1d1ef85c9c70951db1c3c33cc46da376c2c7e0b1ebcd1e33aafd38f3. Flutter CI also passed on the same SHA: run 38858755489.
 
 This is local/disposable evidence only. The next required action is a fresh 13-query capture against the verified read-only Development session; do not paste the token into chat or apply any hosted repair.
+
+
+## Current authoritative capture procedure — 13 queries (supersedes earlier 12-query steps)
+
+The older instructions above describe the 12-query runner. For the next capture, use this section and the secure wrapper only.
+
+### 1. Update the isolated audit checkout
+
+From the root of the **isolated verification repository** (not the original `Nexo` repo), run:
+
+```powershell
+git fetch origin codex/migration-ledger-provenance-20261015
+git switch codex/migration-ledger-provenance-20261015
+git pull --ff-only origin codex/migration-ledger-provenance-20261015
+```
+
+Do not merge this branch into the original application repository. It remains an isolated audit/review branch.
+
+### 2. Run the local tests first — no hosted requests
+
+```powershell
+py -3 tools/supabase_readonly_migration_effect_audit.py --self-test
+if ($LASTEXITCODE -ne 0) { throw "Self-test failed; do not connect." }
+
+py -3 -m unittest discover -s tests -p "test_supabase_readonly_migration_effect_audit.py" -v
+if ($LASTEXITCODE -ne 0) { throw "Runner tests failed; do not connect." }
+
+py -3 -m unittest discover -s tests -p "test_review_hosted_migration_ledger.py" -v
+if ($LASTEXITCODE -ne 0) { throw "Offline reviewer tests failed; do not connect." }
+```
+
+The self-test must identify **13 SELECT-only queries** and these pinned SHA-256 values:
+- Base query pack (queries 1–12): `a7aba3461786dbb5854f71dc4f87b7e0498d12509add535ab3df4a7ec231a284`
+- Query 13 inherited-ACL provenance: `ffdcc3f51ee20fb2ddb44e74f292df4767a76a9dff5e8cd30eef2adb8e9d4f64`
+
+If any command fails, stop. Do not edit the query pack, bypass a gate, or use the unrestricted SQL endpoint.
+
+### 3. Run the secure wrapper
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\\tools\\run_zavqera_readonly_effect_audit.ps1
+```
+
+The wrapper re-runs the pinned self-test before prompting for the token. Enter only a scoped Management API PAT for **ZAVQERA Development** using the hidden prompt. The token is not an argument, is not printed, and is removed from the process environment immediately after capture; the temporary BSTR is zeroed. Never paste the token into ChatGPT, a GitHub issue/PR, a file, or shell history. Do not target Main/Production.
+
+The wrapper runs the capture and then the offline ledger reviewer, zips the evidence directory, and prints the ZIP path. A blocked/failed capture still means stop and review the captured stage; never retry by relaxing the role gate or changing SQL.
+
+### 4. Upload only the generated evidence ZIP
+
+Upload the resulting `zavqera-readonly-effect-audit-output-<timestamp>.zip` to the project conversation. Do not upload the source checkout, shell history, credentials, config files, or unrelated files. Do not rename a prior 12-query ZIP to make it appear current.
+
+The ZIP must contain `query_13.json` and metadata identifying both query-pack hashes. The offline reviewer must report its normal **REVIEW REQUIRED / NO-GO** status until all migration-history and ACL findings are resolved.
+
+### 5. Mandatory W86 interpretation
+
+- If query 13 reports any inherited table/column ACL path for `service_role`, **W86 must not be applied as-is**. Preserve the evidence and request an owner-reviewed least-privilege decision for that role path.
+- If query 13 reports no inherited ACLs, that only removes this specific blocker. Direct/stored grants, owner/grantor context, historical migration provenance, and all previously recorded schema/function mismatches still require review.
+- The capture is read-only evidence, not permission to apply a migration. Do not perform hosted DDL, ACL changes, migration repair, deployment, or secret changes.
+
+No hosted change is authorized by this procedure. Keep release **NO-GO** and the provider dispatch registry empty/fail-closed.
