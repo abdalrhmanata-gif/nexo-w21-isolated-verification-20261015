@@ -21,7 +21,7 @@ WITH RECURSIVE role_path (
          child.role_name::text COLLATE "C",
          membership.inherit_option,
          membership.set_option,
-         (child.inherits_all AND membership.inherit_option)
+         (child.reachable_via_membership_options AND membership.inherit_option)
            OR (child.can_set_role AND membership.set_option)
     FROM role_path child
     JOIN pg_auth_members membership ON membership.member = child.role_oid
