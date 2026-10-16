@@ -1,6 +1,6 @@
 # ZAVQERA — Supplemental Hosted Migration-Effect Audit Runbook (2026-10-15)
 
-**Current status — 2026-10-16: REVIEW REQUIRED / NO-GO.** The supplied hosted evidence archive is an older 12-query capture and has no `query_13.json`. This branch contains the pinned 12-query base pack plus a separate, SHA-256-pinned SELECT-only ACL-provenance query 13 and the secure Windows capture wrapper. The isolated tests pass, but **no fresh hosted 13-query capture has been recorded**. The old capture must not be treated as evidence about inherited `INHERIT` / `SET ROLE` paths. This runbook performs read-only metadata collection only; it never authorizes hosted changes or release.
+**Current status — 2026-10-16: REVIEW REQUIRED / NO-GO.** The supplied hosted evidence archive is an older 12-query capture and has no `query_13.json`. This branch contains the pinned 12-query base pack plus a separate, SHA-256-pinned SELECT-only ACL-provenance query 13 and the secure Windows capture wrapper. The isolated tests pass, but **no fresh hosted 13-query capture has been recorded**. The old capture must not be treated as evidence about inherited `INHERIT` / `SET ROLE` paths. The W86 candidate and offline reviewer were also strengthened to block the case where `service_role` is the table owner or can `SET ROLE` to that owner, even when ordinary owner ACL rows are absent. Query 13 already returns the table owner and membership paths needed for that review. This runbook performs read-only metadata collection only; it never authorizes hosted changes or release.
 
 ## Repository and safety scope
 
@@ -57,11 +57,11 @@ If the token or local checkout is unavailable, stop. Do not substitute the norma
 10. Built-in and explicit function-default ACLs for `postgres` and `supabase_admin`.
 11. Migration ledger `version,name` pairs only; SQL bodies are not returned.
 12. Effective and expanded stored ACL rows for `public.agent_executions` (W66).
-13. Reachable role-membership paths and inherited table/column ACL provenance for `service_role`, covering both `INHERIT` and `SET ROLE` semantics.
+13. Relation owner identity, reachable role-membership paths and inherited table/column ACL provenance for `service_role`; covers `INHERIT`, `SET ROLE`, the `authenticated` future-grant target, and reachable table-owner authority.
 
 ## After collection
 
-After a fresh 13-query capture, manually match ledger tuples to source files and classify the W66 effective/stored ACLs and query 13 role-path results. Existing isolated PostgreSQL 17/CI success validates the code pack only; it is not a substitute for hosted Development evidence. Do not assume the ledger row count until the new capture is reviewed. A database/platform owner must independently review all unexpected privilege paths, function owners/modes, search paths, relation ACLs and default ACL policy.
+After a fresh 13-query capture, manually match ledger tuples to source files and classify the W66 effective/stored ACLs; also review `relation.owner_role`, any path from `service_role` to `authenticated`, and any path from `service_role` to the table owner with `SET ROLE` enabled. A table-owner path or inherited ACL blocks W86 as-is. Existing isolated PostgreSQL 17/CI success validates the code pack only; it is not a substitute for hosted Development evidence. Do not assume the ledger row count until the new capture is reviewed. A database/platform owner must independently review all unexpected privilege paths, function owners/modes, search paths, relation ACLs and default ACL policy.
 
 No hosted remediation is authorized by this runbook. Do not run `supabase db push`, `migration repair`, manually edit `supabase_migrations.schema_migrations`, replay migrations against hosted Development, or change Supabase Main/Production. Any future hosted migration requires a separate reviewed plan and explicit owner authorization.
 
