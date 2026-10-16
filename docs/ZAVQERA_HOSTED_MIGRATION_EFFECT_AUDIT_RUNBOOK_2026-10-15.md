@@ -126,11 +126,11 @@ The previous 12-query capture remains valid evidence for the 2026-10-15 observat
 
 The guarded runner now pins two files independently:
 - Base 12-query pack SHA-256: a7aba3461786dbb5854f71dc4f87b7e0498d12509add535ab3df4a7ec231a284
-- Query 13, supabase/tests/hosted_readonly_w86_acl_provenance_query.sql, SHA-256: ffdcc3f51ee20fb2ddb44e74f292df4767a76a9dff5e8cd30eef2adb8e9d4f64
+- Query 13, supabase/tests/hosted_readonly_w86_acl_provenance_query.sql, SHA-256: 700939087d9708fc3d6a72ebe10064b4c0db7f5d26b08556c7e641e1aa09a919
 
 From the repository root in PowerShell, first run: py -3 tools/supabase_readonly_migration_effect_audit.py --self-test
 
-Expected self-test output: SELF_TEST=PASS; queries=13; base_sha256=a7aba3461786dbb5854f71dc4f87b7e0498d12509add535ab3df4a7ec231a284; acl_provenance_sha256=ffdcc3f51ee20fb2ddb44e74f292df4767a76a9dff5e8cd30eef2adb8e9d4f64; no network requests.
+Expected self-test output: SELF_TEST=PASS; queries=13; base_sha256=a7aba3461786dbb5854f71dc4f87b7e0498d12509add535ab3df4a7ec231a284; acl_provenance_sha256=700939087d9708fc3d6a72ebe10064b4c0db7f5d26b08556c7e641e1aa09a919; no network requests.
 
 Then run the same guarded Development capture procedure described earlier in this runbook, using the verified Development project ref, explicit DEVELOPMENT_ONLY_READ_ONLY confirmation, and the scoped read-only Management API token locally. The runner verifies both SQL hashes, validates project identity and the read-only role before proceeding, sends only Management API database/query/read-only requests, saves query outputs 01–13, and never saves or prints the token. Do not paste a token into chat. Inspect the evidence ZIP for secrets before uploading it.
 
@@ -190,7 +190,7 @@ if ($LASTEXITCODE -ne 0) { throw "Offline reviewer tests failed; do not connect.
 
 The self-test must identify **13 SELECT-only queries** and these pinned SHA-256 values:
 - Base query pack (queries 1–12): `a7aba3461786dbb5854f71dc4f87b7e0498d12509add535ab3df4a7ec231a284`
-- Query 13 inherited-ACL provenance: `ffdcc3f51ee20fb2ddb44e74f292df4767a76a9dff5e8cd30eef2adb8e9d4f64`
+- Query 13 inherited-ACL provenance: `700939087d9708fc3d6a72ebe10064b4c0db7f5d26b08556c7e641e1aa09a919`
 
 If any command fails, stop. Do not edit the query pack, bypass a gate, or use the unrestricted SQL endpoint.
 
