@@ -236,8 +236,17 @@ def reconcile(directory, repo_root):
 
     effective = [row for row in acl_rows if row.get("evidence_kind") == "EFFECTIVE_PRIVILEGE"]
     parent_acl_path_found = bool(inherited_table or inherited_column)
+    authenticated_parent_paths = [
+        item for item in membership_paths
+        if item.get("role_name") == "authenticated"
+        and item.get("depth", 0) > 0
+        and (item.get("all_edges_inherit") is True or item.get("all_edges_set_role") is True)
+    ]
+    authenticated_grant_path_found = bool(authenticated_parent_paths)
     w86_parent_acl_gate = (
-        "BLOCKED_PARENT_ROLE_ACL" if parent_acl_path_found else "NO_PARENT_ROLE_ACL_OBSERVED"
+        "BLOCKED_PARENT_ROLE_ACL" if parent_acl_path_found
+        else "BLOCKED_AUTHENTICATED_ROLE_PATH" if authenticated_grant_path_found
+        else "NO_PARENT_ROLE_ACL_OBSERVED"
     )
     hosted_write_blockers = [
         "Historical migration SQL provenance remains unresolved; version/name ledger comparison does not prove deployed SQL equality.",
@@ -247,6 +256,11 @@ def reconcile(directory, repo_root):
         hosted_write_blockers.insert(
             0,
             "W86 direct revokes cannot remove privileges reachable through a parent role; do not apply this candidate as-is.",
+        )
+    if authenticated_grant_path_found:
+        hosted_write_blockers.insert(
+            0,
+            "service_role can reach authenticated through INHERIT or SET ROLE, and W86 grants SELECT to authenticated; do not apply this candidate as-is even if query 13 shows no current parent-role ACL entry.",
         )
     stored = [row for row in acl_rows if row.get("evidence_kind") == "STORED_ACL"]
     actual_matrix = {(row.get("grantee"), row.get("privilege_type")) for row in effective}
@@ -282,6 +296,7 @@ def reconcile(directory, repo_root):
             1 for item in membership_paths
             if isinstance(item, dict) and item.get("depth", 0) > 0 and item.get("all_edges_set_role") is True
         ),
+        "service_role_authenticated_parent_path_count": len(authenticated_parent_paths),
         "service_role_inherited_table_acl_rows": len(inherited_table),
         "service_role_inherited_column_acl_rows": len(inherited_column),
         "service_role_parent_role_acl_path_semantics": "entries reachable through INHERIT or SET ROLE",
@@ -312,6 +327,7 @@ def reconcile(directory, repo_root):
             "The source migration manifest SHA-256 covers sorted filename/file-SHA pairs and identifies migration contents even if Git metadata is unavailable.",
             "The source checkout HEAD and dirty flag are local Git metadata; the manifest is required to identify the actual source bytes.",
             "Direct table/column revokes do not remove privileges inherited from parent roles; any inherited ACL row is a blocker for the current W86 candidate and requires owner-reviewed resolution.",
+            "W86 grants SELECT to authenticated after its preflight; any reachable INHERIT/SET ROLE path from service_role to authenticated is independently a blocker, even if that role has no ACL entry in the current capture.",
             "Effective ACLs are a signal, not complete proof of reachability; review RLS, memberships, function ownership and trusted writers separately.",
             "The observed role has rolbypassrls=true; do not use this evidence credential for application-row reads.",
             "This is offline analysis only; it performs no SQL, hosted writes, migration repair, or deployment.",
@@ -336,6 +352,7 @@ def render_markdown(result):
         f"- Effective ACL rows on public.agent_executions: **{result['effective_table_privilege_rows']}**",
         f"- service_role inherited table ACL rows: **{result['service_role_inherited_table_acl_rows']}**",
         f"- service_role inherited column ACL rows: **{result['service_role_inherited_column_acl_rows']}**",
+        f"- service_role reachable authenticated parent paths: **{result['service_role_authenticated_parent_path_count']}**",
         f"- W86 parent-role ACL gate: **{result['w86_candidate_parent_acl_gate']}**",
         f"- Hosted write authorized: **{result['hosted_write_authorized']}** (the offline reviewer never authorizes hosted writes)",
         f"- Stored ACL rows: **{result['stored_table_acl_rows']}**",
