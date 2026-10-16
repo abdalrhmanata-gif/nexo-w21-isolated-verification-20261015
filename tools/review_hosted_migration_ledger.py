@@ -108,6 +108,10 @@ def membership_paths_form_valid_chain(paths):
             return False
     return True
 
+def truthy_db(value):
+    return value is True or (isinstance(value, str) and value.strip().lower() in {"true", "t", "on", "1"})
+
+
 def acl_entries_have_valid_shape(entries, *, inherited=False, column=False):
     """Validate explicit ACL projection fields before interpreting provenance."""
     if not isinstance(entries, list):
