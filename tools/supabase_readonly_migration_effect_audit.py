@@ -222,7 +222,6 @@ def membership_paths_form_valid_chain(paths):
     if not isinstance(paths, list) or not paths:
         return False
     roots = []
-    seen = set()
     for item in paths:
         if not isinstance(item, dict):
             return False
@@ -241,10 +240,6 @@ def membership_paths_form_valid_chain(paths):
                 return False
         elif not isinstance(member, str) or not member:
             return False
-        key = (name, depth, member, inherits, can_set)
-        if key in seen:
-            return False
-        seen.add(key)
     if len(roots) != 1:
         return False
     for item in paths:
