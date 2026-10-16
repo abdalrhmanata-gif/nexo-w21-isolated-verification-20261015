@@ -131,6 +131,7 @@ class ReadOnlyEffectAuditTests(unittest.TestCase):
         sql_path = root / "supabase" / "tests" / "hosted_readonly_w86_acl_provenance_query.sql"
         sql = sql_path.read_text(encoding="utf-8")
         self.assertEqual(sql.count("AND rp.depth > 0"), 2)
+        self.assertEqual(sql.count("'all_membership_edges_set_role', rp.can_set_role"), 2)
         self.assertNotIn("rp.depth = 0 OR rp.inherits_all OR rp.can_set_role", sql)
         self.assertIn("'service_role_effective_privileges'", sql)
         self.assertIn("'table_acl_entries'", sql)
