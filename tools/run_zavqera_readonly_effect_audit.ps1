@@ -49,7 +49,7 @@ try {
         Write-Warning "Offline reviewer returned $reviewExitCode. Preserve the evidence for review; do not apply hosted changes."
     }
 
-    $evidenceZip = "$auditDir.zip"
+    $evidenceZip = "$($auditDir).zip"
     if (Test-Path $evidenceZip) {
         Remove-Item -LiteralPath $evidenceZip -Force
     }
