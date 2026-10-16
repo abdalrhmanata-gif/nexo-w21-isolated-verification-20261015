@@ -117,10 +117,10 @@ The negative control is still **disposable/local-only**. It reproduces the ACL s
 
 ## Verification addendum — inherited-role fail-closed guard (2026-10-16)
 
-The W86 candidate now performs a recursive role-membership/ACL preflight **before any REVOKE or GRANT**. It has no arbitrary depth cutoff; cycle detection prevents repeated role traversal. If a parent role on an inheritable membership path has table-level or column-level ACL entries on `public.agent_executions`, the migration raises an explicit exception before changing ACLs. This is intentionally fail-closed: revoking direct grants from `service_role` cannot remove a grant inherited from another role.
+The W86 candidate now performs a recursive role-membership/ACL preflight **before any REVOKE or GRANT**. It has no arbitrary depth cutoff; cycle detection prevents repeated role traversal. If a parent role has table-level or column-level ACL entries reachable through either automatic `INHERIT` or a `SET ROLE` membership path, the migration raises an explicit exception before changing ACLs. This is intentionally fail-closed: revoking direct grants from `service_role` cannot remove privileges available through a parent role.
 
-The disposable W80 workflow deliberately seeded `w86_acl_probe_parent`, granted it to `service_role WITH INHERIT TRUE`, then granted table UPDATE and column SELECT. The read-only provenance query correctly returned `W86_ACL_PROVENANCE_INHERITED_ACL_PASS`. The migration then exited nonzero with the expected message:
-`W86 refused: service_role inherits agent_executions privileges from parent roles: column id SELECT via role w86_acl_probe_parent; table UPDATE via role w86_acl_probe_parent`.
+The disposable W80 workflow deliberately seeded `w86_acl_probe_parent`, granted it to `service_role WITH INHERIT FALSE, SET TRUE`, then granted table UPDATE and column SELECT. The read-only provenance query correctly returned `W86_ACL_PROVENANCE_SET_ROLE_ACL_PASS`; effective `service_role` UPDATE was false, but the parent-role ACL path remained available via `SET ROLE`. W86 exited nonzero with the expected message before any REVOKE or GRANT:
+`W86 refused: service_role can obtain agent_executions privileges via parent roles (INHERIT or SET ROLE): column id SELECT via role w86_acl_probe_parent; table UPDATE via role w86_acl_probe_parent`.
 The workflow verified this was an expected guard rejection, removed the disposable role fixture, reapplied W86 successfully, and reran the W66/W86 tests.
 
 **Latest full local PostgreSQL 17.11 evidence:**
@@ -137,3 +137,14 @@ This proves fail-closed handling in the disposable stack only. **Before any host
 ## Hosted evidence gate updated — 2026-10-16
 
 The current capture procedure is documented in [the 13-query audit runbook](https://github.com/abdalrhmanata-gif/nexo-w21-isolated-verification-20261015/blob/codex/migration-ledger-provenance-20261015/docs/ZAVQERA_HOSTED_MIGRATION_EFFECT_AUDIT_RUNBOOK_2026-10-15.md) and implemented in [audit PR #2](https://github.com/abdalrhmanata-gif/nexo-w21-isolated-verification-20261015/pull/2). Query 13 is pinned at SHA-256 `700939087d9708fc3d6a72ebe10064b4c0db7f5d26b08556c7e641e1aa09a919`; it records service_role membership paths and inherited table/column ACLs. Local W80 validation passed on `f4d7fed423739db0d39ba576ca455c5d4a182169`, but the old hosted ZIP remains 12-query evidence. A fresh 13-query capture under the verified read-only Development session is still required. No hosted repair is authorized by these tests.
+
+
+### SET ROLE-only negative control — 2026-10-16
+
+- W80 isolated PostgreSQL 17 run [38865144782](https://github.com/abdalrhmanata-gif/nexo-w21-isolated-verification-20261015/actions/runs/38865144782) — **SUCCESS** on candidate/workflow SHA `a5f899ffff202eb0eda7954cec9ad12d82d252dc`.
+- Artifact [12031370300](https://github.com/abdalrhmanata-gif/nexo-w21-isolated-verification-20261015/actions/runs/38865144782/artifacts/12031370300), SHA-256 `8bccecd95878f0fa56309b01f0118d7f19fdc9eccbbdb5180ed5947f9775bc98`.
+- Membership fixture used `INHERIT FALSE, SET TRUE`. Query 13 observed `all_edges_inherit=false`, `all_edges_set_role=true`; the JSON assertion returned `W86_ACL_PROVENANCE_SET_ROLE_PASS` (the workflow's recorded marker is `W86_ACL_PROVENANCE_SET_ROLE_ACL_PASS`).
+- The migration's guard rejected the parent-role ACL path before ACL mutation (expected exit code 3). The disposable role was removed, W86 then reapplied successfully, and W66 11/11 plus W86 20/20 passed after cleanup. Full chain, W84/W85/W44/W46/W80 tests, read-only query smoke, and disposable cleanup also passed.
+- Flutter CI: [run 38865152105](https://github.com/abdalrhmanata-gif/nexo-w21-isolated-verification-20261015/actions/runs/38865152105) — **SUCCESS**.
+
+The hosted query 13 now also reports whether each membership path supports `SET ROLE`. Updated query digest in the audit branch: `700939087d9708fc3d6a72ebe10064b4c0db7f5d26b08556c7e641e1aa09a919`. The old hosted evidence remains a 12-query capture; a fresh 13-query capture is still mandatory.
