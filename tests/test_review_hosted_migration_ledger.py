@@ -312,6 +312,33 @@ class HostedLedgerReviewTests(unittest.TestCase):
         with self.assertRaises(review.EvidenceError):
             review.reconcile(self.evidence, self.repo)
 
+    def test_membership_reachability_cannot_mix_edge_modes(self):
+        paths = [
+            {
+                "role_name": "service_role", "depth": 0, "member_of_role": None,
+                "all_edges_inherit": True, "all_edges_set_role": True,
+                "edge_inherit_option": None, "edge_set_option": None,
+                "reachable_via_membership_options": True,
+            },
+            {
+                "role_name": "set_only_parent", "depth": 1, "member_of_role": "service_role",
+                "all_edges_inherit": False, "all_edges_set_role": True,
+                "edge_inherit_option": False, "edge_set_option": True,
+                "reachable_via_membership_options": True,
+            },
+            {
+                "role_name": "inherit_only_grandparent", "depth": 2, "member_of_role": "set_only_parent",
+                "all_edges_inherit": False, "all_edges_set_role": False,
+                "edge_inherit_option": True, "edge_set_option": False,
+                "reachable_via_membership_options": False,
+            },
+        ]
+        self.assertTrue(review.membership_paths_form_valid_chain(paths))
+        # Old recurrence used parent.reachable + the current INHERIT edge and
+        # incorrectly treated this mixed SET-then-INHERIT path as reachable.
+        paths[2]["reachable_via_membership_options"] = True
+        self.assertFalse(review.membership_paths_form_valid_chain(paths))
+
     def test_rejects_disconnected_or_impossible_membership_paths(self):
         original = json.loads((self.evidence / "query_13.json").read_text(encoding="utf-8"))
         mutations = (
