@@ -17,8 +17,9 @@ import sys
 PROJECT_REF = "mrwmmbytcymqgwvcoywd"
 PROJECT_NAME = "ZAVQERA Development"
 PROJECT_REGION = "eu-west-1"
-QUERY_COUNT = 12
+QUERY_COUNT = 13
 PACK_SHA256 = "a7aba3461786dbb5854f71dc4f87b7e0498d12509add535ab3df4a7ec231a284"
+ACL_PROVENANCE_SHA256 = "014bd621768fd5f85dca25682568b484539683ab41d8ff6d2385b4068d80c05b"
 MIGRATION = re.compile(r"^(?P<version>[0-9]+)_(?P<name>.+)\.sql$")
 ROLES = ("anon", "authenticated", "service_role", "postgres")
 PRIVILEGES = ("SELECT", "INSERT", "UPDATE", "DELETE", "TRUNCATE", "REFERENCES", "TRIGGER", "MAINTAIN")
@@ -69,6 +70,10 @@ def verify_evidence(directory):
         raise EvidenceError("requires a completed 12-query CAPTURED_FOR_MANUAL_REVIEW run")
     if summary.get("query_pack_sha256") != PACK_SHA256:
         raise EvidenceError("query pack SHA-256 mismatch")
+    if summary.get("acl_provenance_query_sha256") != ACL_PROVENANCE_SHA256:
+        raise EvidenceError("ACL provenance query SHA-256 mismatch")
+    if metadata.get("acl_provenance_query_sha256") != ACL_PROVENANCE_SHA256:
+        raise EvidenceError("run metadata ACL provenance query SHA-256 mismatch")
     if summary.get("access_token_saved") is not False or metadata.get("token_saved") is not False:
         raise EvidenceError("token-safety metadata missing or unexpected")
     if metadata.get("project_ref") != PROJECT_REF:
@@ -162,6 +167,28 @@ def reconcile(directory, repo_root):
     summary, metadata, identity = verify_evidence(directory)
     ledger = rows_from(read_json(directory / "query_11.json").get("response"))
     acl_rows = rows_from(read_json(directory / "query_12.json").get("response"))
+    provenance_rows = rows_from(read_json(directory / "query_13.json").get("response"))
+    if len(provenance_rows) != 1 or not isinstance(provenance_rows[0].get("w86_acl_provenance"), dict):
+        raise EvidenceError("query 13 ACL provenance result is missing or malformed")
+    provenance = provenance_rows[0]["w86_acl_provenance"]
+    relation = provenance.get("relation")
+    membership_paths = provenance.get("service_role_membership_paths")
+    effective_privileges = provenance.get("service_role_effective_privileges")
+    inherited_table = provenance.get("service_role_inherited_table_acl_entries")
+    inherited_column = provenance.get("service_role_inherited_column_acl_entries")
+    if (
+        provenance.get("probe_name") != "w86_acl_provenance_v1"
+        or provenance.get("current_user") != "supabase_read_only_user"
+        or provenance.get("session_user") != "supabase_read_only_user"
+        or not truthy_db(provenance.get("transaction_read_only"))
+        or not isinstance(relation, dict) or relation.get("exists") is not True
+        or not isinstance(membership_paths, list)
+        or not isinstance(effective_privileges, dict)
+        or set(effective_privileges) != set(PRIVILEGES)
+        or not isinstance(inherited_table, list)
+        or not isinstance(inherited_column, list)
+    ):
+        raise EvidenceError("query 13 ACL provenance payload failed role/read-only/shape checks")
     if not ledger:
         raise EvidenceError("hosted migration ledger returned zero rows")
     hosted = []
@@ -220,6 +247,13 @@ def reconcile(directory, repo_root):
         "captured_at_utc": metadata.get("observed_at_utc"),
         "project": identity,
         "query_pack_sha256": summary["query_pack_sha256"],
+        "acl_provenance_query_sha256": ACL_PROVENANCE_SHA256,
+        "service_role_membership_paths": membership_paths,
+        "service_role_effective_privileges": effective_privileges,
+        "service_role_inherited_table_acl_rows": len(inherited_table),
+        "service_role_inherited_column_acl_rows": len(inherited_column),
+        "service_role_inherited_table_acl_entries": inherited_table,
+        "service_role_inherited_column_acl_entries": inherited_column,
         "source_checkout_head_sha": source_identity["source_checkout_head_sha"],
         "source_migration_manifest_sha256": source_identity["source_migration_manifest_sha256"],
         "source_migrations_worktree_clean": source_identity["source_migrations_worktree_clean"],
@@ -240,6 +274,7 @@ def reconcile(directory, repo_root):
             "The migration ledger records version/name metadata, not historical SQL bytes.",
             "The source migration manifest SHA-256 covers sorted filename/file-SHA pairs and identifies migration contents even if Git metadata is unavailable.",
             "The source checkout HEAD and dirty flag are local Git metadata; the manifest is required to identify the actual source bytes.",
+            "Direct table/column revokes do not remove privileges inherited from parent roles; any inherited ACL row is a blocker for the current W86 candidate and requires owner-reviewed resolution.",
             "Effective ACLs are a signal, not complete proof of reachability; review RLS, memberships, function ownership and trusted writers separately.",
             "The observed role has rolbypassrls=true; do not use this evidence credential for application-row reads.",
             "This is offline analysis only; it performs no SQL, hosted writes, migration repair, or deployment.",
@@ -262,6 +297,8 @@ def render_markdown(result):
         f"- Exact version/name matches: **{result['exact_version_name_matches']}**",
         f"- Same-name/different-version candidates: **{len(result['same_name_different_version'])}**",
         f"- Effective ACL rows on public.agent_executions: **{result['effective_table_privilege_rows']}**",
+        f"- service_role inherited table ACL rows: **{result['service_role_inherited_table_acl_rows']}**",
+        f"- service_role inherited column ACL rows: **{result['service_role_inherited_column_acl_rows']}**",
         f"- Stored ACL rows: **{result['stored_table_acl_rows']}**",
         "",
         "## Same-name/different-version candidates",
