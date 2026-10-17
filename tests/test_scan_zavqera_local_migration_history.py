@@ -51,6 +51,7 @@ class LocalMigrationHistoryScanTests(unittest.TestCase):
         matches = [item for item in result["candidates"] if item["path"] == TARGET and item["commit_sha"] == commit]
         self.assertEqual(len(matches), 1)
         self.assertEqual(matches[0]["sql_sha256"], hashlib.sha256(SQL_BYTES).hexdigest())
+        self.assertEqual(matches[0]["file_size_bytes"], len(SQL_BYTES))
         self.assertEqual(matches[0]["migration_stem"], "w30_reconstruct_missing_w5_history_tables")
         self.assertNotIn("sql_text", matches[0])
         self.assertFalse(result["sql_content_emitted"])
