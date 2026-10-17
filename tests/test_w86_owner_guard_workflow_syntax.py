@@ -68,7 +68,7 @@ class W86OwnerPathWorkflowSyntaxTests(unittest.TestCase):
         self.assertIn("W86_AFTER_UNTRUSTED_OWNER_${owner_role^^}_CLEANUP", helper)
         self.assertIn("supabase/tests/w86_agent_executions_acl_correction.sql 23", helper)
         self.assertIn("run_untrusted_owner_mixed_path_negative_control", helper)
-        self.assertIn("GRANT w86_acl_untrusted_owner_mixed_intermediate_probe TO authenticated WITH INHERIT FALSE, SET TRUE;", helper)
+        self.assertIn("GRANT ${intermediate_role} TO authenticated WITH INHERIT FALSE, SET TRUE;", helper)
         self.assertIn("GRANT ${owner_role} TO ${intermediate_role} WITH INHERIT TRUE, SET FALSE;", helper)
         self.assertIn("W86_UNTRUSTED_OWNER_MIXED_PATH_REACHABILITY_PASS", helper)
         self.assertIn("W86_UNTRUSTED_OWNER_MIXED_PATH_NO_MUTATION_PASS", helper)
