@@ -176,6 +176,18 @@ def validate(
             if offline_approval == "APPROVED_FOR_OFFLINE_DESIGN" and (reviewer in ("", "UNASSIGNED") or not rationale):
                 errors.append(f"{rid}: offline_design_approval_requires_reviewer_and_rationale")
 
+        for field in ("verified_source_sql_sha256", "verified_deployed_sql_sha256", "evidence_artifact_sha256"):
+            value = row.get(field, "")
+            if value and not valid_sha(value):
+                errors.append(f"{rid}: {field}_must_be_64_hex")
+
+        if disposition == "NAME_VERSION_CONFLICT_RESOLVED" and row.get("metadata_relation") != "SAME_NAME_DIFFERENT_VERSION":
+            errors.append(f"{rid}: NAME_VERSION_CONFLICT_RESOLVED_requires_conflict_row")
+        if disposition == "HOSTED_ONLY_SOURCE_RECOVERED" and row.get("metadata_relation") != "HOSTED_TUPLE_ABSENT_FROM_SOURCE":
+            errors.append(f"{rid}: HOSTED_ONLY_SOURCE_RECOVERED_requires_hosted_only_row")
+        if disposition == "SOURCE_ONLY_REVIEWED" and row.get("metadata_relation") != "SOURCE_TUPLE_ABSENT_FROM_HOSTED_LEDGER":
+            errors.append(f"{rid}: SOURCE_ONLY_REVIEWED_requires_source_only_row")
+
         if disposition in SOURCE_EVIDENCE_DISPOSITIONS:
             for field in (
                 "authoritative_historical_source_uri",
