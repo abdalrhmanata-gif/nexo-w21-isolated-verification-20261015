@@ -175,3 +175,60 @@ The historical-source scan report was expanded/normalized at commit `69cea504b73
 - Owner-scoped code search for six hosted-only migration names returned zero indexed results; this is only supporting negative evidence because code search is visibility/index limited.\n- Actions run scan now covers pages 1–30 (3,000 records); selected W21 artifact inventories include Oct 10–15 and still contain no SQL source archive.
 
 No authoritative historic SQL has been recovered. The result remains UNKNOWN; no hosted write or ledger edit is authorized. Exact-current-head CI must be rechecked for the latest documentation-only commit before asserting final validation.
+
+## 11. Conversation transfer checkpoint — final verified state for 2026-10-17 (18:30 Europe/Oslo)
+
+**Read this section first in a new chat, then read the complete execution checkpoint and the reports linked below.** This section supersedes stale HEAD/run/state descriptions in earlier parts of this handoff; older text is retained as project history, not erased.
+
+### Current repository state
+
+- Isolated audit repo: https://github.com/abdalrhmanata-gif/nexo-w21-isolated-verification-20261015
+- Audit/provenance PR #2: https://github.com/abdalrhmanata-gif/nexo-w21-isolated-verification-20261015/pull/2 — OPEN / DRAFT / UNMERGED.
+- Current PR #2 HEAD: `4a7f0d025764c1e81a95d02bd0f3481902a02426`, branch `codex/migration-ledger-provenance-20261015`.
+- Exact-HEAD Flutter CI push run [39049023551 — SUCCESS](https://github.com/abdalrhmanata-gif/nexo-w21-isolated-verification-20261015/actions/runs/39049023551) and PR run [39049027426 — SUCCESS](https://github.com/abdalrhmanata-gif/nexo-w21-isolated-verification-20261015/actions/runs/39049027426). These completed successful MVP verification, controlled-adapter tests, web tests and web typecheck.
+- W86 candidate PR #1: https://github.com/abdalrhmanata-gif/nexo-w21-isolated-verification-20261015/pull/1 — OPEN / DRAFT / UNMERGED; HEAD `0dc44842f9eaa25d0f34628b1c5c3de0741b41cf`, base `codex/w80-forward-correction-20261015`.
+- Do not merge either audit PR. Original repo PR #39 and Issue #23 remain open; do not modify them as an incidental part of the database audit.
+- Persistence comment with the capture review and gated remediation plan: https://github.com/abdalrhmanata-gif/nexo-w21-isolated-verification-20261015/pull/2#issuecomment-6235818612. The source-recovery expanded report/previous progress is also recorded in PR #2 comments and `docs/ZAVQERA_HISTORICAL_MIGRATION_SOURCE_RECOVERY_SCAN_2026-10-17.md`.
+
+### Fresh hosted Development capture — integrity and findings
+
+- Local archive: `/mnt/data/20261017T151516202599Z.zip`
+- Archive SHA-256: `9cee349552ddc4daf3a30c109ac570963313d35915b11308130916cb4773d79d`
+- Capture time: `2026-10-17T15:15:16.204988+00:00` UTC; ZIP CRC passed; query_01.json through query_13.json all present.
+- Target: `ZAVQERA Development`, project ref `mrwmmbytcymqgwvcoywd`, region `eu-west-1`, status `ACTIVE_HEALTHY`, PostgreSQL 17.6 (`server_version_num=170006`).
+- Base query pack SHA-256: `a7aba3461786dbb5854f71dc4f87b7e0498d12509add535ab3df4a7ec231a284`.
+- Query 13 SHA-256: `806c1fbc1842860387dea71cdcefc6d02edf8e4f23ad1aa07ece96c1a1a8312b`.
+- Capture role's read-only gate passed; `token_saved=false`. It has `rolbypassrls=true`; keep use limited to the pinned metadata-only audit, never application-row reads.
+
+**W86 preflight — one narrow prerequisite passed, not authorization:** query 13 observed no parent-role ACL rows reachable from `service_role`, no `service_role` path to relation owner, and no membership path to `authenticated`. Thus the W86 parent-role/owner-path gate is `NO_PARENT_ROLE_ACL_OBSERVED`. Direct grants remain and the broader schema/source issues are unresolved.
+
+**Remaining hosted Development drift:**
+- `service_role` has direct/effective `SELECT, INSERT, UPDATE, DELETE, TRUNCATE, REFERENCES, TRIGGER, MAINTAIN` on `public.agent_executions`; RLS is enabled but not forced.
+- Missing relations `public.mission_authority_budgets` and `public.mission_authority_budget_reservations`.
+- 26 expected columns absent; 10/11 queried expected constraints absent; all 8 queried expected indexes absent; `agent_execution_success_receipt_guard` trigger absent.
+- Routine expectations: 17/40 match, 23 mismatch; 19 expected signatures absent and 4 legacy signatures expected absent remain present. Legacy `reserve_ai_generation(text)` SECURITY DEFINER routines and old six-argument Research completion overloads require owner review of body, dependency and ACL. Signature drift alone is not proof of exploitability; do not drop/revoke based on names alone.
+- Eight explicit default function EXECUTE ACL rows appear for creators `postgres` and `supabase_admin`. Effective private-schema USAGE projection: anon=false, authenticated=true, service_role=true.
+- Migration provenance: 89 checked-in source migration files vs 74 hosted ledger rows; 46 exact version/name matches; 22 same-name/different-version conflicts; 6 hosted-only names; 43 source tuples absent from the hosted ledger. The 22 conflict tuples overlap the set of 43 unmatched source tuples. The ledger only records version/name metadata and does not establish equality of deployed SQL bytes.
+
+### Historical SQL source recovery was expanded, but not achieved
+
+- Report: `docs/ZAVQERA_HISTORICAL_MIGRATION_SOURCE_RECOVERY_SCAN_2026-10-17.md` (see PR branch); it includes the exact conflicts/hosted-only names and the bounded search scopes.
+- Scan expanded to 3,000 Actions run records (pages 1–30, timestamp range recorded in the report), sampled W21 artifacts and W25 runs, visible branch-head migration trees, tag refs, migration import history and owner-scoped exact-name searches. No authoritative historical SQL source archive was recovered. This is a bounded public/repo/CI search, **not proof that SQL never existed**, and not exhaustive of private owner-controlled clones, reflogs, backups, deployment archives or other external stores.
+- The original Nexo tag query returned zero visible tags. PR #12 remains open/unmerged; migration files appear as the initial imported source rather than recovered historical renamed bytes. Treat every unresolved conflict and all six hosted-only names as `UNKNOWN`; do not reconstruct old SQL from adjacent/current migrations or edit the hosted ledger to force a match.
+
+### Latest persistent documents
+
+1. `docs/ZAVQERA_HOSTED_13_QUERY_CAPTURE_REVIEW_2026-10-17.md` — offline capture facts and full observed findings.
+2. `docs/ZAVQERA_HOSTED_REMEDIATION_GATES_2026-10-17.md` — controlled sequence: historic provenance, owner review, offline remediation design, isolated acceptance, then separate execution authorization. Planning only; contains no authorization to execute hosted SQL.
+3. `docs/ZAVQERA_HISTORICAL_MIGRATION_SOURCE_RECOVERY_SCAN_2026-10-17.md` — expanded source recovery attempts and explicit limits.
+4. `docs/ZAVQERA_NEXT_CHAT_START_HERE_2026-10-16.md` — this handoff, with historical sections retained and this section authoritative for current status.
+
+### Next steps — continue without re-asking already answered questions
+
+1. Read the full local portable checkpoint `ZAVQERA_EXECUTION_CHECKPOINT_2026-10-17_UPDATED.md`, not just this summary, and preserve the history/addenda. Then inspect the local query ZIP and the reports above if their contents are needed.
+2. Continue *only* from evidence-backed, non-mutating work. The highest-value unresolved task is to recover authoritative history from a database owner or owner-controlled original clone/reflog/backup/deployment bundle; any recovered SQL must have a trusted provenance chain and match a deployment identity. Keep unresolved rows `UNKNOWN`.
+3. Require an independent database-owner review of the 13-query capture and exact remediation plan. Do not run SQL, apply W86 or any other migration, modify the hosted migration ledger, or change privileges/functions in hosted Development/Main.
+4. Preserve PostgreSQL 17 corrected mixed-membership reachability semantics. The path `service_role --SET ROLE--> intermediate --INHERIT--> parent` can be reachable even when homogeneous cumulative flags are both false; do not revert the recurrence to homogeneous-only logic.
+5. Keep `hosted_write_authorized=false`, `TRUSTED_DISPATCH_ADAPTERS` empty/fail-closed, release **NO-GO**, PR #1/#2 open/draft/unmerged. No paid services, no Codex credits, no credentials in chat, and no Main/Production changes.
+
+No hosted writes, migrations, deployment or secret changes were made during the 13-query review or historical-source scan.
