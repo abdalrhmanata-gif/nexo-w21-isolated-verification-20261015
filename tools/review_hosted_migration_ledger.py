@@ -202,17 +202,30 @@ def source_migrations(repo_root):
     return rows
 
 
-def source_provenance(repo_root, source_rows):
-    """Return deterministic local source identities without network access.
+def lf_normalized_sql_bytes(raw):
+    """Normalize text-file line endings for cross-platform provenance comparison."""
+    return raw.replace(b"\r\n", b"\n").replace(b"\r", b"\n")
 
-    The migration manifest hashes sorted filename/file-SHA pairs, so it remains
-    informative even when the checkout is dirty or Git metadata is unavailable.
+
+def source_provenance(repo_root, source_rows):
+    """Return raw and LF-normalized source identities without network access.
+
+    The raw manifest preserves the exact bytes in this checkout. The LF-normalized
+    manifest provides a stable comparison across Windows CRLF and Unix LF checkouts.
     """
+    ordered_rows = sorted(source_rows, key=lambda row: row["file"])
     manifest_text = "".join(
         f"{row['file']}\t{row['sha256']}\n"
-        for row in sorted(source_rows, key=lambda row: row["file"])
+        for row in ordered_rows
     )
     manifest_sha256 = hashlib.sha256(manifest_text.encode("utf-8")).hexdigest()
+
+    migration_directory = repo_root / "supabase" / "migrations"
+    normalized_manifest_text = "".join(
+        f"{row['file']}\t{hashlib.sha256(lf_normalized_sql_bytes((migration_directory / row['file']).read_bytes())).hexdigest()}\n"
+        for row in ordered_rows
+    )
+    normalized_manifest_sha256 = hashlib.sha256(normalized_manifest_text.encode("utf-8")).hexdigest()
 
     head = None
     worktree_clean = None
@@ -248,6 +261,7 @@ def source_provenance(repo_root, source_rows):
     return {
         "source_checkout_head_sha": head,
         "source_migration_manifest_sha256": manifest_sha256,
+        "source_migration_manifest_lf_normalized_sha256": normalized_manifest_sha256,
         "source_migrations_worktree_clean": worktree_clean,
     }
 
@@ -516,6 +530,7 @@ def reconcile(directory, repo_root):
         "service_role_inherited_column_acl_entries": inherited_column,
         "source_checkout_head_sha": source_identity["source_checkout_head_sha"],
         "source_migration_manifest_sha256": source_identity["source_migration_manifest_sha256"],
+        "source_migration_manifest_lf_normalized_sha256": source_identity["source_migration_manifest_lf_normalized_sha256"],
         "source_migrations_worktree_clean": source_identity["source_migrations_worktree_clean"],
         "source_migration_count": len(source),
         "hosted_ledger_row_count": len(hosted),
@@ -532,8 +547,9 @@ def reconcile(directory, repo_root):
         "interpretation": [
             "Same-name/different-version is not proof that deployed SQL matches checked-in SQL.",
             "The migration ledger records version/name metadata, not historical SQL bytes.",
-            "The source migration manifest SHA-256 covers sorted filename/file-SHA pairs and identifies migration contents even if Git metadata is unavailable.",
-            "The source checkout HEAD and dirty flag are local Git metadata; the manifest is required to identify the actual source bytes.",
+            "The raw source migration manifest SHA-256 covers sorted filename/raw-file-SHA pairs for the current checkout; its digest can differ across Windows CRLF and Unix LF worktrees.",
+            "The LF-normalized source migration manifest SHA-256 covers sorted filename/SHA pairs after canonicalizing CRLF and CR to LF; use it for cross-platform checkout comparison.",
+            "The source checkout HEAD and dirty flag are local Git metadata; neither by itself proves historical deployed SQL-byte equality.",
             "Direct table/column revokes do not remove privileges inherited from parent roles; any inherited ACL row is a blocker for the current W86 candidate and requires owner-reviewed resolution.",
             "W86 grants SELECT to authenticated after its preflight; any reachable INHERIT/SET ROLE path from service_role to authenticated is independently a blocker, even if that role has no ACL entry in the current capture.",
             "A service_role membership path to the relation owner with INHERIT or SET ROLE enabled, or service_role itself as relation owner, is a separate blocker because ownership authority can restore ACLs even when owner ACL rows are absent.",
@@ -553,7 +569,8 @@ def render_markdown(result):
         f"- Captured UTC: {result['captured_at_utc']}",
         f"- Project: {result['project'].get('name')} ({result['project'].get('id')}), region {result['project'].get('region')}",
         f"- Source checkout HEAD: `{result['source_checkout_head_sha'] or 'UNAVAILABLE'}`",
-        f"- Source migration manifest SHA-256: `{result['source_migration_manifest_sha256']}`",
+        f"- Source migration manifest SHA-256 (raw checkout bytes): `{result['source_migration_manifest_sha256']}`",
+        f"- Source migration manifest SHA-256 (LF-normalized): `{result['source_migration_manifest_lf_normalized_sha256']}`",
         f"- Migration files clean in Git worktree: **{result['source_migrations_worktree_clean'] if result['source_migrations_worktree_clean'] is not None else 'UNKNOWN'}**",
         f"- Source files: **{result['source_migration_count']}**; hosted ledger rows: **{result['hosted_ledger_row_count']}**",
         f"- Exact version/name matches: **{result['exact_version_name_matches']}**",
@@ -616,6 +633,7 @@ def main(argv=None):
         "hosted_tuples_missing_from_source": len(result["hosted_tuples_missing_from_source"]),
         "source_checkout_head_sha": result["source_checkout_head_sha"],
         "source_migration_manifest_sha256": result["source_migration_manifest_sha256"],
+        "source_migration_manifest_lf_normalized_sha256": result["source_migration_manifest_lf_normalized_sha256"],
         "source_migrations_worktree_clean": result["source_migrations_worktree_clean"],
         "effective_nonowner_write_grants": len(result["effective_nonowner_write_grants"]),
         "w86_candidate_parent_acl_gate": result["w86_candidate_parent_acl_gate"],
