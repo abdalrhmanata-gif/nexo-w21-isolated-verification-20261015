@@ -655,7 +655,7 @@ class HostedLedgerReviewTests(unittest.TestCase):
 
         ignore_rule = self.repo / ".gitignore"
         ignore_rule.write_text(
-            "/supabase/migrations/20261017123456_ignored_probe.sql\\n",
+            "/supabase/migrations/20261017123456_ignored_probe.sql\n",
             encoding="utf-8",
         )
         git("init", "-q")
@@ -667,7 +667,7 @@ class HostedLedgerReviewTests(unittest.TestCase):
         self.assertIs(clean["source_migrations_worktree_clean"], True)
 
         ignored_migration = self.repo / "supabase" / "migrations" / "20261017123456_ignored_probe.sql"
-        ignored_migration.write_text("select 77;\\n", encoding="utf-8")
+        ignored_migration.write_text("select 77;\n", encoding="utf-8")
         git("check-ignore", "-q", "supabase/migrations/20261017123456_ignored_probe.sql")
 
         result = review.reconcile(self.evidence, self.repo)
