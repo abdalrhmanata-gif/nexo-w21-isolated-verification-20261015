@@ -153,7 +153,7 @@ No hosted database was modified during the capture review or planning. TRUSTED_D
 
 New report committed on the same audit branch:
 - `docs/ZAVQERA_HISTORICAL_MIGRATION_SOURCE_RECOVERY_SCAN_2026-10-17.md`
-- Commit: `4ce56b22f08e768a8ddba7c92a482b9559dcf4ce`
+- Initial report commit: `4ce56b22f08e768a8ddba7c92a482b9559dcf4ce`; expanded and normalized final scan report: `69cea504b73165f58ab40719a210c8484319ab32`.
 
 This pass went beyond exact hosted filename lookups:
 - Recursively scanned all 23 visible `abdalrhmanata-gif/Nexo` branch-head trees. All scans completed with `truncated=false`.
@@ -161,7 +161,7 @@ This pass went beyond exact hosted filename lookups:
 - None of the six hosted-only names appeared in those branch-head trees.
 - Queried commit history for all 22 current-source paths on `zavqera/ai-planner-integration`: 21 paths return one commit; W50 returns two commits for the same current source path.
 - The earliest bulk-integration commit for W4 table privilege hardening, W7, W8, W9, W9.1 and W10 is `772f011624c199adc021a61d039a4cf13e9a3740` (“merge: stage ZAVQERA integration without historical artifact”); these files are marked added. Its parent `fcac980c9909c1a083007ed120d4742584fbcb4e` has no `supabase/migrations` files.
-- Bounded Actions search: 2,000 run records (pages 1–20 of 10,590 records, spanning 2026-10-17T04:41:56Z to 2026-10-12T10:37:25Z). Sampled W21 artifacts are only 326–328 byte evidence and 661–743 byte browser-diagnostics archives; three sampled W25 runs have no artifacts. No historic SQL source archive was identified in these checks.
+- Bounded Actions search: 3,000 run records (pages 1–30 of 10,590 records, spanning 2026-10-17T04:41:56Z to 2026-10-10T16:34:02Z). Sampled W21 evidence archives were 243 bytes in sampled Oct 10 runs and 326–328 bytes in sampled Oct 11–15 runs; sampled browser diagnostics were 660–743 bytes. Three sampled W25 runs had no artifacts. No historic SQL source archive was identified in these checks.
 
 **Result: no authoritative historical SQL recovered.** This is a bounded public-branch-head/Actions inventory, not proof that no external/private/local archive exists. The 22 timestamp conflicts and six hosted-only names remain **UNKNOWN** until owner-controlled authoritative source/deployment provenance is produced.
 
@@ -169,9 +169,9 @@ Keep `hosted_write_authorized=false`, do not edit the hosted migration ledger, a
 
 ## 12. Follow-up origin-reference search (2026-10-17)
 
-The historical-source scan report was further updated in commit `66f9f918f08257e0510a17193574ef9fa995de2e` to include three additional bounded checks:
+The historical-source scan report was expanded/normalized at commit `69cea504b73165f58ab40719a210c8484319ab32`, incorporating the following bounded checks:
 - GitHub matching tag refs in original `Nexo`: zero visible tags.
 - Original PR #12 (“Integrate ZAVQERA W4-W16 baseline into main (clean, artifact-free)”) remains open/unmerged; the early migration import commit added the current migration paths rather than providing historical-renamed source bytes. PR #12 was read-only and not modified.
-- Owner-scoped code search for six hosted-only migration names returned zero indexed results; this is only supporting negative evidence because code search is visibility/index limited.
+- Owner-scoped code search for six hosted-only migration names returned zero indexed results; this is only supporting negative evidence because code search is visibility/index limited.\n- Actions run scan now covers pages 1–30 (3,000 records); selected W21 artifact inventories include Oct 10–15 and still contain no SQL source archive.
 
 No authoritative historic SQL has been recovered. The result remains UNKNOWN; no hosted write or ledger edit is authorized. Exact-current-head CI must be rechecked for the latest documentation-only commit before asserting final validation.
