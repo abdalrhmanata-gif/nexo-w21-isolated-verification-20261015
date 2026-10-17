@@ -13,6 +13,8 @@ on:
       - 'tests/test_zavqera_migration_owner_intake.py'
       - 'tests/test_scan_zavqera_local_migration_history.py'
       - 'docs/ZAVQERA_HISTORICAL_MIGRATION_SOURCE_RECOVERY_SCAN_2026-10-17.md'
+      - 'docs/ZAVQERA_LIBRARY_ARCHIVE_MIGRATION_SOURCE_RECOVERY_2026-10-17.md'
+      - 'docs/ZAVQERA_LOCAL_MIGRATION_HISTORY_RECOVERY_RUNBOOK_2026-10-17.md'
       - '.github/workflows/zavqera-owner-intake-validation.yml'
   pull_request:
     paths:
@@ -24,6 +26,8 @@ on:
       - 'tests/test_zavqera_migration_owner_intake.py'
       - 'tests/test_scan_zavqera_local_migration_history.py'
       - 'docs/ZAVQERA_HISTORICAL_MIGRATION_SOURCE_RECOVERY_SCAN_2026-10-17.md'
+      - 'docs/ZAVQERA_LIBRARY_ARCHIVE_MIGRATION_SOURCE_RECOVERY_2026-10-17.md'
+      - 'docs/ZAVQERA_LOCAL_MIGRATION_HISTORY_RECOVERY_RUNBOOK_2026-10-17.md'
       - '.github/workflows/zavqera-owner-intake-validation.yml'
   workflow_dispatch:
 
