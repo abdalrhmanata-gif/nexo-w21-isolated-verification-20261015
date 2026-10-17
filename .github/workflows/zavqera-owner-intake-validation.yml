@@ -1,0 +1,41 @@
+name: ZAVQERA owner intake validation
+
+on:
+  push:
+    branches:
+      - codex/migration-ledger-provenance-20261015
+    paths:
+      - 'docs/ZAVQERA_MIGRATION_OWNER_DECISION_INTAKE_2026-10-17.csv'
+      - 'docs/ZAVQERA_MIGRATION_OWNER_DECISION_INTAKE_README_2026-10-17.md'
+      - 'docs/ZAVQERA_MIGRATION_PROVENANCE_RECONCILIATION_LEDGER_2026-10-17.md'
+      - 'tools/validate_zavqera_migration_owner_intake.py'
+      - 'tests/test_zavqera_migration_owner_intake.py'
+      - '.github/workflows/zavqera-owner-intake-validation.yml'
+  pull_request:
+    paths:
+      - 'docs/ZAVQERA_MIGRATION_OWNER_DECISION_INTAKE_2026-10-17.csv'
+      - 'docs/ZAVQERA_MIGRATION_OWNER_DECISION_INTAKE_README_2026-10-17.md'
+      - 'docs/ZAVQERA_MIGRATION_PROVENANCE_RECONCILIATION_LEDGER_2026-10-17.md'
+      - 'tools/validate_zavqera_migration_owner_intake.py'
+      - 'tests/test_zavqera_migration_owner_intake.py'
+      - '.github/workflows/zavqera-owner-intake-validation.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate-owner-intake:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check out the audited source
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Run structural and tamper-regression tests
+        run: python -m unittest discover -s tests -p 'test_zavqera_migration_owner_intake.py' -v
+      - name: Validate the owner intake with no network access
+        run: python tools/validate_zavqera_migration_owner_intake.py
