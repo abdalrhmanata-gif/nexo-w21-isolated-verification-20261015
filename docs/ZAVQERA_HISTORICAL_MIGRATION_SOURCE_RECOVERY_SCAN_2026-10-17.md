@@ -117,3 +117,10 @@ A targeted scan of 10 selected Library ZIPs found one candidate: `ZAVQERA_W4_DB_
 This does **not** resolve hosted row ZMR-008: source version `20260921180052`, hosted version `20260921180138`. The W4 pack status document says eight W4 migrations were applied to Development but provides no per-migration execution receipt or deployed SQL digest for hosted version `20260921180138`. Keep `NAME_VERSION_CONFLICT` / owner review `PENDING`; deployed byte hash and deployment URI remain unknown. Detailed report: [ZAVQERA_LIBRARY_ARCHIVE_MIGRATION_SOURCE_RECOVERY_2026-10-17.md](ZAVQERA_LIBRARY_ARCHIVE_MIGRATION_SOURCE_RECOVERY_2026-10-17.md).
 
 The selected scan checked 10 ZIP archives / 228 members / all 28 known target stems (10/10 archive integrity checks passed). It is **not** an exhaustive scan of all 110 Library ZIPs. The other known conflicting/hosted-only SQL sources remain unrecovered.
+## Expanded Library ZIP scan — 2026-10-17
+
+The earlier 10-archive sample was extended using the current Library index: all 43 ZIP files dated on/after 2026-09-20 were materialized. The recursive scan checked 43/43 outer ZIP integrity, 180 nested ZIP archives, 12,468 ZIP members and 63,842,487 member-bytes; no read/integrity errors or scanner caps occurred.
+
+Result: two path occurrences in the scanned packs, but one unique target source file/stem/version/hash: `20260921180052_w4_table_privilege_hardening.sql`, LF SHA-256 `3419a01a1b0ea66bd22877f478b61473cf1210006828ea3f28c5c08fb51ef0c8`. One occurrence is from `ZAVQERA_W4_DB_READY_PACK.zip`, and the duplicate occurrence is the same file nested in a prior continuity bundle. No alternative SQL bytes or version for hosted `20260921180138` were recovered.
+
+This remains a bounded scan rather than all of the 111 ZIP files indexed in the Library: archive objects created before 2026-09-20 were outside this expanded window, as were external/private/deleted repos and every possible owner-device clone. Machine report: `ZAVQERA_LIBRARY_ARCHIVE_MIGRATION_SOURCE_SCAN_2026-10-17_EXPANDED.json`. ZMR-008 and the other 21 conflicts/six hosted-only rows remain unresolved for deployed bytes.
