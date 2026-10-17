@@ -643,6 +643,44 @@ class HostedLedgerReviewTests(unittest.TestCase):
             clean["source_migration_manifest_sha256"],
         )
 
+    def test_ignored_untracked_migration_file_is_not_reported_clean(self):
+        if shutil.which("git") is None:
+            self.skipTest("git is unavailable")
+
+        def git(*args):
+            return subprocess.run(
+                ["git", *args], cwd=self.repo, check=True, capture_output=True,
+                text=True, encoding="utf-8", timeout=10,
+            )
+
+        ignore_rule = self.repo / ".gitignore"
+        ignore_rule.write_text(
+            "/supabase/migrations/20261017123456_ignored_probe.sql\\n",
+            encoding="utf-8",
+        )
+        git("init", "-q")
+        git("config", "user.name", "ZAVQERA offline test")
+        git("config", "user.email", "zavqera-test@example.invalid")
+        git("add", ".gitignore", "supabase/migrations")
+        git("commit", "-qm", "test-only migration fixture and ignore rule")
+        clean = review.reconcile(self.evidence, self.repo)
+        self.assertIs(clean["source_migrations_worktree_clean"], True)
+
+        ignored_migration = self.repo / "supabase" / "migrations" / "20261017123456_ignored_probe.sql"
+        ignored_migration.write_text("select 77;\\n", encoding="utf-8")
+        git("check-ignore", "-q", "supabase/migrations/20261017123456_ignored_probe.sql")
+
+        result = review.reconcile(self.evidence, self.repo)
+        self.assertIs(
+            result["source_migrations_worktree_clean"],
+            False,
+            "ignored SQL files are included in the migration manifest and must not be reported as Git-clean",
+        )
+        self.assertNotEqual(
+            result["source_migration_manifest_sha256"],
+            clean["source_migration_manifest_sha256"],
+        )
+
     def test_effective_service_role_write_is_reported(self):
         payload = json.loads((self.evidence / "query_12.json").read_text())
         for row in payload["response"]:
