@@ -853,6 +853,7 @@ jobs:
             local fixture_status=0
             local guard_exit=0
             local no_mutation_status=0
+            local reachability_status=0
             local cleanup_status=0
             local reapply_status=0
             local fixture="${RUNNER_TEMP}/${prefix}_FIXTURE.sql"
@@ -880,8 +881,17 @@ jobs:
             END IF;
           END
           \$revoke_column_acl\$;
-          GRANT ${role_name} TO service_role WITH ${membership_options};
           SQL
+            if [ "${kind}" = "mixed" ]; then
+              cat >> "${fixture}" <<SQL
+          CREATE ROLE w86_acl_owner_mixed_intermediate_probe NOLOGIN;
+          GRANT w86_acl_owner_mixed_intermediate_probe TO service_role WITH INHERIT FALSE, SET TRUE;
+          GRANT ${role_name} TO w86_acl_owner_mixed_intermediate_probe WITH INHERIT TRUE, SET FALSE;
+          GRANT DELETE ON TABLE public.agent_executions TO service_role;
+          SQL
+            else
+              echo "GRANT ${role_name} TO service_role WITH ${membership_options};" >> "${fixture}"
+            fi
             set +e
             docker cp "${fixture}" "${db_container}:/tmp/${prefix}_FIXTURE.sql"
             docker exec "${db_container}" psql -U postgres -d postgres -X -v ON_ERROR_STOP=1 -f "/tmp/${prefix}_FIXTURE.sql" 2>&1 | tee "${RUNNER_TEMP}/${prefix}_FIXTURE_OUTPUT.txt"
@@ -892,6 +902,20 @@ jobs:
               status=1
               owner_path_guard_status=1
             else
+              set +e
+              if [ "${kind}" = "mixed" ]; then
+                set +e
+                docker exec "${db_container}" psql -U postgres -d postgres -X -qAt -v ON_ERROR_STOP=1 -c "SELECT CASE WHEN pg_has_role('service_role', 'w86_acl_owner_mixed_intermediate_probe', 'SET') AND NOT pg_has_role('service_role', 'w86_acl_owner_mixed_intermediate_probe', 'USAGE') AND pg_has_role('w86_acl_owner_mixed_intermediate_probe', '${role_name}', 'USAGE') AND NOT pg_has_role('w86_acl_owner_mixed_intermediate_probe', '${role_name}', 'SET') AND NOT pg_has_role('service_role', '${role_name}', 'USAGE') AND NOT pg_has_role('service_role', '${role_name}', 'SET') THEN 'W86_OWNER_MIXED_PATH_REACHABILITY_PASS' ELSE 'W86_OWNER_MIXED_PATH_REACHABILITY_FAIL' END" 2>&1 | tee "${RUNNER_TEMP}/${prefix}_REACHABILITY_CHECK.txt"
+                reachability_status="${PIPESTATUS[0]}"
+                set -e
+                echo "w86_owner_mixed_path_reachability_exit_code=${reachability_status}" >> "${RUNNER_TEMP}/W80_EVIDENCE.txt"
+                if [ "${reachability_status}" -ne 0 ] || ! grep -Fq "W86_OWNER_MIXED_PATH_REACHABILITY_PASS" "${RUNNER_TEMP}/${prefix}_REACHABILITY_CHECK.txt"; then
+                  echo "::error::The mixed owner path did not produce the expected SET-only then INHERIT-only state."
+                  status=1
+                else
+                  echo "W86_OWNER_MIXED_PATH_REACHABILITY_PASS" >> "${RUNNER_TEMP}/W80_EVIDENCE.txt"
+                fi
+              fi
               set +e
               docker exec "${db_container}" psql -U postgres -d postgres -X -v ON_ERROR_STOP=1 -f /tmp/w86_agent_executions_acl_correction.sql 2>&1 | tee "${RUNNER_TEMP}/${prefix}_CHECK.txt"
               guard_exit="${PIPESTATUS[0]}"
@@ -904,7 +928,7 @@ jobs:
               else
                 echo "${prefix}_PASS" >> "${RUNNER_TEMP}/W80_EVIDENCE.txt"
                 set +e
-                docker exec "${db_container}" psql -U postgres -d postgres -X -qAt -v ON_ERROR_STOP=1 -c "SELECT CASE WHEN NOT has_table_privilege('authenticated', 'public.agent_executions', 'SELECT') AND EXISTS (SELECT 1 FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace JOIN pg_roles r ON r.oid = c.relowner WHERE n.nspname = 'public' AND c.relname = 'agent_executions' AND r.rolname = '${role_name}') THEN '${pass_marker}' ELSE '${fail_marker}' END" 2>&1 | tee "${RUNNER_TEMP}/${prefix}_NO_MUTATION_CHECK.txt"
+                docker exec "${db_container}" psql -U postgres -d postgres -X -qAt -v ON_ERROR_STOP=1 -c "SELECT CASE WHEN NOT has_table_privilege('authenticated', 'public.agent_executions', 'SELECT') AND ('${kind}' <> 'mixed' OR has_table_privilege('service_role', 'public.agent_executions', 'DELETE')) AND EXISTS (SELECT 1 FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace JOIN pg_roles r ON r.oid = c.relowner WHERE n.nspname = 'public' AND c.relname = 'agent_executions' AND r.rolname = '${role_name}') THEN '${pass_marker}' ELSE '${fail_marker}' END" 2>&1 | tee "${RUNNER_TEMP}/${prefix}_NO_MUTATION_CHECK.txt"
                 no_mutation_status="${PIPESTATUS[0]}"
                 set -e
                 if [ "${no_mutation_status}" -ne 0 ] || ! grep -q "^${pass_marker}$" "${RUNNER_TEMP}/${prefix}_NO_MUTATION_CHECK.txt"; then
@@ -933,6 +957,13 @@ jobs:
               END IF;
               IF EXISTS (SELECT 1 FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace JOIN pg_roles r ON r.oid = c.relowner WHERE n.nspname = 'public' AND c.relname = 'agent_executions' AND r.rolname = '${role_name}') THEN
                 ALTER TABLE public.agent_executions OWNER TO postgres;
+              END IF;
+              IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'w86_acl_owner_mixed_intermediate_probe') THEN
+                IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = '${role_name}') THEN
+                  EXECUTE 'REVOKE ${role_name} FROM w86_acl_owner_mixed_intermediate_probe';
+                END IF;
+                EXECUTE 'REVOKE w86_acl_owner_mixed_intermediate_probe FROM service_role';
+                EXECUTE 'DROP ROLE w86_acl_owner_mixed_intermediate_probe';
               END IF;
               EXECUTE 'REVOKE ${role_name} FROM service_role';
               EXECUTE 'REVOKE ${role_name} FROM postgres';
@@ -971,6 +1002,7 @@ jobs:
 
           run_owner_path_negative_control role "INHERIT FALSE, SET TRUE" || owner_path_guard_status=1
           run_owner_path_negative_control inherit "INHERIT TRUE, SET FALSE" || owner_path_guard_status=1
+          run_owner_path_negative_control mixed "MIXED SET ROLE THEN INHERIT" || owner_path_guard_status=1
           echo "owner_path_guard_status=${owner_path_guard_status}" >> "${RUNNER_TEMP}/W80_EVIDENCE.txt"
           if [ "${regression_status}" -ne 0 ] || [ "${later_status}" -ne 0 ] || [ "${w84_status}" -ne 0 ] || [ "${w85_status}" -ne 0 ] || [ "${w86_status}" -ne 0 ] || [ "${query_pack_status}" -ne 0 ] || [ "${w86_authenticated_parent_guard_status}" -ne 0 ] || [ "${owner_path_guard_status}" -ne 0 ] || [ "${mixed_path_no_mutation_status:-1}" -ne 0 ]; then exit 1; fi
 
@@ -1097,3 +1129,11 @@ jobs:
             ${{ runner.temp }}/W86_OWNER_INHERIT_GUARD_CLEANUP.sql
             ${{ runner.temp }}/W86_OWNER_INHERIT_GUARD_CLEANUP_OUTPUT.txt
             ${{ runner.temp }}/W86_OWNER_INHERIT_GUARD_REAPPLY.txt
+            ${{ runner.temp }}/W86_OWNER_MIXED_GUARD_FIXTURE.sql
+            ${{ runner.temp }}/W86_OWNER_MIXED_GUARD_FIXTURE_OUTPUT.txt
+            ${{ runner.temp }}/W86_OWNER_MIXED_GUARD_CHECK.txt
+            ${{ runner.temp }}/W86_OWNER_MIXED_GUARD_NO_MUTATION_CHECK.txt
+            ${{ runner.temp }}/W86_OWNER_MIXED_GUARD_CLEANUP.sql
+            ${{ runner.temp }}/W86_OWNER_MIXED_GUARD_CLEANUP_OUTPUT.txt
+            ${{ runner.temp }}/W86_OWNER_MIXED_GUARD_REAPPLY.txt
+            ${{ runner.temp }}/W86_OWNER_MIXED_GUARD_REACHABILITY_CHECK.txt
