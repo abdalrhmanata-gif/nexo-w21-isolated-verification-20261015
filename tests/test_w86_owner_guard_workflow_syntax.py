@@ -14,7 +14,7 @@ WORKFLOW = (
     / "zavqera-w80-isolated-pgtap.yml"
 )
 START_MARKER = "          # Exercise both ways to obtain table-owner authority (SET ROLE and INHERIT)."
-EXPECTED_FINAL_GATE = "if [ \"${regression_status}\" -ne 0 ] || [ \"${later_status}\" -ne 0 ] || [ \"${w84_status}\" -ne 0 ] || [ \"${w85_status}\" -ne 0 ] || [ \"${w86_status}\" -ne 0 ] || [ \"${query_pack_status}\" -ne 0 ] || [ \"${w86_authenticated_parent_guard_status}\" -ne 0 ] || [ \"${owner_path_guard_status}\" -ne 0 ] || [ \"${mixed_path_no_mutation_status:-1}\" -ne 0 ]; then exit 1; fi"
+EXPECTED_FINAL_GATE = 'if [ "${regression_status}" -ne 0 ] || [ "${later_status}" -ne 0 ] || [ "${w84_status}" -ne 0 ] || [ "${w85_status}" -ne 0 ] || [ "${w86_status}" -ne 0 ] || [ "${query_pack_status}" -ne 0 ] || [ "${w86_authenticated_parent_guard_status}" -ne 0 ] || [ "${owner_path_guard_status}" -ne 0 ] || [ "${mixed_path_no_mutation_status:-1}" -ne 0 ]; then exit 1; fi'
 END_MARKER = EXPECTED_FINAL_GATE
 
 
