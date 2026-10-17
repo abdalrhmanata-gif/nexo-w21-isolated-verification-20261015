@@ -9,7 +9,10 @@ on:
       - 'docs/ZAVQERA_MIGRATION_OWNER_DECISION_INTAKE_README_2026-10-17.md'
       - 'docs/ZAVQERA_MIGRATION_PROVENANCE_RECONCILIATION_LEDGER_2026-10-17.md'
       - 'tools/validate_zavqera_migration_owner_intake.py'
+      - 'tools/scan_zavqera_local_migration_history.py'
       - 'tests/test_zavqera_migration_owner_intake.py'
+      - 'tests/test_scan_zavqera_local_migration_history.py'
+      - 'docs/ZAVQERA_HISTORICAL_MIGRATION_SOURCE_RECOVERY_SCAN_2026-10-17.md'
       - '.github/workflows/zavqera-owner-intake-validation.yml'
   pull_request:
     paths:
@@ -17,7 +20,10 @@ on:
       - 'docs/ZAVQERA_MIGRATION_OWNER_DECISION_INTAKE_README_2026-10-17.md'
       - 'docs/ZAVQERA_MIGRATION_PROVENANCE_RECONCILIATION_LEDGER_2026-10-17.md'
       - 'tools/validate_zavqera_migration_owner_intake.py'
+      - 'tools/scan_zavqera_local_migration_history.py'
       - 'tests/test_zavqera_migration_owner_intake.py'
+      - 'tests/test_scan_zavqera_local_migration_history.py'
+      - 'docs/ZAVQERA_HISTORICAL_MIGRATION_SOURCE_RECOVERY_SCAN_2026-10-17.md'
       - '.github/workflows/zavqera-owner-intake-validation.yml'
   workflow_dispatch:
 
@@ -37,5 +43,7 @@ jobs:
           python-version: '3.12'
       - name: Run structural and tamper-regression tests
         run: python -m unittest discover -s tests -p 'test_zavqera_migration_owner_intake.py' -v
+      - name: Test local Git history recovery scan with temporary repositories
+        run: python -m unittest discover -s tests -p 'test_scan_zavqera_local_migration_history.py' -v
       - name: Validate the owner intake with no network access
         run: python tools/validate_zavqera_migration_owner_intake.py
