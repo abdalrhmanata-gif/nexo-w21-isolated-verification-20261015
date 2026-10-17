@@ -25,6 +25,14 @@ Populate the following only after independent evidence review:
 - `evidence_artifact_sha256`: digest of the supporting evidence bundle.
 - `independent_reviewer_name_role`, `reviewed_at_utc`, `decision_rationale_and_evidence`, and `required_follow_up`: reviewer and audit trail.
 
+## Candidate archive fields — not deployment proof
+
+Seven `candidate_*` columns record source-archive leads independently from verified evidence fields. The W4 archive lead for ZMR-008 records:
+- Archive: `ZAVQERA_W4_DB_READY_PACK.zip`, SHA-256 `1781646022255f2eda2a8007676ebd157d70782fccabb6492ada6afc59245f4c`.
+- Member SQL source version `20260921180052`, SHA-256 `3419a01a1b0ea66bd22877f478b61473cf1210006828ea3f28c5c08fb51ef0c8`.
+- Hosted ledger version `20260921180138` differs. The archive's W4 status says eight W4 migrations were applied, but includes no per-row deployment receipt or hash linking those bytes to the hosted version.
+
+Accordingly, candidate metadata is populated, but `authoritative_historical_source_uri`, `verified_source_sql_sha256`, `hosted_deployment_record_uri`, and `verified_deployed_sql_sha256` remain blank; the row remains `NAME_VERSION_CONFLICT` / `OPEN` / `PENDING`. The source reviewer digest `43b8aeac20e00ce8170f5064a8622a66f7cee58c6cc25d4ff0afeb59b83ed044` reflects CRLF line endings (566 bytes), while the archived/current GitHub LF source is 559 bytes with digest `3419a01a1b0ea66bd22877f478b61473cf1210006828ea3f28c5c08fb51ef0c8`. This is only a source representation match, not proof of deployed SQL-byte identity. See [the source-recovery analysis](ZAVQERA_LIBRARY_ARCHIVE_MIGRATION_SOURCE_RECOVERY_2026-10-17.md).
 ## Controlled owner disposition values
 
 Use exactly one of the following values in `owner_disposition` only when evidence supports it:
