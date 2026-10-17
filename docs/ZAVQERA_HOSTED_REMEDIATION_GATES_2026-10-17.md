@@ -150,6 +150,6 @@ A future owner-authorized change must capture before/after values and fail the r
 
 ## 9. Current next action
 
-The highest-value next action is an independent database-owner review of the uploaded archive and this plan, concurrent with authoritative historical migration-source recovery. The audit PR can preserve the evidence and organize planning, but it cannot replace the owner decision or authorize database changes.
+The highest-value next action is an independent database-owner review of the uploaded archive and this plan, concurrent with authoritative historical migration-source recovery. Use [`ZAVQERA_INDEPENDENT_DB_OWNER_REVIEW_WORKSHEET_2026-10-17.md`](ZAVQERA_INDEPENDENT_DB_OWNER_REVIEW_WORKSHEET_2026-10-17.md) to record evidence-backed dispositions; it is intentionally unsigned and defaults every owner gate to OPEN. The audit PR can preserve the evidence and organize planning, but it cannot replace the owner decision or authorize database changes.
 
 **Current final disposition: NO-GO. hosted_write_authorized=false. No hosted migration is authorized or performed by this document.**
