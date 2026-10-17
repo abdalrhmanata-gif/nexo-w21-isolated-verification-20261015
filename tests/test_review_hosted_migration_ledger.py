@@ -811,10 +811,21 @@ class HostedLedgerReviewTests(unittest.TestCase):
         lf_digest = digest_manifest(crlf_checkout=False)
         crlf_digest = digest_manifest(crlf_checkout=True)
         captured_digest = "0d05ab7285edc975084ddbc595d1af7d2dd0752cc27e94d8fe0549170419be38"
-        self.assertIn(
-            captured_digest,
-            {lf_digest, crlf_digest},
-            f"Captured source manifest matches neither LF ({lf_digest}) nor CRLF ({crlf_digest}) checkout bytes",
+        self.assertNotEqual(lf_digest, captured_digest)
+        self.assertEqual(crlf_digest, captured_digest)
+
+    def test_lf_normalized_manifest_is_stable_across_line_endings(self):
+        migration = self.repo / "supabase" / "migrations" / "20261013100000_w80_example.sql"
+        lf_result = review.reconcile(self.evidence, self.repo)
+        lf_raw_digest = lf_result["source_migration_manifest_sha256"]
+        normalized_digest = lf_result["source_migration_manifest_lf_normalized_sha256"]
+
+        migration.write_bytes(b"select 1;\r\n")
+        crlf_result = review.reconcile(self.evidence, self.repo)
+        self.assertNotEqual(lf_raw_digest, crlf_result["source_migration_manifest_sha256"])
+        self.assertEqual(
+            normalized_digest,
+            crlf_result["source_migration_manifest_lf_normalized_sha256"],
         )
 
 
