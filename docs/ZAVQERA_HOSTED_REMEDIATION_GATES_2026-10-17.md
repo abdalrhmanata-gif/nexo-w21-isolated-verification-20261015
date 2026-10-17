@@ -12,7 +12,7 @@ Before additional work, preserve the exact source inputs and hashes together:
 - Target project: ZAVQERA Development / mrwmmbytcymqgwvcoywd / eu-west-1
 - Target PostgreSQL version: 17.6 (server_version_num 170006)
 - Base query pack SHA-256: a7aba3461786dbb5854f71dc4f87b7e0498d12509add535ab3df4a7ec231a284
-- Query 13 SHA-256: 806c1fbc1842860387dea71ebe10064b4c0db7f5d26b08556c7e641e1aa09a919
+- Query 13 SHA-256: 806c1fbc1842860387dea71cdcefc6d02edf8e4f23ad1aa07ece96c1a1a8312b
 - Source HEAD: fbbcb080904acd88aad83a082803f627859026e2
 - Source migration manifest SHA-256: 0d05ab7285edc975084ddbc595d1af7d2dd0752cc27e94d8fe0549170419be38
 
