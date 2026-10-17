@@ -28,13 +28,13 @@ The W4 pack's `docs/W4_STATUS.md` says that eight W4 migrations were applied to 
 
 ## Whole-Library scan scope
 
-- Examined 10 selected source/verification ZIP archives from the Library, including W4/W5 readiness packs, replay source packs and historical NEXO source packs.
-- ZIP integrity checks: 10/10 passed.
-- ZIP members inspected: 228.
-- Target stems: the known 22 version-conflict names plus six hosted-only names.
-- Source-side candidate matches: 1 (the W4 file above).
-- The scan did not search every one of the 110 ZIP files indexed in the Library, nor any external/private/deleted repositories or all owner-machine clones. Its result is bounded and must not be represented as an exhaustive archive search.
-- Report JSON in the working container: `/mnt/data/ZAVQERA_LIBRARY_ARCHIVE_MIGRATION_SOURCE_SCAN_2026-10-17.json`.
+Expanded scan after the initial selected-pack pass:
+- All 43 ZIP files in the current Library listing created on/after 2026-09-20 were materialized and scanned, recursively inspecting nested ZIPs through depth 4.
+- Outer ZIP integrity: 43/43 passed; nested ZIP integrity checks: 180/180 passed.
+- ZIP members inspected: 12,468; extracted member bytes processed: 63,842,487; read/integrity errors: 0; depth/size caps hit: 0.
+- Candidate path occurrences: 2, but unique migration stem/version/SQL-hash tuples: 1. Both occurrences refer to the same `20260921180052_w4_table_privilege_hardening.sql` source candidate with LF SHA-256 `3419a01a1b0ea66bd22877f478b61473cf1210006828ea3f28c5c08fb51ef0c8`; the second occurrence is nested in a continuity bundle.
+- This expands the earlier 10-archive/228-member scan. It is still not exhaustive across all 111 ZIPs in the Library (older archives were outside the selected creation-date window), external/private/deleted repositories, or every owner-machine clone.
+- Machine-readable summaries: `ZAVQERA_LIBRARY_ARCHIVE_MIGRATION_SOURCE_SCAN_2026-10-17_EXPANDED.json` (expanded scan) and `ZAVQERA_LIBRARY_ARCHIVE_MIGRATION_SOURCE_SCAN_2026-10-17.json` (initial targeted scan).
 
 ## Next recovery gate
 
