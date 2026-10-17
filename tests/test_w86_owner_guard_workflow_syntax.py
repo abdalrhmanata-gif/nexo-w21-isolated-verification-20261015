@@ -14,7 +14,7 @@ WORKFLOW = (
     / "zavqera-w80-isolated-pgtap.yml"
 )
 START_MARKER = "          # Exercise both ways to obtain table-owner authority (SET ROLE and INHERIT)."
-EXPECTED_FINAL_GATE = 'if [ "${regression_status}" -ne 0 ] || [ "${later_status}" -ne 0 ] || [ "${w84_status}" -ne 0 ] || [ "${w85_status}" -ne 0 ] || [ "${w86_status}" -ne 0 ] || [ "${query_pack_status}" -ne 0 ] || [ "${w86_authenticated_parent_guard_status}" -ne 0 ] || [ "${anon_authenticated_guard_status:-1}" -ne 0 ] || [ "${owner_path_guard_status}" -ne 0 ] || [ "${mixed_path_no_mutation_status:-1}" -ne 0 ]; then exit 1; fi'
+EXPECTED_FINAL_GATE = 'if [ "${regression_status}" -ne 0 ] || [ "${later_status}" -ne 0 ] || [ "${w84_status}" -ne 0 ] || [ "${w85_status}" -ne 0 ] || [ "${w86_status}" -ne 0 ] || [ "${query_pack_status}" -ne 0 ] || [ "${w86_authenticated_parent_guard_status}" -ne 0 ] || [ "${anon_authenticated_guard_status:-1}" -ne 0 ]  || [ "${owner_path_guard_status}" -ne 0 ] || [ "${untrusted_owner_guard_status:-1}" -ne 0 ] || [ "${mixed_path_no_mutation_status:-1}" -ne 0 ]; then exit 1; fi'
 END_MARKER = EXPECTED_FINAL_GATE
 
 
@@ -38,12 +38,38 @@ class W86OwnerPathWorkflowSyntaxTests(unittest.TestCase):
         self.assertIn("W86_ANON_AUTH_${kind^^}_REACHABILITY_PASS", helper)
         self.assertIn("W86_ANON_AUTH_${kind^^}_NO_MUTATION_PASS", helper)
         self.assertIn("W86 refused: anon can reach authenticated via a parent role path", helper)
-        self.assertIn('echo "expected_w86_pgtap_assertions=22"', workflow)
+        self.assertIn('echo "expected_w86_pgtap_assertions=23"', workflow)
         self.assertIn("REVOKE authenticated FROM anon", helper)
         self.assertIn(r"DO \$cleanup_anon_auth\$", workflow)
         self.assertIn("anon_authenticated_guard_status=1", helper)
         self.assertIn('[ "${anon_authenticated_guard_status:-1}" -ne 0 ]', workflow)
 
+
+    def test_untrusted_roles_cannot_own_or_reach_execution_table_owner(self):
+        workflow = WORKFLOW.read_text(encoding="utf-8")
+        start_marker = "          # Negative controls: neither untrusted API role may own the execution table."
+        end_marker = "          # Exercise both ways to obtain table-owner authority (SET ROLE and INHERIT)."
+        self.assertIn(start_marker, workflow)
+        self.assertIn(end_marker, workflow)
+        start = workflow.index(start_marker)
+        end = workflow.index(end_marker, start)
+        helper = textwrap.dedent(workflow[start:end])
+        result = subprocess.run(
+            ["bash", "-n"], input=helper, text=True, capture_output=True, check=False
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("run_untrusted_owner_negative_control anon", helper)
+        self.assertIn("run_untrusted_owner_negative_control authenticated", helper)
+        self.assertIn("ALTER TABLE public.agent_executions OWNER TO ${owner_role}", helper)
+        self.assertIn("W86 refused: anon/authenticated can own or reach owner of public.agent_executions", helper)
+        self.assertIn('before_state="$(docker exec', helper)
+        self.assertIn('[ "${before_state}" != "${after_state}" ]', helper)
+        self.assertIn("REVOKE CREATE ON SCHEMA public FROM ${owner_role}", helper)
+        self.assertIn("W86_AFTER_UNTRUSTED_OWNER_${owner_role^^}_CLEANUP", helper)
+        self.assertIn("supabase/tests/w86_agent_executions_acl_correction.sql 23", helper)
+        self.assertIn("untrusted_owner_guard_status=1", workflow)
+        self.assertIn('[ "${untrusted_owner_guard_status:-1}" -ne 0 ]', workflow)
+        self.assertIn('echo "expected_w86_pgtap_assertions=23"', workflow)
 
     def test_owner_path_helper_is_valid_bash_and_covers_both_membership_modes(self):
         workflow = WORKFLOW.read_text(encoding="utf-8")
