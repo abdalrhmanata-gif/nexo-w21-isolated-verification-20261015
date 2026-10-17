@@ -55,6 +55,7 @@ class W86OwnerPathWorkflowSyntaxTests(unittest.TestCase):
         self.assertIn("pg_has_role('service_role', 'w86_acl_owner_mixed_intermediate_probe', 'SET')", workflow)
         self.assertIn("has_table_privilege('service_role', 'public.agent_executions', 'DELETE')", workflow)
         self.assertIn("REVOKE w86_acl_owner_mixed_intermediate_probe FROM service_role", workflow)
+        self.assertIn("REVOKE ALL PRIVILEGES ON TABLE public.agent_executions FROM service_role", workflow)
         self.assertIn("w86_owner_mixed_path_reachability_exit_code", workflow)
         self.assertIn("W86_OWNER_MIXED_GUARD_REACHABILITY_CHECK.txt", workflow)
 
