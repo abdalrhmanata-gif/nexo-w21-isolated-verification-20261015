@@ -246,3 +246,18 @@ This addendum supersedes earlier comments that could not resolve the reported so
 - Row-level reconciliation consistency regression passed in W80; current row counts remain 95: 46 metadata matches still `UNKNOWN` for SQL bytes, 22 conflicts, 21 source-only, six hosted-only; all owner review states remain `PENDING`.
 
 No hosted database write, SQL, migration, deployment or merge occurred. `hosted_write_authorized=false`; `TRUSTED_DISPATCH_ADAPTERS` stays empty/fail-closed; PR #1/#2 stay OPEN/DRAFT/UNMERGED; Main/Production untouched; release remains **NO-GO**.
+
+
+## Final verified CI closure — W80 source-manifest portability (2026-10-17)
+
+This section supersedes the earlier in-progress W80 status in the preceding addendum.
+
+- Exact code/test SHA: `5d08941a5ac06098c8d5f693ceb4accaeaff2fc4`.
+- W80 isolated PostgreSQL 17.11 run [39052699830 — SUCCESS](https://github.com/abdalrhmanata-gif/nexo-w21-isolated-verification-20261015/actions/runs/39052699830). The pre-database audit suite reports 39/39 tests passed, including `test_captured_source_manifest_is_reproducible_across_line_endings`, `test_lf_normalized_manifest_is_stable_across_line_endings`, and `test_persisted_migration_provenance_ledger_is_consistent`. Full disposable migration replay/reapply and cleanup steps completed successfully.
+- W80 evidence artifact [12107823490](https://github.com/abdalrhmanata-gif/nexo-w21-isolated-verification-20261015/actions/runs/39052699830/artifacts/12107823490); ZIP digest `sha256:848582a25c33623516beaf2af6e72639628c1d555361777bddad3cc4d43ee42e`.
+- Flutter CI on the same code/test SHA: Push [39052699725 — SUCCESS](https://github.com/abdalrhmanata-gif/nexo-w21-isolated-verification-20261015/actions/runs/39052699725); PR [39052703565 — SUCCESS](https://github.com/abdalrhmanata-gif/nexo-w21-isolated-verification-20261015/actions/runs/39052703565).
+- Current docs-only HEAD `032aca973ff2504519f247e9940d7907393c284a): Flutter Push [39052913139 — SUCCESS](https://github.com/abdalrhmanata-gif/nexo-w21-isolated-verification-20261015/actions/runs/39052913139); PR [39052916641 — SUCCESS](https://github.com/abdalrhmanata-gif/nexo-w21-isolated-verification-20261015/actions/runs/39052916641).
+- Line-ending conclusion: the capture manifest hash `0d05ab...` matches the simulated CRLF checkout manifest, while Linux/LF checkout produced `555db007d0c25ee7bf6ed4f983766eea1dde170a7ef5d0e12cc710d5838c7094`. The reviewer now emits both raw and LF-normalized manifest values. This reconciles the cross-platform representation only; historical deployed SQL bytes and deployment provenance remain UNKNOWN.
+- PR #1 remains OPEN/DRAFT/UNMERGED at `0dc44842f9eaa25d0f34628b1c5c3de0741b41cf`. PR #2 remains OPEN/DRAFT/UNMERGED; re-check its live head before any future action.
+
+No hosted database write or migration occurred. `hosted_write_authorized=false`; `TRUSTED_DISPATCH_ADAPTERS` empty/fail-closed; release NO-GO. The 95 migration reconciliation units remain pending independent database-owner review; do not infer historical SQL from filenames/version numbers and do not edit the hosted migration ledger.
