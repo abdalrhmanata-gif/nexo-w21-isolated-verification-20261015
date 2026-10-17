@@ -2,7 +2,7 @@
 -- Intended for the disposable PostgreSQL 17 replay only.
 begin;
 create extension if not exists pgtap;
-select plan(21);
+select plan(22);
 
 select ok(not has_table_privilege('service_role', 'public.agent_executions', 'SELECT'),
   'service_role cannot directly read execution rows');
@@ -103,6 +103,34 @@ select ok(not exists (
      and role_name = 'authenticated'
      and reachable_via_membership_options
 ), 'service_role has no INHERIT or SET ROLE path to authenticated');
+
+select ok(not exists (
+  with recursive anon_role_path (
+    role_oid, role_name, depth, oid_path, inherits_all, can_set_role, reachable_via_membership_options
+  ) as (
+    select r.oid, r.rolname, 0, array[r.oid]::oid[], true, true, true
+      from pg_roles r
+     where r.rolname = 'anon'
+    union all
+    select parent.oid,
+           parent.rolname,
+           child.depth + 1,
+           child.oid_path || parent.oid,
+           child.inherits_all and membership.inherit_option,
+           child.can_set_role and membership.set_option,
+           (child.reachable_via_membership_options and membership.inherit_option)
+             or (child.can_set_role and membership.set_option)
+      from anon_role_path child
+      join pg_auth_members membership on membership.member = child.role_oid
+      join pg_roles parent on parent.oid = membership.roleid
+     where not parent.oid = any(child.oid_path)
+  )
+  select 1
+    from anon_role_path
+   where depth > 0
+     and role_name = 'authenticated'
+     and reachable_via_membership_options
+), 'anon has no INHERIT or SET ROLE path to authenticated SELECT grant target');
 
 select * from finish();
 rollback;

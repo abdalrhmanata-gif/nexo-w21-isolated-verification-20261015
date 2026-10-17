@@ -184,3 +184,17 @@ Corrective commits:
 - `c3cc1310e438412f029b9c0082f2fca3ae52539a`: every fixture/guard/cleanup/pgTAP failure directly sets the top-level `owner_path_guard_status` so an owner-path fixture failure cannot be hidden by a successful later cleanup or reapply.
 
 The corrected W80 owner-path validation is now **PASS** on source SHA `ddeca7aa91dd4d94fce5391cf13789aac8312016`: [run 38901754218](https://github.com/abdalrhmanata-gif/nexo-w21-isolated-verification-20261015/actions/runs/38901754218). Its uploaded artifact is ID `12046597051`, ZIP SHA-256 `d499b6a733d5e3d8aa8ea9cd981f196f4ccdb5a2f589d6d131bae299e8caabae`. Both fixtures succeeded; W86 exited with code 3 and the expected owner-path refusal for each membership mode; both no-mutation markers were present; cleanup succeeded; and W66/W86 rechecks passed 11/11 and 21/21 after each case. The overall W80 run also verified disposable resource cleanup (`cleanup=VERIFIED`). The earlier false-positive runs are retained as failed fixture attempts, not treated as proof.
+
+
+## 2026-10-17 follow-up — anonymous access through authenticated membership
+
+W86 preflight now separately starts a recursive membership walk from `anon` and fails closed if `authenticated` is reachable through INHERIT, SET ROLE, or a mixed multi-edge path. This check runs before any table/column ACL mutation because W86 grants SELECT to authenticated at the end of the migration. This prevents the grant target from carrying table-read access to anon via role membership.
+
+The disposable W80 PostgreSQL 17 workflow now exercises three negative controls:
+- direct INHERIT membership from anon to authenticated;
+- direct SET ROLE membership from anon to authenticated;
+- mixed path anon --SET ROLE--> intermediate --INHERIT--> authenticated.
+
+Each control verifies its exact path shape, expects the explicit pre-mutation W86 refusal, verifies authenticated and anon still lack SELECT while the service_role DELETE no-mutation canary survives, removes the membership fixture and ACL canaries, reapplies W86, and reruns W66 11/11 and W86 22/22. W86 pgTAP plan increased from 21 to 22 with a baseline assertion that anon has no INHERIT/SET ROLE path to authenticated.
+
+This is isolated-only candidate evidence. It does not prove hosted role memberships, reconcile hosted migration history, or authorize applying the migration to hosted Development/Main. Keep release NO-GO and no hosted writes pending query_13 capture, provenance reconciliation, and independent database-owner review.

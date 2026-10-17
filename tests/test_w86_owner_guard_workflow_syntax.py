@@ -14,11 +14,35 @@ WORKFLOW = (
     / "zavqera-w80-isolated-pgtap.yml"
 )
 START_MARKER = "          # Exercise both ways to obtain table-owner authority (SET ROLE and INHERIT)."
-EXPECTED_FINAL_GATE = 'if [ "${regression_status}" -ne 0 ] || [ "${later_status}" -ne 0 ] || [ "${w84_status}" -ne 0 ] || [ "${w85_status}" -ne 0 ] || [ "${w86_status}" -ne 0 ] || [ "${query_pack_status}" -ne 0 ] || [ "${w86_authenticated_parent_guard_status}" -ne 0 ] || [ "${owner_path_guard_status}" -ne 0 ] || [ "${mixed_path_no_mutation_status:-1}" -ne 0 ]; then exit 1; fi'
+EXPECTED_FINAL_GATE = 'if [ "${regression_status}" -ne 0 ] || [ "${later_status}" -ne 0 ] || [ "${w84_status}" -ne 0 ] || [ "${w85_status}" -ne 0 ] || [ "${w86_status}" -ne 0 ] || [ "${query_pack_status}" -ne 0 ] || [ "${w86_authenticated_parent_guard_status}" -ne 0 ] || [ "${anon_authenticated_guard_status:-1}" -ne 0 ] || [ "${owner_path_guard_status}" -ne 0 ] || [ "${mixed_path_no_mutation_status:-1}" -ne 0 ]; then exit 1; fi'
 END_MARKER = EXPECTED_FINAL_GATE
 
 
 class W86OwnerPathWorkflowSyntaxTests(unittest.TestCase):
+    def test_anon_to_authenticated_guard_covers_inherit_set_and_mixed_paths(self):
+        workflow = WORKFLOW.read_text(encoding="utf-8")
+        start_marker = "          # Negative control: W86 must reject any anon-to-authenticated path before it grants SELECT."
+        end_marker = "          # Exercise both ways to obtain table-owner authority (SET ROLE and INHERIT)."
+        self.assertIn(start_marker, workflow)
+        self.assertIn(end_marker, workflow)
+        start = workflow.index(start_marker)
+        end = workflow.index(end_marker, start)
+        helper = textwrap.dedent(workflow[start:end])
+        result = subprocess.run(
+            ["bash", "-n"], input=helper, text=True, capture_output=True, check=False
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn('run_anon_authenticated_parent_negative_control inherit "INHERIT TRUE, SET FALSE"', helper)
+        self.assertIn('run_anon_authenticated_parent_negative_control set "INHERIT FALSE, SET TRUE"', helper)
+        self.assertIn('run_anon_authenticated_parent_negative_control mixed "MIXED SET ROLE THEN INHERIT"', helper)
+        self.assertIn("W86_ANON_AUTH_${kind^^}_REACHABILITY_PASS", helper)
+        self.assertIn("W86_ANON_AUTH_${kind^^}_NO_MUTATION_PASS", helper)
+        self.assertIn("W86 refused: anon can reach authenticated via a parent role path", helper)
+        self.assertIn("REVOKE authenticated FROM anon", helper)
+        self.assertIn("anon_authenticated_guard_status=1", helper)
+        self.assertIn('[ "${anon_authenticated_guard_status:-1}" -ne 0 ]', workflow)
+
+
     def test_owner_path_helper_is_valid_bash_and_covers_both_membership_modes(self):
         workflow = WORKFLOW.read_text(encoding="utf-8")
         self.assertIn(START_MARKER, workflow, "W86 owner-path test helper is missing")
