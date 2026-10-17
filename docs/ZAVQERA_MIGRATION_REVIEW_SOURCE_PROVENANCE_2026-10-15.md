@@ -39,3 +39,15 @@ The offline reviewer now requires `query_13.json`, validates its role/read-only 
 **Exact-SHA verification:** W80 isolated PostgreSQL 17 workflow [run 38858063330](https://github.com/abdalrhmanata-gif/nexo-w21-isolated-verification-20261015/actions/runs/38858063330) — SUCCESS on `f4d7fed423739db0d39ba576ca455c5d4a182169`. The workflow ran the read-only runner unit tests, self-test (`queries=13`), offline ledger-review tests, full local PostgreSQL 17 migration replay/regression suite, local smoke of the new ACL provenance SQL, and cleanup verification. Evidence artifact `12027554468`, ZIP SHA-256 `8147e0b3624b27bdd6dc83f566b665a8942a1b3aac3e3dd785de1a3fc45a483d`. Flutter CI also passed on the same SHA: [run 38858068979](https://github.com/abdalrhmanata-gif/nexo-w21-isolated-verification-20261015/actions/runs/38858068979).
 
 This does not retroactively add the new query to the previously uploaded 12-query ZIP. To review the current hosted role path, rerun the guarded runner on the verified read-only Development connection and preserve the resulting 13-query output with its two query hashes and exact source manifest/HEAD. No token should be pasted into chat or saved in evidence.
+
+## Current source-provenance guard — 2026-10-17
+
+The scoped Git cleanliness check now includes ignored paths as well as tracked modifications and ordinary untracked files. This is necessary because the reviewer enumerates every `*.sql` file under `supabase/migrations`, including files that a local `.gitignore` rule may hide from ordinary `git status`. An ignored migration file therefore changes the manifest and must also set `source_migrations_worktree_clean` to `false`; the reviewer must not describe that source tree as fully Git-clean.
+
+Regression test: `test_ignored_untracked_migration_file_is_not_reported_clean`. The test creates an ignored, validly named migration in a temporary Git checkout and checks that the source manifest changes while the clean flag becomes false. This is offline provenance validation only.
+
+For the current PR #2 branch snapshot, the authoritative query pins validated by the runner self-test are:
+- Base query pack SHA-256: `a7aba3461786dbb5854f71dc4f87b7e0498d12509add535ab3df4a7ec231a284`.
+- Query 13 ACL-provenance SHA-256: `806c1fbc1842860387dea71cdcefc6d02edf8e4f23ad1aa07ece96c1a1a8312b`.
+
+Older query digests in preceding dated sections describe historical snapshots and must not be used for a new capture. No hosted database was queried or modified by this source-provenance change; historical migration SQL provenance remains unresolved and release remains **NO-GO**.
