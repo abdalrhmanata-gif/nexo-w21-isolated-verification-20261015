@@ -232,3 +232,17 @@ No authoritative historic SQL has been recovered. The result remains UNKNOWN; no
 5. Keep `hosted_write_authorized=false`, `TRUSTED_DISPATCH_ADAPTERS` empty/fail-closed, release **NO-GO**, PR #1/#2 open/draft/unmerged. No paid services, no Codex credits, no credentials in chat, and no Main/Production changes.
 
 No hosted writes, migrations, deployment or secret changes were made during the 13-query review or historical-source scan.
+
+
+## 2026-10-17 — source manifest cross-platform reconciliation and regression gates
+
+This addendum supersedes earlier comments that could not resolve the reported source HEAD. Keep the older notes as history, but use this update for current interpretation.
+
+- The captured raw-checkout migration manifest SHA remains `0d05ab7285edc975084ddbc595d1af7d2dd0752cc27e94d8fe0549170419be38`.
+- The Linux/LF checkout manifest independently calculated in CI is `555db007d0c25ee7bf6ed4f983766eea1dde170a7ef5d0e12cc710d5838c7094`. A regression test confirmed the captured manifest equals the simulated CRLF checkout form and differs from LF form. This explains the hash difference as line-ending representation; it does **not** prove deployed SQL bytes.
+- The reported source HEAD `fbbcb080904acd88aad83a082803f627859026e2` is resolvable as a commit in the isolated audit repository: https://github.com/abdalrhmanata-gif/nexo-w21-isolated-verification-20261015/commit/fbbcb080904acd88aad83a082803f627859026e2. It has 89 migration files. Commit comparison to the newer audit branch showed no path changes under `supabase/migrations`.
+- Reviewer tool change commit: `15df03da787e6bd0900bce015ca09bac2220086f` adds `source_migration_manifest_lf_normalized_sha256` alongside the existing raw checkout-byte manifest. Test commit: `5d08941a5ac06098c8d5f693ceb4accaeaff2fc4` adds explicit CRLF capture matching and an LF-normalization regression. The ledger addendum is at commit `9b7dbd1dfc6313511f64647d6a7d3a854994b54d`.
+- The W80 job on code/test SHA `5d08941a5ac06098c8d5f693ceb4accaeaff2fc4` passed the pre-database audit test step and had progressed to disposable migration replay at last observation; do not claim the full W80 run passed until its final result is confirmed. Flutter CI on the same code/test SHA passed push run [39052699725](https://github.com/abdalrhmanata-gif/nexo-w21-isolated-verification-20261015/actions/runs/39052699725) and PR run [39052703565](https://github.com/abdalrhmanata-gif/nexo-w21-isolated-verification-20261015/actions/runs/39052703565). Documentation-head CI on `9b7dbd1dfc6313511f64647d6a7d3a854994b54d` is being rechecked.
+- Row-level reconciliation consistency regression passed in W80; current row counts remain 95: 46 metadata matches still `UNKNOWN` for SQL bytes, 22 conflicts, 21 source-only, six hosted-only; all owner review states remain `PENDING`.
+
+No hosted database write, SQL, migration, deployment or merge occurred. `hosted_write_authorized=false`; `TRUSTED_DISPATCH_ADAPTERS` stays empty/fail-closed; PR #1/#2 stay OPEN/DRAFT/UNMERGED; Main/Production untouched; release remains **NO-GO**.
