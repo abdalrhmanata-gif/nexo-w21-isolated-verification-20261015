@@ -135,5 +135,29 @@ class MigrationOwnerIntakeGuardTests(unittest.TestCase):
         self.assertTrue(any("reconciliation_ids_do_not_match_ZMR_001_to_095" in e for e in errors))
 
 
+    def test_w4_archive_candidate_does_not_close_hosted_sql_provenance(self):
+        with INTAKE.open("r", encoding="utf-8-sig", newline="") as handle:
+            rows = list(csv.DictReader(handle))
+        row = next(item for item in rows if item["reconciliation_id"] == "ZMR-008")
+        self.assertEqual(row["source_version"], "20260921180052")
+        self.assertEqual(row["hosted_version"], "20260921180138")
+        self.assertEqual(row["existing_classification"], "NAME_VERSION_CONFLICT")
+        self.assertEqual(row["existing_owner_review_status"], "PENDING")
+        self.assertEqual(row["owner_disposition"], "OPEN")
+        self.assertEqual(
+            row["candidate_sql_sha256"],
+            "3419a01a1b0ea66bd22877f478b61473cf1210006828ea3f28c5c08fb51ef0c8",
+        )
+        self.assertEqual(row["candidate_archive_sha256"],
+                         "1781646022255f2eda2a8007676ebd157d70782fccabb6492ada6afc59245f4c")
+        self.assertEqual(row["verified_source_sql_sha256"], "")
+        self.assertEqual(row["hosted_deployment_record_uri"], "")
+        self.assertEqual(row["verified_deployed_sql_sha256"], "")
+        self.assertEqual(
+            row["hosted_change_authorized"],
+            "NO — separate written authorization required",
+        )
+
+
 if __name__ == "__main__":
     unittest.main()
