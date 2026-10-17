@@ -148,3 +148,21 @@ This section supersedes prior statements in this handoff that say the current ho
 Keep hosted_write_authorized=false. Do not apply W86 or any migration to hosted Development or Main/Production. Do not edit the hosted ledger to make tuples match. The next step is independent database-owner review plus authoritative recovery of historic SQL source for the 22 timestamp/version conflicts and six hosted-only names. Then finalize a dependency-aware, forward-only remediation plan with verified backup/restore, isolated PG17 testing, exact pre/post catalog assertions, and separate written authorization naming the target project and change set. If historical source remains unknown, release remains NO-GO; do not infer it from current functions or filenames.
 
 No hosted database was modified during the capture review or planning. TRUSTED_DISPATCH_ADAPTERS stays empty/fail-closed.
+
+## 11. Current checkpoint — expanded historical migration recovery search (2026-10-17)
+
+New report committed on the same audit branch:
+- `docs/ZAVQERA_HISTORICAL_MIGRATION_SOURCE_RECOVERY_SCAN_2026-10-17.md`
+- Commit: `4ce56b22f08e768a8ddba7c92a482b9559dcf4ce`
+
+This pass went beyond exact hosted filename lookups:
+- Recursively scanned all 23 visible `abdalrhmanata-gif/Nexo` branch-head trees. All scans completed with `truncated=false`.
+- Compared the suffix/name independently of the timestamp. The 22 conflict names exist in current-source branches only with the checked-in/source-side versions; no hosted timestamp version path appeared in any visible branch-head tree.
+- None of the six hosted-only names appeared in those branch-head trees.
+- Queried commit history for all 22 current-source paths on `zavqera/ai-planner-integration`: 21 paths return one commit; W50 returns two commits for the same current source path.
+- The earliest bulk-integration commit for W4 table privilege hardening, W7, W8, W9, W9.1 and W10 is `772f011624c199adc021a61d039a4cf13e9a3740` (“merge: stage ZAVQERA integration without historical artifact”); these files are marked added. Its parent `fcac980c9909c1a083007ed120d4742584fbcb4e` has no `supabase/migrations` files.
+- Bounded Actions search: 2,000 run records (pages 1–20 of 10,590 records, spanning 2026-10-17T04:41:56Z to 2026-10-12T10:37:25Z). Sampled W21 artifacts are only 326–328 byte evidence and 661–743 byte browser-diagnostics archives; three sampled W25 runs have no artifacts. No historic SQL source archive was identified in these checks.
+
+**Result: no authoritative historical SQL recovered.** This is a bounded public-branch-head/Actions inventory, not proof that no external/private/local archive exists. The 22 timestamp conflicts and six hosted-only names remain **UNKNOWN** until owner-controlled authoritative source/deployment provenance is produced.
+
+Keep `hosted_write_authorized=false`, do not edit the hosted migration ledger, and do not apply W86 or any migration to hosted Development/Main. PR #1 and PR #2 remain OPEN/DRAFT/UNMERGED; release remains **NO-GO**.
