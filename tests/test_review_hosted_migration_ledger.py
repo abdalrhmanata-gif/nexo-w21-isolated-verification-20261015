@@ -800,7 +800,7 @@ class HostedLedgerReviewTests(unittest.TestCase):
         self.assertEqual(len(sql_files), 89)
 
         manifest = "".join(
-            f"{path.name}\\t{hashlib.sha256(path.read_bytes()).hexdigest()}\\n"
+            f"{path.name}\t{hashlib.sha256(path.read_bytes()).hexdigest()}\n"
             for path in sql_files
         )
         digest = hashlib.sha256(manifest.encode("utf-8")).hexdigest()
