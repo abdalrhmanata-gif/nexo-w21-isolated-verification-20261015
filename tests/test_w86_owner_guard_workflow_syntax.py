@@ -14,7 +14,8 @@ WORKFLOW = (
     / "zavqera-w80-isolated-pgtap.yml"
 )
 START_MARKER = "          # Exercise both ways to obtain table-owner authority (SET ROLE and INHERIT)."
-END_MARKER = '          if [ "${regression_status}" -ne 0 ] || [ "${later_status}" -ne 0 ] || [ "${w84_status}" -ne 0 ] || [ "${w85_status}" -ne 0 ] || [ "${w86_status}" -ne 0 ] || [ "${query_pack_status}" -ne 0 ] || [ "${w86_authenticated_parent_guard_status}" -ne 0 ] || [ "${owner_path_guard_status}" -ne 0 ]; then exit 1; fi'
+EXPECTED_FINAL_GATE = '          if [ "${regression_status}" -ne 0 ] || [ "${later_status}" -ne 0 ] || [ "${w84_status}" -ne 0 ] || [ "${w85_status}" -ne 0 ] || [ "${w86_status}" -ne 0 ] || [ "${query_pack_status}" -ne 0 ] || [ "${w86_authenticated_parent_guard_status}" -ne 0 ] || [ "${owner_path_guard_status}" -ne 0 ]; then exit 1; fi'
+END_MARKER = EXPECTED_FINAL_GATE
 
 
 class W86OwnerPathWorkflowSyntaxTests(unittest.TestCase):
@@ -22,6 +23,7 @@ class W86OwnerPathWorkflowSyntaxTests(unittest.TestCase):
         workflow = WORKFLOW.read_text(encoding="utf-8")
         self.assertIn(START_MARKER, workflow, "W86 owner-path test helper is missing")
         self.assertIn(END_MARKER, workflow, "W80 final gate is missing")
+        self.assertIn(EXPECTED_FINAL_GATE, workflow, "W80 final gate must account for every required negative-control status")
         start = workflow.index(START_MARKER)
         end = workflow.index(END_MARKER, start)
         helper = textwrap.dedent(workflow[start:end])
