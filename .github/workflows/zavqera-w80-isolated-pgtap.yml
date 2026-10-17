@@ -200,7 +200,7 @@ jobs:
             echo "w86_test_blob=$(git -C "${GITHUB_WORKSPACE}" rev-parse HEAD:supabase/tests/w86_agent_executions_acl_correction.sql)"
             echo "expected_w84_pgtap_assertions=21"
             echo "expected_w66_pgtap_assertions=11"
-            echo "expected_w86_pgtap_assertions=21"
+            echo "expected_w86_pgtap_assertions=22"
             echo "w44_test_blob=$(git -C "${GITHUB_WORKSPACE}" rev-parse HEAD:supabase/tests/w44_workspace_invitations.sql)"
             echo "expected_w80_pgtap_assertions=49"
             echo "expected_w44_pgtap_assertions=17"

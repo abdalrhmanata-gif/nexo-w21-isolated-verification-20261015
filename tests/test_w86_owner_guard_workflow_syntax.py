@@ -38,6 +38,7 @@ class W86OwnerPathWorkflowSyntaxTests(unittest.TestCase):
         self.assertIn("W86_ANON_AUTH_${kind^^}_REACHABILITY_PASS", helper)
         self.assertIn("W86_ANON_AUTH_${kind^^}_NO_MUTATION_PASS", helper)
         self.assertIn("W86 refused: anon can reach authenticated via a parent role path", helper)
+        self.assertIn('echo "expected_w86_pgtap_assertions=22"', workflow)
         self.assertIn("REVOKE authenticated FROM anon", helper)
         self.assertIn(r"DO \$cleanup_anon_auth\$", workflow)
         self.assertIn("anon_authenticated_guard_status=1", helper)
