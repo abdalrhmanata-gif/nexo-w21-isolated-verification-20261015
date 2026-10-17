@@ -166,3 +166,12 @@ This pass went beyond exact hosted filename lookups:
 **Result: no authoritative historical SQL recovered.** This is a bounded public-branch-head/Actions inventory, not proof that no external/private/local archive exists. The 22 timestamp conflicts and six hosted-only names remain **UNKNOWN** until owner-controlled authoritative source/deployment provenance is produced.
 
 Keep `hosted_write_authorized=false`, do not edit the hosted migration ledger, and do not apply W86 or any migration to hosted Development/Main. PR #1 and PR #2 remain OPEN/DRAFT/UNMERGED; release remains **NO-GO**.
+
+## 12. Follow-up origin-reference search (2026-10-17)
+
+The historical-source scan report was further updated in commit `66f9f918f08257e0510a17193574ef9fa995de2e` to include three additional bounded checks:
+- GitHub matching tag refs in original `Nexo`: zero visible tags.
+- Original PR #12 (“Integrate ZAVQERA W4-W16 baseline into main (clean, artifact-free)”) remains open/unmerged; the early migration import commit added the current migration paths rather than providing historical-renamed source bytes. PR #12 was read-only and not modified.
+- Owner-scoped code search for six hosted-only migration names returned zero indexed results; this is only supporting negative evidence because code search is visibility/index limited.
+
+No authoritative historic SQL has been recovered. The result remains UNKNOWN; no hosted write or ledger edit is authorized. Exact-current-head CI must be rechecked for the latest documentation-only commit before asserting final validation.
