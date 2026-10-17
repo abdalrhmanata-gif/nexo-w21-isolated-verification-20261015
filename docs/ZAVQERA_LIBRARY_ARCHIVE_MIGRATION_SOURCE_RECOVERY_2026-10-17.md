@@ -26,16 +26,15 @@ The W4 pack's `docs/W4_STATUS.md` says that eight W4 migrations were applied to 
 
 **Required classification:** keep ZMR-008 `NAME_VERSION_CONFLICT`, owner review `PENDING`; keep `verified_deployed_sql_sha256` and `hosted_deployment_record_uri` blank. Do not classify `EXACT_SOURCE_BYTES_VERIFIED`, rewrite migration history, or infer the hosted row was equivalent because the filename suffix/text matches.
 
-## Expanded Library ZIP scan scope — final bounded pass (2026-10-17)
+## Full Library ZIP snapshot scan — final (2026-10-17)
 
-- Selected and materialized all 42 ZIP files in the current Library listing created on/after 2026-09-20, excluding the newly generated continuity bundle itself to avoid recounting its embedded copies.
-- Outer ZIP integrity checks: 42/42 passed; nested ZIP integrity checks: 166/166 passed.
-- ZIP members inspected: 11,590; extracted member bytes processed: 59,362,544; read/integrity errors: 0; size/depth caps hit: 0.
-- Target migration stems: the 22 known version-conflict names plus six hosted-only names.
-- Candidate path occurrences: 1; unique stem/version/SQL-hash candidates: 1. Candidate: `20260921180052_w4_table_privilege_hardening.sql`, 559-byte LF representation, SHA-256 `3419a01a1b0ea66bd22877f478b61473cf1210006828ea3f28c5c08fb51ef0c8` from `ZAVQERA_W4_DB_READY_PACK.zip`.
-- No alternative SQL bytes/version for hosted row `20260921180138_w4_table_privilege_hardening` was found within this selected archive window.
-- Scope is bounded: 69 older ZIPs in the current 111-ZIP Library index were outside the selected creation-date window; this also excludes external/private/deleted repositories and all user-device clones.
-- Machine-readable reports: `/mnt/data/ZAVQERA_LIBRARY_ARCHIVE_MIGRATION_SOURCE_SCAN_2026-10-17_EXPANDED.json` (final bounded pass) and `/mnt/data/ZAVQERA_LIBRARY_ARCHIVE_MIGRATION_SOURCE_SCAN_2026-10-17.json` (earlier targeted pass).
+- Scanned all 112 ZIP objects present in the Library index at the time of the scan, including archives created before and after 2026-09-20. Every outer ZIP passed integrity validation: 112/112; zero failures.
+- Outer archives contained 79 unique content hashes. Recursive scan inspected 86 unique ZIP payloads (including nested ZIPs) and 4,572 members / 24,630,444 declared uncompressed member-bytes; 130 nested-archive occurrences were seen and 123 duplicate payloads were skipped after content-hash deduplication.
+- Target stems: all 22 known same-name/different-version conflict names plus all six hosted-only migration names. Only one unique SQL source candidate was found: `20260921180052_w4_table_privilege_hardening.sql`, 559 bytes, LF SHA-256 `3419a01a1b0ea66bd22877f478b61473cf1210006828ea3f28c5c08fb51ef0c8`.
+- No alternative SQL bytes or filename/version for hosted `20260921180138_w4_table_privilege_hardening` were found. Name mentions in replay/catalog documents are not original SQL bytes and are not counted as recovered source.
+- Read/integrity errors: 0; member-size, total-uncompressed or nesting-depth caps: 0. No network/database requests occurred and no hosted writes were authorized.
+- Machine-readable full-snapshot report: `ZAVQERA_LIBRARY_ARCHIVE_MIGRATION_SOURCE_SCAN_2026-10-17_ALL_112.json`; SHA-256 `24c01040a5ae4f4376a99a5205999d4a6d6c5fd499a1abc84cbaf819071c7cd6`.
+- This covers the 112 ZIP objects visible in the Library index at scan time. It does not cover deleted/unindexed storage, private or external repositories not archived here, or every user-device clone.
 
 ## Next recovery gate
 
