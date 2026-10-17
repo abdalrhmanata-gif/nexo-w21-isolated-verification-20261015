@@ -1175,6 +1175,209 @@ jobs:
           run_untrusted_owner_negative_control authenticated || untrusted_owner_guard_status=1
           echo "untrusted_owner_guard_status=${untrusted_owner_guard_status}" >> "${RUNNER_TEMP}/W80_EVIDENCE.txt"
 
+          # Negative control: an untrusted role must not reach a separate table owner through a mixed path.
+          # authenticated --SET ROLE--> intermediate --INHERIT--> owner must fail before touching ACLs.
+          run_untrusted_owner_mixed_path_negative_control() {
+            local owner_role="w86_acl_untrusted_owner_mixed_probe"
+            local intermediate_role="w86_acl_untrusted_owner_mixed_intermediate_probe"
+            local prefix="W86_UNTRUSTED_OWNER_MIXED_PATH"
+            local status=0
+            local fixture_status=0
+            local reachability_status=0
+            local guard_exit=0
+            local no_mutation_status=0
+            local cleanup_status=0
+            local reapply_status=0
+            local before_state=""
+            local after_state=""
+            local fixture="${RUNNER_TEMP}/${prefix}_FIXTURE.sql"
+            local reachability="${RUNNER_TEMP}/${prefix}_REACHABILITY.sql"
+            local cleanup="${RUNNER_TEMP}/${prefix}_CLEANUP.sql"
+
+            cat > "${fixture}" <<SQL
+          REVOKE ALL PRIVILEGES ON TABLE public.agent_executions FROM public, anon, authenticated, service_role;
+          DO \$revoke_untrusted_owner_mixed_columns\$
+          DECLARE column_names text;
+          BEGIN
+            SELECT string_agg(format('%I', a.attname), ', ' ORDER BY a.attnum)
+              INTO column_names
+              FROM pg_attribute a
+             WHERE a.attrelid = 'public.agent_executions'::regclass
+               AND a.attnum > 0 AND NOT a.attisdropped;
+            IF column_names IS NOT NULL THEN
+              EXECUTE format(
+                'REVOKE ALL PRIVILEGES (%s) ON TABLE public.agent_executions FROM public, anon, authenticated, service_role',
+                column_names
+              );
+            END IF;
+          END
+          \$revoke_untrusted_owner_mixed_columns\$;
+          CREATE ROLE ${owner_role} NOLOGIN;
+          CREATE ROLE ${intermediate_role} NOLOGIN;
+          GRANT ${owner_role} TO postgres WITH INHERIT TRUE, SET TRUE;
+          GRANT CREATE ON SCHEMA public TO ${owner_role};
+          ALTER TABLE public.agent_executions OWNER TO ${owner_role};
+          REVOKE ALL PRIVILEGES ON TABLE public.agent_executions FROM public, anon, authenticated, service_role;
+          DO \$revoke_untrusted_owner_mixed_columns_after_owner\$
+          DECLARE column_names text;
+          BEGIN
+            SELECT string_agg(format('%I', a.attname), ', ' ORDER BY a.attnum)
+              INTO column_names
+              FROM pg_attribute a
+             WHERE a.attrelid = 'public.agent_executions'::regclass
+               AND a.attnum > 0 AND NOT a.attisdropped;
+            IF column_names IS NOT NULL THEN
+              EXECUTE format(
+                'REVOKE ALL PRIVILEGES (%s) ON TABLE public.agent_executions FROM public, anon, authenticated, service_role',
+                column_names
+              );
+            END IF;
+          END
+          \$revoke_untrusted_owner_mixed_columns_after_owner\$;
+          GRANT ${intermediate_role} TO authenticated WITH INHERIT FALSE, SET TRUE;
+          GRANT ${owner_role} TO ${intermediate_role} WITH INHERIT TRUE, SET FALSE;
+          GRANT DELETE ON TABLE public.agent_executions TO service_role;
+          SQL
+            set +e
+            docker cp "${fixture}" "${db_container}:/tmp/${prefix}_FIXTURE.sql"
+            docker exec "${db_container}" psql -U postgres -d postgres -X -v ON_ERROR_STOP=1 -f "/tmp/${prefix}_FIXTURE.sql" 2>&1 | tee "${RUNNER_TEMP}/${prefix}_FIXTURE_OUTPUT.txt"
+            fixture_status="${PIPESTATUS[0]}"
+            set -e
+            echo "w86_untrusted_owner_mixed_path_fixture_exit_code=${fixture_status}" >> "${RUNNER_TEMP}/W80_EVIDENCE.txt"
+            if [ "${fixture_status}" -ne 0 ]; then
+              status=1
+            else
+              before_state="$(docker exec "${db_container}" psql -U postgres -d postgres -X -qAt -v ON_ERROR_STOP=1 -c "SELECT c.relowner::text || '|' || coalesce(c.relacl::text, 'NULL') || '|' || has_table_privilege('service_role', 'public.agent_executions', 'DELETE')::text FROM pg_class c WHERE c.oid = 'public.agent_executions'::regclass")"
+              cat > "${reachability}" <<'SQL'
+          WITH RECURSIVE untrusted_owner_role_path (
+            role_oid, role_name, depth, oid_path, inherits_all, can_set_role, reachable_via_membership_options
+          ) AS (
+            SELECT r.oid, r.rolname, 0, ARRAY[r.oid]::oid[], true, true, true
+              FROM pg_roles r
+             WHERE r.rolname IN ('anon', 'authenticated')
+            UNION ALL
+            SELECT parent.oid,
+                   parent.rolname,
+                   child.depth + 1,
+                   child.oid_path || parent.oid,
+                   child.inherits_all AND membership.inherit_option,
+                   child.can_set_role AND membership.set_option,
+                   (child.reachable_via_membership_options AND membership.inherit_option)
+                     OR (child.can_set_role AND membership.set_option)
+              FROM untrusted_owner_role_path child
+              JOIN pg_auth_members membership ON membership.member = child.role_oid
+              JOIN pg_roles parent ON parent.oid = membership.roleid
+             WHERE NOT parent.oid = ANY(child.oid_path)
+          )
+          SELECT CASE WHEN EXISTS (
+            SELECT 1
+              FROM untrusted_owner_role_path rp
+             WHERE rp.role_name = 'w86_acl_untrusted_owner_mixed_probe'
+               AND rp.depth = 2
+               AND rp.reachable_via_membership_options
+               AND NOT rp.inherits_all
+               AND NOT rp.can_set_role
+          ) THEN 'W86_UNTRUSTED_OWNER_MIXED_PATH_REACHABILITY_PASS'
+            ELSE 'W86_UNTRUSTED_OWNER_MIXED_PATH_REACHABILITY_FAIL'
+          END;
+          SQL
+              set +e
+              docker cp "${reachability}" "${db_container}:/tmp/${prefix}_REACHABILITY.sql"
+              docker exec "${db_container}" psql -U postgres -d postgres -X -qAt -v ON_ERROR_STOP=1 -f "/tmp/${prefix}_REACHABILITY.sql" 2>&1 | tee "${RUNNER_TEMP}/${prefix}_REACHABILITY_CHECK.txt"
+              reachability_status="${PIPESTATUS[0]}"
+              set -e
+              echo "w86_untrusted_owner_mixed_path_reachability_exit_code=${reachability_status}" >> "${RUNNER_TEMP}/W80_EVIDENCE.txt"
+              if [ "${reachability_status}" -ne 0 ] || ! grep -Fq "W86_UNTRUSTED_OWNER_MIXED_PATH_REACHABILITY_PASS" "${RUNNER_TEMP}/${prefix}_REACHABILITY_CHECK.txt"; then
+                echo "::error::The untrusted mixed owner-path fixture did not establish the expected membership options."
+                status=1
+              else
+                echo "W86_UNTRUSTED_OWNER_MIXED_PATH_REACHABILITY_PASS" >> "${RUNNER_TEMP}/W80_EVIDENCE.txt"
+                set +e
+                docker exec "${db_container}" psql -U postgres -d postgres -X -v ON_ERROR_STOP=1 -f /tmp/w86_agent_executions_acl_correction.sql 2>&1 | tee "${RUNNER_TEMP}/${prefix}_GUARD_CHECK.txt"
+                guard_exit="${PIPESTATUS[0]}"
+                set -e
+                echo "w86_untrusted_owner_mixed_path_guard_exit_code=${guard_exit}" >> "${RUNNER_TEMP}/W80_EVIDENCE.txt"
+                if [ "${guard_exit}" -eq 0 ] || ! grep -q "W86 refused: anon/authenticated can own or reach owner of public.agent_executions" "${RUNNER_TEMP}/${prefix}_GUARD_CHECK.txt"; then
+                  echo "::error::W86 did not fail closed on the mixed untrusted-to-owner membership path."
+                  status=1
+                else
+                  echo "W86_UNTRUSTED_OWNER_MIXED_PATH_GUARD_PASS" >> "${RUNNER_TEMP}/W80_EVIDENCE.txt"
+                fi
+                set +e
+                after_state="$(docker exec "${db_container}" psql -U postgres -d postgres -X -qAt -v ON_ERROR_STOP=1 -c "SELECT c.relowner::text || '|' || coalesce(c.relacl::text, 'NULL') || '|' || has_table_privilege('service_role', 'public.agent_executions', 'DELETE')::text FROM pg_class c WHERE c.oid = 'public.agent_executions'::regclass" 2>&1)"
+                no_mutation_status="$?"
+                set -e
+                echo "w86_untrusted_owner_mixed_path_no_mutation_exit_code=${no_mutation_status}" >> "${RUNNER_TEMP}/W80_EVIDENCE.txt"
+                if [ "${no_mutation_status}" -ne 0 ] || [ "${before_state}" != "${after_state}" ]; then
+                  echo "::error::W86 mutated owner/ACL/canary state before refusing the mixed untrusted owner path."
+                  status=1
+                else
+                  echo "W86_UNTRUSTED_OWNER_MIXED_PATH_NO_MUTATION_PASS" >> "${RUNNER_TEMP}/W80_EVIDENCE.txt"
+                fi
+              fi
+            fi
+
+            cat > "${cleanup}" <<SQL
+          DO \$cleanup_untrusted_owner_mixed_path\$
+          DECLARE column_names text;
+          BEGIN
+            EXECUTE 'REVOKE ALL PRIVILEGES ON TABLE public.agent_executions FROM public, anon, authenticated, service_role';
+            SELECT string_agg(format('%I', a.attname), ', ' ORDER BY a.attnum)
+              INTO column_names
+              FROM pg_attribute a
+             WHERE a.attrelid = 'public.agent_executions'::regclass
+               AND a.attnum > 0 AND NOT a.attisdropped;
+            IF column_names IS NOT NULL THEN
+              EXECUTE format(
+                'REVOKE ALL PRIVILEGES (%s) ON TABLE public.agent_executions FROM public, anon, authenticated, service_role',
+                column_names
+              );
+            END IF;
+            IF EXISTS (SELECT 1 FROM pg_class c WHERE c.oid = 'public.agent_executions'::regclass AND pg_get_userbyid(c.relowner) = '${owner_role}') THEN
+              ALTER TABLE public.agent_executions OWNER TO postgres;
+            END IF;
+            EXECUTE 'REVOKE CREATE ON SCHEMA public FROM ${owner_role}';
+            IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = '${intermediate_role}') THEN
+              EXECUTE 'REVOKE ${owner_role} FROM ${intermediate_role}';
+              EXECUTE 'REVOKE ${intermediate_role} FROM authenticated';
+              EXECUTE 'DROP ROLE ${intermediate_role}';
+            END IF;
+            IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = '${owner_role}') THEN
+              EXECUTE 'REVOKE ${owner_role} FROM postgres';
+              EXECUTE 'DROP ROLE ${owner_role}';
+            END IF;
+          END
+          \$cleanup_untrusted_owner_mixed_path\$;
+          SQL
+            set +e
+            docker cp "${cleanup}" "${db_container}:/tmp/${prefix}_CLEANUP.sql"
+            docker exec "${db_container}" psql -U postgres -d postgres -X -v ON_ERROR_STOP=1 -f "/tmp/${prefix}_CLEANUP.sql" 2>&1 | tee "${RUNNER_TEMP}/${prefix}_CLEANUP_OUTPUT.txt"
+            cleanup_status="${PIPESTATUS[0]}"
+            set -e
+            echo "w86_untrusted_owner_mixed_path_cleanup_exit_code=${cleanup_status}" >> "${RUNNER_TEMP}/W80_EVIDENCE.txt"
+            if [ "${cleanup_status}" -ne 0 ]; then
+              status=1
+              untrusted_owner_guard_status=1
+            else
+              set +e
+              docker exec "${db_container}" psql -U postgres -d postgres -X -v ON_ERROR_STOP=1 -f /tmp/w86_agent_executions_acl_correction.sql 2>&1 | tee "${RUNNER_TEMP}/${prefix}_REAPPLY.txt"
+              reapply_status="${PIPESTATUS[0]}"
+              set -e
+              echo "w86_untrusted_owner_mixed_path_reapply_exit_code=${reapply_status}" >> "${RUNNER_TEMP}/W80_EVIDENCE.txt"
+              if [ "${reapply_status}" -ne 0 ]; then
+                status=1
+                untrusted_owner_guard_status=1
+              else
+                run_pgtap W66_AFTER_UNTRUSTED_OWNER_MIXED_PATH_CLEANUP supabase/tests/w66_service_role_table_privilege_hardening.sql 11 || status=1
+                run_pgtap W86_AFTER_UNTRUSTED_OWNER_MIXED_PATH_CLEANUP supabase/tests/w86_agent_executions_acl_correction.sql 23 || status=1
+              fi
+            fi
+            echo "w86_untrusted_owner_mixed_path_status=${status}" >> "${RUNNER_TEMP}/W80_EVIDENCE.txt"
+            if [ "${status}" -ne 0 ]; then untrusted_owner_guard_status=1; fi
+            return "${status}"
+          }
+          run_untrusted_owner_mixed_path_negative_control || untrusted_owner_guard_status=1
+
           # Exercise both ways to obtain table-owner authority (SET ROLE and INHERIT).
           # Each test runs only in the disposable PostgreSQL instance and always attempts cleanup.
           owner_path_guard_status=0
@@ -1488,6 +1691,22 @@ jobs:
             ${{ runner.temp }}/W86_UNTRUSTED_OWNER_AUTHENTICATED_CLEANUP.sql
             ${{ runner.temp }}/W86_UNTRUSTED_OWNER_AUTHENTICATED_CLEANUP_OUTPUT.txt
             ${{ runner.temp }}/W86_UNTRUSTED_OWNER_AUTHENTICATED_REAPPLY.txt
+            ${{ runner.temp }}/W86_UNTRUSTED_OWNER_ANON_REACHABILITY_CHECK.txt
+            ${{ runner.temp }}/W86_UNTRUSTED_OWNER_AUTHENTICATED_REACHABILITY_CHECK.txt
+            ${{ runner.temp }}/W86_UNTRUSTED_OWNER_MIXED_PATH_FIXTURE.sql
+            ${{ runner.temp }}/W86_UNTRUSTED_OWNER_MIXED_PATH_FIXTURE_OUTPUT.txt
+            ${{ runner.temp }}/W86_UNTRUSTED_OWNER_MIXED_PATH_REACHABILITY.sql
+            ${{ runner.temp }}/W86_UNTRUSTED_OWNER_MIXED_PATH_REACHABILITY_CHECK.txt
+            ${{ runner.temp }}/W86_UNTRUSTED_OWNER_MIXED_PATH_GUARD_CHECK.txt
+            ${{ runner.temp }}/W86_UNTRUSTED_OWNER_MIXED_PATH_CLEANUP.sql
+            ${{ runner.temp }}/W86_UNTRUSTED_OWNER_MIXED_PATH_CLEANUP_OUTPUT.txt
+            ${{ runner.temp }}/W86_UNTRUSTED_OWNER_MIXED_PATH_REAPPLY.txt
+            ${{ runner.temp }}/W66_AFTER_UNTRUSTED_OWNER_ANON_CLEANUP_PGTAP_OUTPUT.txt
+            ${{ runner.temp }}/W86_AFTER_UNTRUSTED_OWNER_ANON_CLEANUP_PGTAP_OUTPUT.txt
+            ${{ runner.temp }}/W66_AFTER_UNTRUSTED_OWNER_AUTHENTICATED_CLEANUP_PGTAP_OUTPUT.txt
+            ${{ runner.temp }}/W86_AFTER_UNTRUSTED_OWNER_AUTHENTICATED_CLEANUP_PGTAP_OUTPUT.txt
+            ${{ runner.temp }}/W66_AFTER_UNTRUSTED_OWNER_MIXED_PATH_CLEANUP_PGTAP_OUTPUT.txt
+            ${{ runner.temp }}/W86_AFTER_UNTRUSTED_OWNER_MIXED_PATH_CLEANUP_PGTAP_OUTPUT.txt
             ${{ runner.temp }}/W86_ANON_AUTH_INHERIT_FIXTURE.sql
             ${{ runner.temp }}/W86_ANON_AUTH_INHERIT_FIXTURE_OUTPUT.txt
             ${{ runner.temp }}/W86_ANON_AUTH_INHERIT_REACHABILITY.sql
