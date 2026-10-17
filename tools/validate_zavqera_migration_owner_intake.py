@@ -149,7 +149,12 @@ def validate(
 
     if EXPECTED_CAPTURE_SHA256 not in instructions:
         errors.append("capture_sha256_missing_from_intake_instructions")
-    if "does not authorize a database write" not in instructions:
+    non_authorization_phrases = (
+        "does not authorize a database write",
+        "this CSV never authorizes a database write",
+        "does not authorize a hosted change",
+    )
+    if not any(phrase in instructions for phrase in non_authorization_phrases):
         errors.append("instructions_missing_non_authorization_statement")
 
     return errors
