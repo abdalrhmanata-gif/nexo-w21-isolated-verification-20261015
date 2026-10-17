@@ -973,7 +973,7 @@ jobs:
             fi
 
             cat > "${cleanup}" <<SQL
-          DO $cleanup_anon_auth$
+          DO \$cleanup_anon_auth\$
           DECLARE column_names text;
           BEGIN
             IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = '${intermediate_role}') THEN
@@ -995,7 +995,7 @@ jobs:
               );
             END IF;
           END
-          $cleanup_anon_auth$;
+          \$cleanup_anon_auth\$;
           SQL
             set +e
             docker cp "${cleanup}" "${db_container}:/tmp/${prefix}_CLEANUP.sql"
