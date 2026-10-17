@@ -14,6 +14,18 @@
 - Query-pack SHA-256: `a7aba3461786dbb5854f71dc4f87b7e0498d12509add535ab3df4a7ec231a284`
 - Query 13 SHA-256: `806c1fbc1842860387dea71cdcefc6d02edf8e4f23ad1aa07ece96c1a1a8312b`
 
+## Source manifest line-ending reconciliation — 2026-10-17
+
+The recorded manifest discrepancy was investigated without changing any migration SQL:
+
+- Captured raw-checkout manifest SHA-256: `0d05ab7285edc975084ddbc595d1af7d2dd0752cc27e94d8fe0549170419be38`.
+- The reproducible Linux/LF checkout manifest was `555db007d0c25ee7bf6ed4f983766eea1dde170a7ef5d0e12cc710d5838c7094`.
+- GitHub resolves the reported source HEAD `fbbcb080904acd88aad83a082803f627859026e2` in this isolated audit repository, and that tree contains 89 migration files. Comparing that commit to the current audit branch showed no changed paths under `supabase/migrations`.
+- The isolated W80 pre-database test verified that the captured digest matches the simulated CRLF checkout manifest and differs from the LF checkout manifest. This identifies a checkout line-ending representation difference; it does not prove the historical SQL bytes executed by Supabase.
+- The reviewer now emits both the raw working-tree manifest and a separate LF-normalized manifest so future captures can be compared across Windows/Linux checkout settings. The existing ZIP remains unchanged and its original raw manifest value is preserved.
+
+**Limit:** only the local-source manifest representation has been reconciled. Historical deployed SQL bytes and deployment provenance remain unverified; the 46 exact version/name metadata matches stay `UNKNOWN`, all owner reviews remain `PENDING`, and release remains NO-GO.
+
 ## Reconciliation totals
 
 | Measure | Count | Interpretation |
