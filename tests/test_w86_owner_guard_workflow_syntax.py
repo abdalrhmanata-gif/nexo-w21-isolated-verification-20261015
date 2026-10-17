@@ -46,6 +46,18 @@ class W86OwnerPathWorkflowSyntaxTests(unittest.TestCase):
         self.assertIn("W86_OWNER_${kind^^}_NO_MUTATION_PASS", helper)
         self.assertIn("owner_path_guard_status=1", helper)
 
+    def test_owner_guard_covers_mixed_set_role_then_inherit_path(self):
+        workflow = WORKFLOW.read_text(encoding="utf-8")
+        self.assertIn('run_owner_path_negative_control mixed "MIXED SET ROLE THEN INHERIT"', workflow)
+        self.assertIn("GRANT w86_acl_owner_mixed_intermediate_probe TO service_role WITH INHERIT FALSE, SET TRUE;", workflow)
+        self.assertIn("GRANT ${role_name} TO w86_acl_owner_mixed_intermediate_probe WITH INHERIT TRUE, SET FALSE;", workflow)
+        self.assertIn("W86_OWNER_MIXED_PATH_REACHABILITY_PASS", workflow)
+        self.assertIn("pg_has_role('service_role', 'w86_acl_owner_mixed_intermediate_probe', 'SET')", workflow)
+        self.assertIn("has_table_privilege('service_role', 'public.agent_executions', 'DELETE')", workflow)
+        self.assertIn("REVOKE w86_acl_owner_mixed_intermediate_probe FROM service_role", workflow)
+        self.assertIn("w86_owner_mixed_path_reachability_exit_code", workflow)
+        self.assertIn("W86_OWNER_MIXED_GUARD_REACHABILITY_CHECK.txt", workflow)
+
     def test_final_gate_fails_closed_on_missing_or_failed_mixed_path_check(self):
         workflow = WORKFLOW.read_text(encoding="utf-8")
         self.assertIn(EXPECTED_FINAL_GATE, workflow)
