@@ -53,6 +53,14 @@ class W86OwnerPathWorkflowSyntaxTests(unittest.TestCase):
         self.assertIn('echo "mixed_path_no_mutation_status=${mixed_path_no_mutation_status}" >> "${RUNNER_TEMP}/W80_EVIDENCE.txt"', workflow)
         self.assertIn('[ "${mixed_path_no_mutation_status:-1}" -ne 0 ]', workflow)
 
+    def test_root_owner_negative_control_is_required_in_w80_gate(self):
+        workflow = WORKFLOW.read_text(encoding="utf-8")
+        self.assertIn("ALTER TABLE public.agent_executions OWNER TO service_role", workflow)
+        self.assertIn("W86_ROOT_OWNER_GUARD_PASS", workflow)
+        self.assertIn("W86_ROOT_OWNER_NO_MUTATION_PASS", workflow)
+        self.assertIn('echo "root_owner_guard_status=${root_owner_guard_status}" >> "${RUNNER_TEMP}/W80_EVIDENCE.txt"', workflow)
+        self.assertIn('[ "${root_owner_guard_status:-1}" -ne 0 ]', workflow)
+
     def test_w86_read_only_acl_probe_covers_mixed_set_role_then_inherit_path(self):
         workflow = WORKFLOW.read_text(encoding="utf-8")
         self.assertIn("CREATE ROLE w86_acl_probe_grandparent NOLOGIN", workflow)
