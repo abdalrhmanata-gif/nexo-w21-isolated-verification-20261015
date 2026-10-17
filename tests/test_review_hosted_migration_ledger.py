@@ -791,5 +791,24 @@ class HostedLedgerReviewTests(unittest.TestCase):
         self.assertTrue(all(row[1] == "—" and row[2] == "—" for row in hosted_only))
 
 
+    def test_captured_source_manifest_is_reproducible(self):
+        import hashlib
+
+        root = Path(__file__).resolve().parents[1]
+        migration_dir = root / "supabase" / "migrations"
+        sql_files = sorted(migration_dir.glob("*.sql"), key=lambda path: path.name)
+        self.assertEqual(len(sql_files), 89)
+
+        manifest = "".join(
+            f"{path.name}\\t{hashlib.sha256(path.read_bytes()).hexdigest()}\\n"
+            for path in sql_files
+        )
+        digest = hashlib.sha256(manifest.encode("utf-8")).hexdigest()
+        self.assertEqual(
+            digest,
+            "0d05ab7285edc975084ddbc595d1af7d2dd0752cc27e94d8fe0549170419be38",
+        )
+
+
 if __name__ == "__main__":
     unittest.main()
