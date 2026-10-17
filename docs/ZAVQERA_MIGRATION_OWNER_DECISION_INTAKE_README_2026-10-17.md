@@ -43,3 +43,20 @@ Keep `approved_for_offline_remediation_design` as `NOT_REVIEWED` until the owner
 ## Required output
 
 For every row that is not fully resolved, leave it visibly `OPEN` or mark it `UNKNOWN_BLOCKING`, identify the missing evidence and its owner, and keep release **NO-GO**. The independent owner signs off on the reconciliation separately; filling a row is not itself approval. Any future hosted change requires a separate written authorization naming the exact target, SQL/change set, operator, time window, backup/recovery procedure, and acceptance checks.
+
+## Offline validator and regression tests
+
+The intake has a dependency-free, offline validator and tamper-regression test suite:
+
+- Validator: [validate_zavqera_migration_owner_intake.py](../tools/validate_zavqera_migration_owner_intake.py)
+- Tests: [test_zavqera_migration_owner_intake.py](../tests/test_zavqera_migration_owner_intake.py)
+- GitHub Actions gate: [zavqera-owner-intake-validation.yml](../.github/workflows/zavqera-owner-intake-validation.yml)
+
+From the repository root, run:
+
+```powershell
+python -m unittest discover -s tests -p 'test_zavqera_migration_owner_intake.py' -v
+python tools/validate_zavqera_migration_owner_intake.py
+```
+
+The validator cross-checks all 95 IDs and immutable baseline fields against the source ledger, enforces the 46/22/21/6 metadata and classification counts, and fails if any row is prematurely dispositioned, assigned to a reviewer, marked approved, given evidence without review, or marked as authorized for hosted changes. It makes no network requests or database connections. This gate protects the integrity of the *intake template*; it does not establish historical provenance or substitute for an independent owner review.
