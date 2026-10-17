@@ -178,3 +178,14 @@ Stop without making a hosted change if the owner is unavailable, independence is
 - Isolated audit PR #2: https://github.com/abdalrhmanata-gif/nexo-w21-isolated-verification-20261015/pull/2
 
 **Final statement:** Until an independent owner completes and approves the review, all these discrepancies remain open, no hosted write is authorized, trusted dispatch adapters remain empty/fail-closed, and release remains **NO-GO**.
+
+
+## 8. Row-by-row migration decision intake
+
+To prevent a broad approval note from hiding unresolved individual rows, use the companion 95-row intake file:
+
+- [Row-level decision intake CSV](ZAVQERA_MIGRATION_OWNER_DECISION_INTAKE_2026-10-17.csv)
+- [Intake instructions and controlled dispositions](ZAVQERA_MIGRATION_OWNER_DECISION_INTAKE_README_2026-10-17.md)
+- Source ledger: [migration provenance reconciliation ledger](ZAVQERA_MIGRATION_PROVENANCE_RECONCILIATION_LEDGER_2026-10-17.md)
+
+The CSV preserves all 95 current reconciliation units and initializes each owner disposition as `OPEN`, reviewer as `UNASSIGNED`, and hosted change authorization as `NO — separate written authorization required`. Fill historical source/blob/archive evidence, actual SQL SHA-256, deployment reference, deployed SQL digest, independent reviewer, UTC review time, decision rationale and follow-up only when supported by evidence. `EXACT_SOURCE_BYTES_VERIFIED` is permitted only when both authoritative historic SQL bytes and a trusted deployment record establish exact identity. Metadata tuple matches, normalized manifests, current schema, similar names and local tests are not sufficient. A `SOURCE_ONLY_REVIEWED` disposition must not imply that ledger absence proves non-deployment.
