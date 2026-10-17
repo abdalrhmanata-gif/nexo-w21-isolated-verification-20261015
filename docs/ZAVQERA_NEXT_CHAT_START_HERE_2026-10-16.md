@@ -107,3 +107,44 @@ This update supersedes earlier “latest SHA/test count” statements in older s
 **Non-bypassable blocker:** the hosted Development ZIP still has 12 queries and no `query_13.json`. Once the local Windows machine is available, use the secure wrapper from the isolated repository and upload only the generated 13-query ZIP. Do not paste the token into chat, use the unrestricted SQL endpoint, or infer hosted role paths from local PostgreSQL. After capture, manually reconcile source migration provenance and require independent database-owner review and separate explicit authorization.
 
 No hosted Supabase writes were performed. `hosted_write_authorized=false`; `TRUSTED_DISPATCH_ADAPTERS` remains empty/fail-closed; PR #1/#2 remain open/draft/unmerged; original PR #39 and Issue #23 remain open; release stays **NO-GO**. The updated portable checkpoint is `ZAVQERA_EXECUTION_CHECKPOINT_2026-10-16.md` in the current ChatGPT conversation.
+
+## 10. Current checkpoint — hosted 13-query capture reviewed and remediation gated (2026-10-17)
+
+This section supersedes prior statements in this handoff that say the current hosted evidence has only 12 queries. A new guarded Windows capture was uploaded and reviewed offline.
+
+### Capture identity and W86 result
+
+- Uploaded archive: 20261017T151516202599Z.zip
+- ZIP SHA-256: 9cee349552ddc4daf3a30c109ac570963313d35915b11308130916cb4773d79d
+- Capture time UTC: 2026-10-17T15:15:16.204988+00:00
+- Target: ZAVQERA Development, project ref mrwmmbytcymqgwvcoywd, region eu-west-1, PostgreSQL server_version_num=170006 (PostgreSQL 17.6).
+- Base query-pack SHA-256: a7aba3461786dbb5854f71dc4f87b7e0498d12509add535ab3df4a7ec231a284
+- Query 13 SHA-256: 806c1fbc1842860387dea71cdcefc6d02edf8e4f23ad1aa07ece96c1a1a8312b
+- Offline reviewer source HEAD: fbbcb080904acd88aad83a082803f627859026e2; migration-manifest SHA-256: 0d05ab7285edc975084ddbc595d1af7d2dd0752cc27e94d8fe0549170419be38.
+- Read-only role gate passed; metadata reports token_saved=false. The audit role has rolbypassrls=true, so do not reuse this credential for application-row reads.
+- Query 13 reports no service_role parent-role table/column ACLs, no path to the table owner, and no path from service_role to authenticated. W86's specific parent/owner-path preflight gate reports NO_PARENT_ROLE_ACL_OBSERVED. This is one cleared gate, not authorization to apply W86.
+
+### Confirmed hosted Development drift — release still NO-GO
+
+- service_role retains direct effective SELECT, INSERT, UPDATE, DELETE, TRUNCATE, REFERENCES, TRIGGER and MAINTAIN on public.agent_executions; RLS is enabled but not forced.
+- Missing relations: public.mission_authority_budgets and public.mission_authority_budget_reservations.
+- All 26 queried expected columns are absent; 10 of 11 expected constraints and all 8 expected indexes are absent; agent_execution_success_receipt_guard trigger is absent.
+- Query 6 has only 17/40 routine expectations matching (23 mismatches): 19 expected signatures absent and four legacy signatures expected absent remain present. Old reserve_ai_generation(text) SECURITY DEFINER routines and legacy read-only research completion overloads require independent body, dependency and ACL review; signature drift alone is not proof of exploitability.
+- Query 10 reports eight explicit default EXECUTE ACL rows for public routines across postgres and supabase_admin.
+- Historical ledger provenance: 89 source migrations, 74 hosted ledger rows, 46 exact version/name tuples, 22 same-name/different-version conflicts, six hosted-only names, and 43 source tuples absent from the hosted ledger. The 22 version-conflict source tuples are included in the 43; these groups must not be added as disjoint counts. Ledger metadata does not prove deployed SQL-byte equality.
+
+### New persistent documents in this audit PR
+
+- Full offline capture review: docs/ZAVQERA_HOSTED_13_QUERY_CAPTURE_REVIEW_2026-10-17.md
+- Controlled remediation/acceptance plan: docs/ZAVQERA_HOSTED_REMEDIATION_GATES_2026-10-17.md
+- PR #2 is still OPEN/DRAFT/UNMERGED; current branch is codex/migration-ledger-provenance-20261015. The exact tested source/test SHA for the ignored-migration-file provenance correction was a9fa8d484015f17fdb454e5dff6838547fe63c30:
+  - W80 isolated PostgreSQL 17: run 39026148527 SUCCESS; artifact 12098333981; ZIP digest sha256:16066fd85754408f2aff997952706445b34195f3669128d95e97eb4c88b2be81.
+  - Flutter CI on that tested SHA: run 39026148532 SUCCESS.
+  - Test counts: catalog 8/8, 13-query capture runner 27/27, ledger reviewer 36/36. 13-query local self-test passed without network requests; migration replay, required pgTAP flow and disposable cleanup passed.
+- Later handoff/report documentation commits do not change tested runner/reviewer source. Exact current-head Flutter CI also passed (run 39026246970). PR #1 remains OPEN/DRAFT/UNMERGED.
+
+### Required disposition and next move
+
+Keep hosted_write_authorized=false. Do not apply W86 or any migration to hosted Development or Main/Production. Do not edit the hosted ledger to make tuples match. The next step is independent database-owner review plus authoritative recovery of historic SQL source for the 22 timestamp/version conflicts and six hosted-only names. Then finalize a dependency-aware, forward-only remediation plan with verified backup/restore, isolated PG17 testing, exact pre/post catalog assertions, and separate written authorization naming the target project and change set. If historical source remains unknown, release remains NO-GO; do not infer it from current functions or filenames.
+
+No hosted database was modified during the capture review or planning. TRUSTED_DISPATCH_ADAPTERS stays empty/fail-closed.
