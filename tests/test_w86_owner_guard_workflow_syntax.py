@@ -46,6 +46,13 @@ class W86OwnerPathWorkflowSyntaxTests(unittest.TestCase):
         self.assertIn("W86_OWNER_${kind^^}_NO_MUTATION_PASS", helper)
         self.assertIn("owner_path_guard_status=1", helper)
 
+    def test_final_gate_fails_closed_on_missing_or_failed_mixed_path_check(self):
+        workflow = WORKFLOW.read_text(encoding="utf-8")
+        self.assertIn(EXPECTED_FINAL_GATE, workflow)
+        self.assertIn('mixed_path_no_mutation_status="${mixed_no_mutation_status}"', workflow)
+        self.assertIn('echo "mixed_path_no_mutation_status=${mixed_path_no_mutation_status}" >> "${RUNNER_TEMP}/W80_EVIDENCE.txt"', workflow)
+        self.assertIn('[ "${mixed_path_no_mutation_status:-1}" -ne 0 ]', workflow)
+
     def test_w86_read_only_acl_probe_covers_mixed_set_role_then_inherit_path(self):
         workflow = WORKFLOW.read_text(encoding="utf-8")
         self.assertIn("CREATE ROLE w86_acl_probe_grandparent NOLOGIN", workflow)
