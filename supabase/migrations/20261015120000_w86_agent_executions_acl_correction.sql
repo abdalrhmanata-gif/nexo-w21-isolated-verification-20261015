@@ -15,6 +15,7 @@ declare
   inherited_entries text;
   reachable_authenticated_parent text;
   reachable_anon_authenticated_parent text;
+  reachable_untrusted_owner_path text;
   reachable_owner_role_path text;
 begin
   with recursive role_path (
@@ -97,6 +98,33 @@ begin
      where rp.depth > 0
        and rp.role_name = 'authenticated'
        and rp.reachable_via_membership_options
+  ),
+  untrusted_owner_role_path (
+    role_oid, role_name, depth, oid_path, inherits_all, can_set_role, reachable_via_membership_options
+  ) as (
+    select r.oid, r.rolname, 0, array[r.oid]::oid[], true, true, true
+      from pg_roles r
+     where r.rolname in ('anon', 'authenticated')
+    union all
+    select parent.oid,
+           parent.rolname,
+           child.depth + 1,
+           child.oid_path || parent.oid,
+           child.inherits_all and membership.inherit_option,
+           child.can_set_role and membership.set_option,
+           (child.reachable_via_membership_options and membership.inherit_option)
+             or (child.can_set_role and membership.set_option)
+      from untrusted_owner_role_path child
+      join pg_auth_members membership on membership.member = child.role_oid
+      join pg_roles parent on parent.oid = membership.roleid
+     where not parent.oid = any(child.oid_path)
+  ),
+  reachable_untrusted_owner as (
+    select string_agg(format('role %I', urp.role_name), ', ' order by urp.role_name) as role_names
+      from untrusted_owner_role_path urp
+      join pg_class c on c.oid = 'public.agent_executions'::regclass
+     where urp.role_name = pg_get_userbyid(c.relowner)
+       and (urp.depth = 0 or urp.reachable_via_membership_options)
   )
   select
     (select string_agg(
@@ -105,12 +133,13 @@ begin
      ) from inherited_acl),
     (select role_names from reachable_authenticated),
     (select role_names from reachable_anon_authenticated),
+    (select role_names from reachable_untrusted_owner),
     (select string_agg(format('role %I', rp.role_name), ', ' order by rp.role_name)
        from role_path rp
        join pg_class c on c.oid = 'public.agent_executions'::regclass
       where rp.role_name = pg_get_userbyid(c.relowner)
         and (rp.depth = 0 or rp.reachable_via_membership_options))
-    into inherited_entries, reachable_authenticated_parent, reachable_anon_authenticated_parent, reachable_owner_role_path;
+    into inherited_entries, reachable_authenticated_parent, reachable_anon_authenticated_parent, reachable_untrusted_owner_path, reachable_owner_role_path;
 
   -- Ownership carries powers that are not reliably represented by grant rows:
   -- service_role must not be the owner or be able to inherit owner authority
@@ -136,6 +165,14 @@ begin
     raise exception
       'W86 refused: anon can reach authenticated via a parent role path (%); granting authenticated SELECT would create an anonymous access path',
       reachable_anon_authenticated_parent;
+  end if;
+
+  -- Untrusted API roles must not own this table or inherit/SET ROLE to its owner.
+  -- ACL revokes cannot strip an owner's implicit privileges or RLS bypass behavior.
+  if reachable_untrusted_owner_path is not null then
+    raise exception
+      'W86 refused: anon/authenticated can own or reach owner of public.agent_executions (%); direct ACL revokes do not remove owner authority',
+      reachable_untrusted_owner_path;
   end if;
 
   if inherited_entries is not null then
