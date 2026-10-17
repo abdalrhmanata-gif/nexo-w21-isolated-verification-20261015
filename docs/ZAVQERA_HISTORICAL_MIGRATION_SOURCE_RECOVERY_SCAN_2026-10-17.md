@@ -94,3 +94,10 @@ The valid classification for all unresolved historical bytes remains \`UNKNOWN\`
 - Require independent database-owner review, authoritative source recovery, isolated revalidation and separate explicit authorization before any future hosted change.
 
 **Result: SOURCE RECOVERY NOT ACHIEVED. RELEASE NO-GO.**
+
+## 6. Additional origin/history checks after the main scan
+
+- The original `Nexo` repository's matching tag-ref query returned **0 visible tag refs**.
+- The related original-repository PR [#12 — “Integrate ZAVQERA W4-W16 baseline into main (clean, artifact-free)”](https://github.com/abdalrhmanata-gif/Nexo/pull/12) remains OPEN and unmerged. Its first migration import commit is the same `772f0116...` recorded above; the current W4 table privilege, W7, W8, W9, W9.1 and W10 files are added in that commit rather than recovered as historical renames. This PR is not modified by this audit.
+- Owner-scoped exact-name code-search queries returned no matches for the six hosted-only names `w4_harden_profile_trigger_search_path`, `w6_authoritative_mission_mutation_and_concurrency`, `w35_plan_ai_allowances_5_50_300`, `expose_anonymous_ai_guard_rpc`, `w44_workspace_invitations_and_activity`, and `w46_invitation_activity_bindings`. This query is index-/visibility-limited and is supporting negative evidence only; it cannot establish that the source never existed.
+- These checks add no recovered SQL bytes and do not change the classification. The source remains **UNKNOWN** pending trusted owner-controlled files, backup/deployment archives or another verifiable original source.
