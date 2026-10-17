@@ -230,7 +230,7 @@ def source_provenance(repo_root, source_rows):
         if head_result.returncode == 0 and re.fullmatch(r"[0-9a-fA-F]{40,64}", candidate):
             head = candidate.lower()
             status_result = subprocess.run(
-                ["git", "status", "--porcelain=v1", "--untracked-files=all", "--", "supabase/migrations"],
+                ["git", "status", "--porcelain=v1", "--untracked-files=all", "--ignored=matching", "--", "supabase/migrations"],
                 cwd=repo_root,
                 capture_output=True,
                 text=True,
