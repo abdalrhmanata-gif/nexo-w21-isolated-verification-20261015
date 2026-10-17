@@ -959,6 +959,7 @@ jobs:
                 ALTER TABLE public.agent_executions OWNER TO postgres;
               END IF;
               IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'w86_acl_owner_mixed_intermediate_probe') THEN
+                EXECUTE 'REVOKE ALL PRIVILEGES ON TABLE public.agent_executions FROM service_role';
                 IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = '${role_name}') THEN
                   EXECUTE 'REVOKE ${role_name} FROM w86_acl_owner_mixed_intermediate_probe';
                 END IF;
