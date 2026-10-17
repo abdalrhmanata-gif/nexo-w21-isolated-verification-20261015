@@ -751,5 +751,45 @@ class HostedLedgerReviewTests(unittest.TestCase):
         self.assertIn("not complete proof of reachability", rendered)
 
 
+    def test_persisted_migration_provenance_ledger_is_consistent(self):
+        ledger_path = (
+            Path(__file__).resolve().parents[1]
+            / "docs"
+            / "ZAVQERA_MIGRATION_PROVENANCE_RECONCILIATION_LEDGER_2026-10-17.md"
+        )
+        ledger = ledger_path.read_text(encoding="utf-8")
+        rows = [
+            [cell.strip() for cell in line.strip().strip("|").split("|")]
+            for line in ledger.splitlines()
+            if line.startswith("| ZMR-")
+        ]
+
+        self.assertEqual(len(rows), 95)
+        self.assertEqual([row[0] for row in rows], [f"ZMR-{i:03d}" for i in range(1, 96)])
+        self.assertTrue(all(len(row) == 9 for row in rows))
+        self.assertTrue(all(row[8] == "PENDING" for row in rows))
+        self.assertFalse(any(row[6] == "EXACT_SOURCE_BYTES_VERIFIED" for row in rows))
+
+        expected = {
+            "EXACT_VERSION_NAME_TUPLE": ("UNKNOWN", 46),
+            "SAME_NAME_DIFFERENT_VERSION": ("NAME_VERSION_CONFLICT", 22),
+            "SOURCE_TUPLE_ABSENT_FROM_HOSTED_LEDGER": ("SOURCE_NOT_IN_LEDGER", 21),
+            "HOSTED_TUPLE_ABSENT_FROM_SOURCE": ("HOSTED_ONLY_SOURCE_UNKNOWN", 6),
+        }
+        for relation, (classification, expected_count) in expected.items():
+            matching = [row for row in rows if row[5] == relation]
+            self.assertEqual(len(matching), expected_count, relation)
+            self.assertTrue(all(row[6] == classification for row in matching), relation)
+
+        exact = [row for row in rows if row[5] == "EXACT_VERSION_NAME_TUPLE"]
+        self.assertTrue(all((row[1], row[2]) == (row[3], row[4]) for row in exact))
+        conflicts = [row for row in rows if row[5] == "SAME_NAME_DIFFERENT_VERSION"]
+        self.assertTrue(all(row[2] == row[4] and row[1] != row[3] for row in conflicts))
+        source_only = [row for row in rows if row[5] == "SOURCE_TUPLE_ABSENT_FROM_HOSTED_LEDGER"]
+        self.assertTrue(all(row[3] == "—" and row[4] == "—" for row in source_only))
+        hosted_only = [row for row in rows if row[5] == "HOSTED_TUPLE_ABSENT_FROM_SOURCE"]
+        self.assertTrue(all(row[1] == "—" and row[2] == "—" for row in hosted_only))
+
+
 if __name__ == "__main__":
     unittest.main()
