@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """Offline guard for the row-level ZAVQERA migration owner-decision intake.
 
-This tool reads repository files only. It performs no network/database access and
-never authorizes or executes a hosted change.
+Reads only local repository files. No network/database access. This validator
+keeps the template fail-closed while permitting evidence-complete owner decisions.
+It never authorizes or executes a hosted change.
 """
 from __future__ import annotations
 
@@ -28,6 +29,8 @@ EXPECTED_CLASSIFICATIONS = {
     "HOSTED_ONLY_SOURCE_UNKNOWN": 6,
 }
 EXPECTED_CAPTURE_SHA256 = "9cee349552ddc4daf3a30c109ac570963313d35915b11308130916cb4773d79d"
+SHA256_PATTERN = re.compile(r"^[0-9a-f]{64}$")
+UTC_TIMESTAMP_PATTERN = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z$")
 REQUIRED_COLUMNS = {
     "reconciliation_id", "source_version", "source_name", "hosted_version",
     "hosted_name", "metadata_relation", "existing_classification",
@@ -40,33 +43,46 @@ REQUIRED_COLUMNS = {
     "decision_rationale_and_evidence", "required_follow_up",
     "approved_for_offline_remediation_design", "hosted_change_authorized",
 }
-OWNER_EVIDENCE_FIELDS = (
-    "authoritative_historical_source_uri",
-    "source_git_blob_commit_or_archive_provenance",
-    "verified_source_sql_sha256",
-    "hosted_deployment_record_uri",
-    "verified_deployed_sql_sha256",
-    "evidence_artifact_sha256",
-    "reviewed_at_utc",
-    "decision_rationale_and_evidence",
-)
+ALLOWED_OWNER_DISPOSITIONS = {
+    "OPEN",
+    "EXACT_SOURCE_BYTES_VERIFIED",
+    "NAME_VERSION_CONFLICT_RESOLVED",
+    "HOSTED_ONLY_SOURCE_RECOVERED",
+    "SOURCE_ONLY_REVIEWED",
+    "UNKNOWN_BLOCKING",
+}
+ALLOWED_OFFLINE_APPROVAL = {
+    "NOT_REVIEWED",
+    "APPROVED_FOR_OFFLINE_DESIGN",
+    "REJECTED",
+}
+VERIFIED_BYTE_DISPOSITIONS = {
+    "EXACT_SOURCE_BYTES_VERIFIED",
+    "NAME_VERSION_CONFLICT_RESOLVED",
+    "HOSTED_ONLY_SOURCE_RECOVERED",
+}
+SOURCE_EVIDENCE_DISPOSITIONS = {
+    "EXACT_SOURCE_BYTES_VERIFIED",
+    "NAME_VERSION_CONFLICT_RESOLVED",
+    "HOSTED_ONLY_SOURCE_RECOVERED",
+    "SOURCE_ONLY_REVIEWED",
+}
 LEDGER_FIELDS = (
-    "reconciliation_id", "source_version", "source_name",
-    "hosted_version", "hosted_name", "metadata_relation",
-    "existing_classification", "source_sql_sha256_in_review_output",
-    "existing_owner_review_status",
+    "reconciliation_id", "source_version", "source_name", "hosted_version",
+    "hosted_name", "metadata_relation", "existing_classification",
+    "source_sql_sha256_in_review_output", "existing_owner_review_status",
 )
 
 
-def _read_csv(path: Path) -> tuple[list[str], list[dict[str, str]]]:
+def read_csv(path: Path) -> tuple[list[str], list[dict[str, str]]]:
     with path.open("r", encoding="utf-8-sig", newline="") as handle:
         reader = csv.DictReader(handle)
         headers = list(reader.fieldnames or [])
-        rows = [{key: (value or "") for key, value in row.items()} for row in reader]
+        rows = [{key: (value or "").strip() for key, value in row.items()} for row in reader]
     return headers, rows
 
 
-def _read_ledger(path: Path) -> dict[str, dict[str, str]]:
+def read_ledger(path: Path) -> dict[str, dict[str, str]]:
     result: dict[str, dict[str, str]] = {}
     pattern = re.compile(r"^\| ZMR-\d{3} \|")
     with path.open("r", encoding="utf-8") as handle:
@@ -81,6 +97,10 @@ def _read_ledger(path: Path) -> dict[str, dict[str, str]]:
     return result
 
 
+def valid_sha(value: str) -> bool:
+    return bool(SHA256_PATTERN.fullmatch(value.strip()))
+
+
 def validate(
     intake_path: Path,
     ledger_path: Path,
@@ -88,8 +108,8 @@ def validate(
 ) -> list[str]:
     errors: list[str] = []
     try:
-        headers, rows = _read_csv(intake_path)
-        ledger = _read_ledger(ledger_path)
+        headers, rows = read_csv(intake_path)
+        ledger = read_ledger(ledger_path)
         instructions = instructions_path.read_text(encoding="utf-8")
     except (OSError, UnicodeError, csv.Error, ValueError) as exc:
         return [f"input_error: {exc}"]
@@ -97,7 +117,6 @@ def validate(
     missing = REQUIRED_COLUMNS - set(headers)
     if missing:
         errors.append("missing_columns: " + ", ".join(sorted(missing)))
-
     if len(rows) != EXPECTED_ROWS:
         errors.append(f"row_count_expected_{EXPECTED_ROWS}_got_{len(rows)}")
 
@@ -115,28 +134,92 @@ def validate(
 
     for row in rows:
         rid = row.get("reconciliation_id", "<missing-id>")
-        if row.get("owner_disposition") != "OPEN":
-            errors.append(f"{rid}: owner_disposition_must_remain_OPEN")
-        if row.get("independent_reviewer_name_role") != "UNASSIGNED":
-            errors.append(f"{rid}: reviewer_must_remain_UNASSIGNED_until_independent_review")
-        if row.get("approved_for_offline_remediation_design") != "NOT_REVIEWED":
-            errors.append(f"{rid}: offline_design_approval_must_remain_NOT_REVIEWED")
+        disposition = row.get("owner_disposition", "")
+        reviewer = row.get("independent_reviewer_name_role", "")
+        reviewed_at = row.get("reviewed_at_utc", "")
+        rationale = row.get("decision_rationale_and_evidence", "")
+        follow_up = row.get("required_follow_up", "")
+        offline_approval = row.get("approved_for_offline_remediation_design", "")
+        source_sha = row.get("verified_source_sql_sha256", "")
+        deployed_sha = row.get("verified_deployed_sql_sha256", "")
+
+        if disposition not in ALLOWED_OWNER_DISPOSITIONS:
+            errors.append(f"{rid}: invalid_owner_disposition:{disposition}")
+        if offline_approval not in ALLOWED_OFFLINE_APPROVAL:
+            errors.append(f"{rid}: invalid_offline_design_approval:{offline_approval}")
+
+        # The intake itself can never authorize a hosted change. Such an
+        # authorization must be separate, explicit, scoped and recorded.
         if row.get("hosted_change_authorized") != "NO — separate written authorization required":
             errors.append(f"{rid}: hosted_change_authorized_must_remain_NO")
-        if row.get("existing_owner_review_status") != "PENDING":
-            errors.append(f"{rid}: original_owner_review_status_must_remain_PENDING")
-        for field in OWNER_EVIDENCE_FIELDS:
-            if row.get(field, "").strip():
-                errors.append(f"{rid}: owner_evidence_field_prematurely_filled:{field}")
-        if row.get("required_follow_up") != "OWNER REVIEW REQUIRED":
-            errors.append(f"{rid}: required_follow_up_must_remain_OWNER_REVIEW_REQUIRED")
 
-    missing_ledger_ids = set(ledger) - set(ids)
-    missing_intake_ids = set(ids) - set(ledger)
-    if missing_ledger_ids or missing_intake_ids:
+        if row.get("existing_owner_review_status") != "PENDING":
+            errors.append(f"{rid}: immutable_ledger_owner_status_changed")
+
+        if disposition == "OPEN":
+            if reviewer and reviewer == "UNASSIGNED" and reviewed_at:
+                errors.append(f"{rid}: unassigned_reviewer_cannot_have_review_timestamp")
+            if reviewed_at and not UTC_TIMESTAMP_PATTERN.fullmatch(reviewed_at):
+                errors.append(f"{rid}: reviewed_at_utc_must_be_iso8601_z")
+            if offline_approval == "APPROVED_FOR_OFFLINE_DESIGN":
+                if reviewer in ("", "UNASSIGNED") or not reviewed_at or not rationale:
+                    errors.append(f"{rid}: offline_design_approval_requires_reviewer_date_and_rationale")
+        else:
+            if reviewer in ("", "UNASSIGNED"):
+                errors.append(f"{rid}: disposition_requires_independent_reviewer")
+            if not UTC_TIMESTAMP_PATTERN.fullmatch(reviewed_at):
+                errors.append(f"{rid}: reviewed_disposition_requires_iso8601_utc_timestamp")
+            if not rationale:
+                errors.append(f"{rid}: reviewed_disposition_requires_rationale")
+            if not follow_up:
+                errors.append(f"{rid}: reviewed_disposition_requires_follow_up")
+            if offline_approval == "APPROVED_FOR_OFFLINE_DESIGN" and (reviewer in ("", "UNASSIGNED") or not rationale):
+                errors.append(f"{rid}: offline_design_approval_requires_reviewer_and_rationale")
+
+        if disposition in SOURCE_EVIDENCE_DISPOSITIONS:
+            for field in (
+                "authoritative_historical_source_uri",
+                "source_git_blob_commit_or_archive_provenance",
+                "verified_source_sql_sha256",
+                "evidence_artifact_sha256",
+            ):
+                if not row.get(field, ""):
+                    errors.append(f"{rid}: {disposition}_requires_{field}")
+            if source_sha and not valid_sha(source_sha):
+                errors.append(f"{rid}: invalid_verified_source_sha256")
+
+        if disposition in VERIFIED_BYTE_DISPOSITIONS:
+            for field in (
+                "hosted_deployment_record_uri",
+                "verified_deployed_sql_sha256",
+            ):
+                if not row.get(field, ""):
+                    errors.append(f"{rid}: {disposition}_requires_{field}")
+            if not valid_sha(source_sha):
+                errors.append(f"{rid}: verified_source_sql_sha256_must_be_64_hex")
+            if not valid_sha(deployed_sha):
+                errors.append(f"{rid}: verified_deployed_sql_sha256_must_be_64_hex")
+            if valid_sha(source_sha) and valid_sha(deployed_sha) and source_sha != deployed_sha:
+                errors.append(f"{rid}: source_and_deployed_sql_sha256_mismatch")
+            evidence_sha = row.get("evidence_artifact_sha256", "")
+            if not valid_sha(evidence_sha):
+                errors.append(f"{rid}: evidence_artifact_sha256_must_be_64_hex")
+
+        if disposition == "SOURCE_ONLY_REVIEWED":
+            # A source-only classification is not evidence the migration was
+            # never deployed. The reviewer must state that limitation.
+            limitation = rationale.lower()
+            if "not prove" not in limitation and "does not prove" not in limitation and "doesn't prove" not in limitation:
+                errors.append(f"{rid}: source_only_rationale_must_state_ledger_absence_does_not_prove_non_deployment")
+
+        if offline_approval == "APPROVED_FOR_OFFLINE_DESIGN" and disposition == "UNKNOWN_BLOCKING":
+            errors.append(f"{rid}: unresolved_unknown_row_cannot_be_approved_for_offline_design")
+
+    expected_ids_in_ledger = set(ledger)
+    if expected_ids_in_ledger != set(ids):
         errors.append(
-            f"ledger_intake_id_difference: missing_from_intake={sorted(missing_ledger_ids)} "
-            f"missing_from_ledger={sorted(missing_intake_ids)}"
+            f"ledger_intake_id_difference: missing_from_intake={sorted(expected_ids_in_ledger - set(ids))} "
+            f"missing_from_ledger={sorted(set(ids) - expected_ids_in_ledger)}"
         )
     intake_by_id = {row.get("reconciliation_id", ""): row for row in rows}
     for rid, baseline in ledger.items():
