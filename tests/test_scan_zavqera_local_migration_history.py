@@ -59,8 +59,9 @@ class LocalMigrationHistoryScanTests(unittest.TestCase):
     def test_unreachable_commit_object_is_scanned(self):
         repo = self._repo()
         commit = self._write_candidate_commit(repo)
-        run_git(repo, "update-ref", "-d", "refs/heads/master")
-        run_git(repo, "update-ref", "-d", "refs/heads/main")
+        refs = run_git(repo, "for-each-ref", "--format=%(refname)", "refs/heads").splitlines()
+        for ref in refs:
+            run_git(repo, "update-ref", "-d", ref)
         run_git(repo, "reflog", "expire", "--expire=now", "--all")
         result = scan_repository(repo)
         matches = [item for item in result["candidates"] if item["commit_sha"] == commit and item["path"] == TARGET]
