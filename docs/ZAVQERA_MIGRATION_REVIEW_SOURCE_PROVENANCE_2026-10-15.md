@@ -5,7 +5,7 @@
 ## Fields added to `ledger_acl_review.json`, Markdown, and CLI summary
 
 - `source_checkout_head_sha`: local `git rev-parse --verify HEAD` result, if available. It is `null` when the supplied source directory has no valid local Git checkout.
-- `source_migration_manifest_sha256`: deterministic SHA-256 of UTF-8 manifest lines sorted by migration filename; each line is `filename<TAB>per-file-SHA256<LF>`. All checked-in `.sql` files under `supabase/migrations` are included.
+- `source_migration_manifest_sha256`: deterministic SHA-256 of UTF-8 manifest lines sorted by migration filename; each line is `filename<TAB>per-file-SHA256<LF>`. Every `.sql` file physically present directly under `supabase/migrations` is included, including untracked or ignored files; the scoped Git-clean flag distinguishes a committed migration tree from local additions and edits.
 - `source_migrations_worktree_clean`: `true` or `false` from local Git status scoped to `supabase/migrations`; `null` if Git metadata is not available.
 
 The manifest covers the actual file bytes through each per-file SHA, so it remains useful when a migration file is modified but not committed. The Git HEAD identifies the recorded commit; the clean flag distinguishes the committed migration tree from local edits. Git calls are local only; the tool does not contact a remote or run SQL.
