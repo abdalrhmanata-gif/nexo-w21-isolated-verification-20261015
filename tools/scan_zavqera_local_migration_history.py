@@ -117,27 +117,40 @@ def scan_repository(repo_path: str | Path, max_commits: int = 50000) -> dict[str
     scanned_commits = 0
     for commit in sorted(all_commits):
         scanned_commits += 1
-        tree = git(repo, "ls-tree", "-r", "-z", "--full-tree", "--name-only", commit, "--", "supabase/migrations", check=False)
+        tree = git(repo, "ls-tree", "-r", "-l", "-z", "--full-tree", commit, "--", "supabase/migrations", check=False)
         if tree.returncode != 0:
             tree_errors.append({"commit": commit, "error": tree.stderr.decode("utf-8", errors="replace").strip()})
             continue
-        for path_bytes in tree.stdout.split(b"\x00"):
-            if not path_bytes:
+        for entry in tree.stdout.split(b"\x00"):
+            if not entry:
+                continue
+            metadata, separator, path_bytes = entry.partition(b"\t")
+            fields = metadata.split()
+            if not separator or len(fields) < 4 or fields[1] != b"blob":
+                tree_errors.append({"commit": commit, "error": "unexpected_ls_tree_entry"})
+                continue
+            blob_oid = fields[2].decode("ascii", errors="ignore")
+            try:
+                file_size_bytes = int(fields[3])
+            except ValueError:
+                tree_errors.append({"commit": commit, "error": "missing_blob_size"})
                 continue
             matched = _candidate_path(path_bytes)
             if not matched:
                 continue
             version, stem = matched
             path = path_bytes.decode("utf-8", errors="replace")
-            ref = git(repo, "rev-parse", f"{commit}:{path}", check=False)
-            blob_oid = ref.stdout.decode("ascii", errors="ignore").strip()
-            if ref.returncode != 0 or not OID_HEX.fullmatch(blob_oid):
-                tree_errors.append({"commit": commit, "error": f"could_not_resolve_blob_for:{path}"})
+            if not OID_HEX.fullmatch(blob_oid):
+                tree_errors.append({"commit": commit, "error": f"invalid_blob_oid_for:{path}"})
                 continue
             try:
-                digest = hashlib.sha256(object_bytes(repo, blob_oid)).hexdigest()
+                blob_bytes = object_bytes(repo, blob_oid)
+                digest = hashlib.sha256(blob_bytes).hexdigest()
             except ScanError as exc:
                 tree_errors.append({"commit": commit, "error": str(exc)})
+                continue
+            if len(blob_bytes) != file_size_bytes:
+                tree_errors.append({"commit": commit, "error": f"blob_size_mismatch_for:{path}"})
                 continue
             key = (commit, path)
             candidates[key] = {
@@ -146,13 +159,14 @@ def scan_repository(repo_path: str | Path, max_commits: int = 50000) -> dict[str
                 "path": path,
                 "commit_sha": commit,
                 "git_blob_oid": blob_oid,
+                "file_size_bytes": file_size_bytes,
                 "sql_sha256": digest,
                 "commit_reachability": (
                     "REF_OR_REFLOG_REACHABLE" if commit in commits else "UNREACHABLE_COMMIT_OBJECT"
                 ),
             }
 
-    fsck_failure = fsck.returncode not in (0, 1)
+    fsck_failure = fsck.returncode != 0
     return {
         "scan_status": "PARTIAL_REQUIRES_REVIEW" if tree_errors or fsck_failure else "COMPLETED_CANDIDATE_SCAN",
         "repository_root": str(repo),
