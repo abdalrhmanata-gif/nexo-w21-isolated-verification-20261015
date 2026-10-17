@@ -117,11 +117,12 @@ A targeted scan of 10 selected Library ZIPs found one candidate: `ZAVQERA_W4_DB_
 This does **not** resolve hosted row ZMR-008: source version `20260921180052`, hosted version `20260921180138`. The W4 pack status document says eight W4 migrations were applied to Development but provides no per-migration execution receipt or deployed SQL digest for hosted version `20260921180138`. Keep `NAME_VERSION_CONFLICT` / owner review `PENDING`; deployed byte hash and deployment URI remain unknown. Detailed report: [ZAVQERA_LIBRARY_ARCHIVE_MIGRATION_SOURCE_RECOVERY_2026-10-17.md](ZAVQERA_LIBRARY_ARCHIVE_MIGRATION_SOURCE_RECOVERY_2026-10-17.md).
 
 The selected scan checked 10 ZIP archives / 228 members / all 28 known target stems (10/10 archive integrity checks passed). It is **not** an exhaustive scan of all 110 Library ZIPs. The other known conflicting/hosted-only SQL sources remain unrecovered.
-## Expanded Library ZIP scan — 2026-10-17
+## Final full-Library ZIP snapshot scan — 2026-10-17 (supersedes earlier bounded-window counts)
 
-Final, duplicate-aware results for the current Library recovery window:
-- 42 ZIP files created on/after 2026-09-20 were scanned, excluding the generated continuity bundle to avoid counting an embedded copy of the W4 source as an independent archive.
-- Outer ZIP integrity 42/42; nested ZIP integrity 166/166; 11,590 members; 59,362,544 extracted member-bytes; zero errors and zero size/depth caps.
-- One candidate path/unique SQL hash: `20260921180052_w4_table_privilege_hardening.sql` (559-byte LF, SHA-256 `3419a01a1b0ea66bd22877f478b61473cf1210006828ea3f28c5c08fb51ef0c8`). It does not supply a per-migration deployment receipt or deployed SQL digest for hosted `20260921180138`, so ZMR-008 remains `NAME_VERSION_CONFLICT` / `PENDING`.
-- This is still not an exhaustive scan of all 111 Library ZIP archives: the older 69 archives were outside the selected date window, and external/private/deleted repositories and user-device clones are not covered.
-- Detailed report: `docs/ZAVQERA_LIBRARY_ARCHIVE_MIGRATION_SOURCE_RECOVERY_2026-10-17.md`.
+- All 112 ZIP archive objects in the current Library index were integrity-checked; 112/112 passed.
+- 79 unique outer archive content hashes. Recursive expansion processed 86 unique ZIP payloads and 4,572 members / 24,630,444 declared uncompressed member-bytes. 130 nested ZIP occurrences were found; 123 duplicate payloads were content-hash deduplicated.
+- 28 target stems were searched (22 timestamp-conflict migration names and six hosted-only migration names). One unique SQL source candidate was found: source version `20260921180052_w4_table_privilege_hardening`, 559-byte LF SQL hash `3419a01a1b0ea66bd22877f478b61473cf1210006828ea3f28c5c08fb51ef0c8`, from `ZAVQERA_W4_DB_READY_PACK.zip`.
+- No source SQL or deployment receipt/hash was recovered for hosted version `20260921180138`. ZMR-008 remains `NAME_VERSION_CONFLICT` / owner review `PENDING`; the other 21 version conflicts and six hosted-only names remain unresolved.
+- Errors/caps: zero read/integrity errors, zero size/total/depth cap hits. No network or database access; `hosted_write_authorized=false`.
+- Full machine report: `ZAVQERA_LIBRARY_ARCHIVE_MIGRATION_SOURCE_SCAN_2026-10-17_ALL_112.json`; SHA-256 `24c01040a5ae4f4376a99a5205999d4a6d6c5fd499a1abc84cbaf819071c7cd6`.
+- This supersedes the prior 42/43-archive bounded scans and covers all 112 ZIP archive objects visible in the Library index at scan time. It does not cover unindexed/deleted external storage or every local clone.
