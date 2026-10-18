@@ -208,6 +208,11 @@ jobs:
             timeout 30m supabase test db supabase/tests/w30_launch_gate_pgtap.sql
           )
 
+      - name: Run disposable PostgreSQL logical backup/restore smoke
+        run: |
+          set -euo pipefail
+          bash "$GITHUB_WORKSPACE/tool/w21_disposable_restore_smoke.sh"
+
       - name: Run Mission Authority execution security regressions
         run: |
           set -euo pipefail
@@ -359,9 +364,52 @@ jobs:
             else
               echo "cleanup_proof=missing"
             fi
+            if [ -f "$RUNNER_TEMP/W21_RESTORE_SMOKE_PROOF.txt" ]; then
+              cat "$RUNNER_TEMP/W21_RESTORE_SMOKE_PROOF.txt"
+            else
+              echo "restore_smoke_proof=missing"
+            fi
           } > "$RUNNER_TEMP/W21_EVIDENCE.txt"
-          if [ ! -f "$RUNNER_TEMP/W21_CLEANUP_PROOF.txt" ] || ! grep -q '^cleanup_verified=true$' "$RUNNER_TEMP/W21_CLEANUP_PROOF.txt"; then
+          if [ ! -f "$RUNNER_TEMP/W21_CLEANUP_PROOF.txt" ] || ! grep -q '^cleanup_verified=true
+
+      - name: Upload browser diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: zavqera-w21-browser-diagnostics
+          path: ${{ runner.temp }}/w21-playwright
+          if-no-files-found: warn
+
+      - name: Upload evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: zavqera-w21-evidence
+          path: ${{ runner.temp }}/W21_EVIDENCE.txt
+          if-no-files-found: error
+ "$RUNNER_TEMP/W21_CLEANUP_PROOF.txt"; then
             echo "Cleanup proof missing or not verified; see W21 evidence artifact." >&2
+            exit 1
+          fi
+          if [ "${{ job.status }}" = "success" ] && { [ ! -f "$RUNNER_TEMP/W21_RESTORE_SMOKE_PROOF.txt" ] || ! grep -q '^restore_smoke=PASS
+
+      - name: Upload browser diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: zavqera-w21-browser-diagnostics
+          path: ${{ runner.temp }}/w21-playwright
+          if-no-files-found: warn
+
+      - name: Upload evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: zavqera-w21-evidence
+          path: ${{ runner.temp }}/W21_EVIDENCE.txt
+          if-no-files-found: error
+ "$RUNNER_TEMP/W21_RESTORE_SMOKE_PROOF.txt"; }; then
+            echo "Restore smoke proof missing or not passing; see W21 evidence artifact." >&2
             exit 1
           fi
 
