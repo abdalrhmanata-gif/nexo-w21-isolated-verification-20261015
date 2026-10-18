@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Disposable PostgreSQL logical backup/restore smoke only.
-# The archive never leaves the labeled W21 PostgreSQL container and is never
-# uploaded. This is not a production backup or an RPO/RTO rehearsal.
+# Allowlisted application-schema logical backup/restore smoke only.
+# Excludes managed realtime/storage/vault schemas; the archive stays in the
+# labeled W21 PostgreSQL container and is never uploaded. Not a full-DB or
+# production backup and not an RPO/RTO rehearsal.
 PROJECT_ID="zavqera-e2e-local"
 EXPECTED_SENTINEL="$ZAVQERA_E2E_SUPABASE_WORKDIR/ZAVQERA_E2E_DISPOSABLE"
 PROOF="$RUNNER_TEMP/W21_RESTORE_SMOKE_PROOF.txt"
@@ -99,7 +100,13 @@ docker exec --user postgres "$DB_CONTAINER" pg_isready -U postgres -d postgres >
 
 # Create the archive only inside the explicitly labeled local test container.
 docker exec --user postgres "$DB_CONTAINER" pg_dump \
-  --format=custom --no-owner --no-acl --file="$DUMP_PATH" --dbname=postgres
+  --format=custom --no-owner --no-acl \
+  --schema=public \
+  --schema=private \
+  --schema=auth \
+  --schema=extensions \
+  --schema=supabase_migrations \
+  --file="$DUMP_PATH" --dbname=postgres
 docker exec --user postgres "$DB_CONTAINER" pg_restore --list "$DUMP_PATH" >/dev/null
 DUMP_SHA256="$(docker exec --user postgres "$DB_CONTAINER" sha256sum "$DUMP_PATH" | awk '{print $1}')"
 DUMP_BYTES="$(docker exec --user postgres "$DB_CONTAINER" stat -c '%s' "$DUMP_PATH")"
@@ -111,7 +118,7 @@ docker exec --user postgres "$DB_CONTAINER" createdb \
 docker exec --user postgres "$DB_CONTAINER" pg_restore \
   --exit-on-error --no-owner --no-acl --dbname="$RESTORE_DB" "$DUMP_PATH"
 
-relation_query="SELECT count(*) FROM pg_catalog.pg_class c JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace WHERE n.nspname IN ('public','private','auth','supabase_migrations') AND c.relkind IN ('r','p','v','m','S','f')"
+relation_query="SELECT count(*) FROM pg_catalog.pg_class c JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace WHERE n.nspname IN ('public','private','auth','extensions','supabase_migrations') AND c.relkind IN ('r','p','v','m','S','f')"
 SOURCE_RELATIONS="$(docker exec --user postgres "$DB_CONTAINER" psql -XAt -U postgres -d postgres -c "$relation_query")"
 RESTORE_RELATIONS="$(docker exec --user postgres "$DB_CONTAINER" psql -XAt -U postgres -d "$RESTORE_DB" -c "$relation_query")"
 [[ "$SOURCE_RELATIONS" =~ ^[0-9]+$ && "$RESTORE_RELATIONS" =~ ^[0-9]+$ ]]
@@ -123,6 +130,8 @@ for relation in \
   public.missions \
   public.mission_actions \
   public.agent_executions \
+  auth.users \
+  auth.identities \
   supabase_migrations.schema_migrations
 do
   source_rows="$(docker exec --user postgres "$DB_CONTAINER" psql -XAt -U postgres -d postgres -c "SELECT count(*) FROM $relation")"
