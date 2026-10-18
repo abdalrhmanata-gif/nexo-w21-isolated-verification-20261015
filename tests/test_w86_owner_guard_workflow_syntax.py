@@ -100,10 +100,10 @@ class W86OwnerPathWorkflowSyntaxTests(unittest.TestCase):
             "run_untrusted_parent_acl_negative_control authenticated mixed",
         ):
             self.assertIn(call, helper)
-        self.assertIn("W86_UNTRUSTED_PARENT_ACL_\\${root_role^^}_\\${kind^^}_NO_MUTATION_PASS", helper)
+        self.assertIn("W86_UNTRUSTED_PARENT_ACL_${root_role^^}_${kind^^}_NO_MUTATION_PASS", helper)
         self.assertIn("W86 refused: anon/authenticated can obtain agent_executions privileges via parent roles", helper)
         self.assertIn("untrusted_parent_acl_guard_status=1", helper)
-        self.assertIn('[ "\\${untrusted_parent_acl_guard_status:-1}" -ne 0 ]', workflow)
+        self.assertIn('[ "${untrusted_parent_acl_guard_status:-1}" -ne 0 ]', workflow)
         self.assertIn("supabase/tests/w86_agent_executions_acl_correction.sql 24", helper)
 
     def test_owner_path_helper_is_valid_bash_and_covers_both_membership_modes(self):

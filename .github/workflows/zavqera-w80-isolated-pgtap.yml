@@ -1383,12 +1383,12 @@ jobs:
           run_untrusted_parent_acl_negative_control() {
             local root_role="$1"
             local kind="$2"
-            local prefix="W86_UNTRUSTED_PARENT_ACL_\${root_role^^}_\${kind^^}"
-            local parent_role="w86_parent_acl_\${root_role}_\${kind}_probe"
-            local intermediate_role="w86_parent_acl_\${root_role}_\${kind}_intermediate"
-            local fixture="\${RUNNER_TEMP}/\${prefix}_FIXTURE.sql"
-            local reachability="\${RUNNER_TEMP}/\${prefix}_REACHABILITY.sql"
-            local cleanup="\${RUNNER_TEMP}/\${prefix}_CLEANUP.sql"
+            local prefix="W86_UNTRUSTED_PARENT_ACL_${root_role^^}_${kind^^}"
+            local parent_role="w86_parent_acl_${root_role}_${kind}_probe"
+            local intermediate_role="w86_parent_acl_${root_role}_${kind}_intermediate"
+            local fixture="${RUNNER_TEMP}/${prefix}_FIXTURE.sql"
+            local reachability="${RUNNER_TEMP}/${prefix}_REACHABILITY.sql"
+            local cleanup="${RUNNER_TEMP}/${prefix}_CLEANUP.sql"
             local before_state=""
             local after_state=""
             local fixture_status=0
@@ -1398,18 +1398,18 @@ jobs:
             local reapply_status=0
             local status=0
 
-            case "\${root_role}" in
+            case "${root_role}" in
               anon|authenticated) ;;
-              *) echo "::error::Unsupported untrusted API role: \${root_role}"; return 1 ;;
+              *) echo "::error::Unsupported untrusted API role: ${root_role}"; return 1 ;;
             esac
-            case "\${kind}" in
+            case "${kind}" in
               inherit|set|mixed) ;;
-              *) echo "::error::Unsupported parent ACL membership mode: \${kind}"; return 1 ;;
+              *) echo "::error::Unsupported parent ACL membership mode: ${kind}"; return 1 ;;
             esac
 
-            cat > "\${fixture}" <<SQL
+            cat > "${fixture}" <<SQL
           REVOKE ALL PRIVILEGES ON TABLE public.agent_executions FROM PUBLIC, anon, authenticated, service_role;
-          DO \\$revoke_parent_acl_columns\\$
+          DO \$revoke_parent_acl_columns\$
           DECLARE column_names text;
           BEGIN
             SELECT string_agg(format('%I', a.attname), ', ' ORDER BY a.attnum)
@@ -1424,41 +1424,41 @@ jobs:
               );
             END IF;
           END
-          \\$revoke_parent_acl_columns\\$;
-          CREATE ROLE \${parent_role} NOLOGIN;
-          GRANT UPDATE ON TABLE public.agent_executions TO \${parent_role};
+          \$revoke_parent_acl_columns\$;
+          CREATE ROLE ${parent_role} NOLOGIN;
+          GRANT UPDATE ON TABLE public.agent_executions TO ${parent_role};
           SQL
-            if [ "\${kind}" = "mixed" ]; then
-              cat >> "\${fixture}" <<SQL
-          CREATE ROLE \${intermediate_role} NOLOGIN;
-          GRANT \${intermediate_role} TO \${root_role} WITH INHERIT FALSE, SET TRUE;
-          GRANT \${parent_role} TO \${intermediate_role} WITH INHERIT TRUE, SET FALSE;
+            if [ "${kind}" = "mixed" ]; then
+              cat >> "${fixture}" <<SQL
+          CREATE ROLE ${intermediate_role} NOLOGIN;
+          GRANT ${intermediate_role} TO ${root_role} WITH INHERIT FALSE, SET TRUE;
+          GRANT ${parent_role} TO ${intermediate_role} WITH INHERIT TRUE, SET FALSE;
           SQL
-            elif [ "\${kind}" = "inherit" ]; then
-              echo "GRANT \${parent_role} TO \${root_role} WITH INHERIT TRUE, SET FALSE;" >> "\${fixture}"
+            elif [ "${kind}" = "inherit" ]; then
+              echo "GRANT ${parent_role} TO ${root_role} WITH INHERIT TRUE, SET FALSE;" >> "${fixture}"
             else
-              echo "GRANT \${parent_role} TO \${root_role} WITH INHERIT FALSE, SET TRUE;" >> "\${fixture}"
+              echo "GRANT ${parent_role} TO ${root_role} WITH INHERIT FALSE, SET TRUE;" >> "${fixture}"
             fi
-            cat >> "\${fixture}" <<SQL
+            cat >> "${fixture}" <<SQL
           GRANT DELETE ON TABLE public.agent_executions TO service_role;
           SQL
             set +e
-            docker cp "\${fixture}" "\${db_container}:/tmp/\${prefix}_FIXTURE.sql"
-            docker exec "\${db_container}" psql -U postgres -d postgres -X -v ON_ERROR_STOP=1 -f "/tmp/\${prefix}_FIXTURE.sql" 2>&1 | tee "\${RUNNER_TEMP}/\${prefix}_FIXTURE_OUTPUT.txt"
-            fixture_status="\${PIPESTATUS[0]}"
+            docker cp "${fixture}" "${db_container}:/tmp/${prefix}_FIXTURE.sql"
+            docker exec "${db_container}" psql -U postgres -d postgres -X -v ON_ERROR_STOP=1 -f "/tmp/${prefix}_FIXTURE.sql" 2>&1 | tee "${RUNNER_TEMP}/${prefix}_FIXTURE_OUTPUT.txt"
+            fixture_status="${PIPESTATUS[0]}"
             set -e
-            echo "w86_untrusted_parent_acl_\${root_role}_\${kind}_fixture_exit_code=\${fixture_status}" >> "\${RUNNER_TEMP}/W80_EVIDENCE.txt"
-            if [ "\${fixture_status}" -ne 0 ]; then
+            echo "w86_untrusted_parent_acl_${root_role}_${kind}_fixture_exit_code=${fixture_status}" >> "${RUNNER_TEMP}/W80_EVIDENCE.txt"
+            if [ "${fixture_status}" -ne 0 ]; then
               status=1
             else
-              cat > "\${reachability}" <<SQL
+              cat > "${reachability}" <<SQL
           WITH RECURSIVE root_role_path (
             root_role_name, role_oid, role_name, depth, oid_path,
             inherits_all, can_set_role, reachable_via_membership_options
           ) AS (
             SELECT r.rolname, r.oid, r.rolname, 0, ARRAY[r.oid]::oid[], true, true, true
               FROM pg_roles r
-             WHERE r.rolname = '\${root_role}'
+             WHERE r.rolname = '${root_role}'
             UNION ALL
             SELECT child.root_role_name, parent.oid, parent.rolname, child.depth + 1,
                    child.oid_path || parent.oid,
@@ -1473,90 +1473,101 @@ jobs:
           )
           SELECT CASE WHEN EXISTS (
             SELECT 1 FROM root_role_path
-             WHERE role_name = '\${parent_role}' AND depth > 0
+             WHERE role_name = '${parent_role}' AND depth > 0
                AND reachable_via_membership_options
-          ) THEN 'W86_UNTRUSTED_PARENT_ACL_\${root_role^^}_\${kind^^}_REACHABILITY_PASS'
-            ELSE 'W86_UNTRUSTED_PARENT_ACL_\${root_role^^}_\${kind^^}_REACHABILITY_FAIL'
+          ) THEN 'W86_UNTRUSTED_PARENT_ACL_${root_role^^}_${kind^^}_REACHABILITY_PASS'
+            ELSE 'W86_UNTRUSTED_PARENT_ACL_${root_role^^}_${kind^^}_REACHABILITY_FAIL'
           END;
           SQL
               set +e
-              docker cp "\${reachability}" "\${db_container}:/tmp/\${prefix}_REACHABILITY.sql"
-              docker exec "\${db_container}" psql -U postgres -d postgres -X -qAt -v ON_ERROR_STOP=1 -f "/tmp/\${prefix}_REACHABILITY.sql" 2>&1 | tee "\${RUNNER_TEMP}/\${prefix}_REACHABILITY_CHECK.txt"
-              reachability_status="\${PIPESTATUS[0]}"
+              docker cp "${reachability}" "${db_container}:/tmp/${prefix}_REACHABILITY.sql"
+              docker exec "${db_container}" psql -U postgres -d postgres -X -qAt -v ON_ERROR_STOP=1 -f "/tmp/${prefix}_REACHABILITY.sql" 2>&1 | tee "${RUNNER_TEMP}/${prefix}_REACHABILITY_CHECK.txt"
+              reachability_status="${PIPESTATUS[0]}"
               set -e
-              echo "w86_untrusted_parent_acl_\${root_role}_\${kind}_reachability_exit_code=\${reachability_status}" >> "\${RUNNER_TEMP}/W80_EVIDENCE.txt"
-              if [ "\${reachability_status}" -ne 0 ] || ! grep -Fq "W86_UNTRUSTED_PARENT_ACL_\${root_role^^}_\${kind^^}_REACHABILITY_PASS" "\${RUNNER_TEMP}/\${prefix}_REACHABILITY_CHECK.txt"; then
-                echo "::error::The \${root_role}/\${kind} fixture did not establish the intended reachable parent-role ACL path."
+              echo "w86_untrusted_parent_acl_${root_role}_${kind}_reachability_exit_code=${reachability_status}" >> "${RUNNER_TEMP}/W80_EVIDENCE.txt"
+              if [ "${reachability_status}" -ne 0 ] || ! grep -Fq "W86_UNTRUSTED_PARENT_ACL_${root_role^^}_${kind^^}_REACHABILITY_PASS" "${RUNNER_TEMP}/${prefix}_REACHABILITY_CHECK.txt"; then
+                echo "::error::The ${root_role}/${kind} fixture did not establish the intended reachable parent-role ACL path."
                 status=1
               else
-                before_state="$(docker exec "\${db_container}" psql -U postgres -d postgres -X -qAt -v ON_ERROR_STOP=1 -c "SELECT coalesce(c.relowner::text,'NULL') || '|' || coalesce(c.relacl::text,'NULL') || '|' || coalesce((SELECT string_agg(a.attnum::text || ':' || coalesce(a.attacl::text,'NULL'), ',' ORDER BY a.attnum) FROM pg_attribute a WHERE a.attrelid=c.oid AND a.attnum>0 AND NOT a.attisdropped),'') || '|' || has_table_privilege('service_role','public.agent_executions','DELETE')::text FROM pg_class c WHERE c.oid='public.agent_executions'::regclass" 2>&1)"
-                if [ -z "\${before_state}" ]; then
-                  echo "::error::Could not capture pre-guard state for \${root_role}/\${kind}."
+                before_state="$(docker exec "${db_container}" psql -U postgres -d postgres -X -qAt -v ON_ERROR_STOP=1 -c "SELECT coalesce(c.relowner::text,'NULL') || '|' || coalesce(c.relacl::text,'NULL') || '|' || coalesce((SELECT string_agg(a.attnum::text || ':' || coalesce(a.attacl::text,'NULL'), ',' ORDER BY a.attnum) FROM pg_attribute a WHERE a.attrelid=c.oid AND a.attnum>0 AND NOT a.attisdropped),'') || '|' || has_table_privilege('service_role','public.agent_executions','DELETE')::text FROM pg_class c WHERE c.oid='public.agent_executions'::regclass" 2>&1)"
+                if [ -z "${before_state}" ]; then
+                  echo "::error::Could not capture pre-guard state for ${root_role}/${kind}."
                   status=1
                 fi
                 set +e
-                docker exec "\${db_container}" psql -U postgres -d postgres -X -v ON_ERROR_STOP=1 -f /tmp/w86_agent_executions_acl_correction.sql 2>&1 | tee "\${RUNNER_TEMP}/\${prefix}_GUARD_CHECK.txt"
-                guard_exit="\${PIPESTATUS[0]}"
+                docker exec "${db_container}" psql -U postgres -d postgres -X -v ON_ERROR_STOP=1 -f /tmp/w86_agent_executions_acl_correction.sql 2>&1 | tee "${RUNNER_TEMP}/${prefix}_GUARD_CHECK.txt"
+                guard_exit="${PIPESTATUS[0]}"
                 set -e
-                echo "w86_untrusted_parent_acl_\${root_role}_\${kind}_guard_exit_code=\${guard_exit}" >> "\${RUNNER_TEMP}/W80_EVIDENCE.txt"
-                if [ "\${guard_exit}" -eq 0 ] || ! grep -Fq "W86 refused: anon/authenticated can obtain agent_executions privileges via parent roles" "\${RUNNER_TEMP}/\${prefix}_GUARD_CHECK.txt"; then
-                  echo "::error::W86 did not refuse the \${root_role}/\${kind} parent ACL before mutation."
+                echo "w86_untrusted_parent_acl_${root_role}_${kind}_guard_exit_code=${guard_exit}" >> "${RUNNER_TEMP}/W80_EVIDENCE.txt"
+                if [ "${guard_exit}" -eq 0 ] || ! grep -Fq "W86 refused: anon/authenticated can obtain agent_executions privileges via parent roles" "${RUNNER_TEMP}/${prefix}_GUARD_CHECK.txt"; then
+                  echo "::error::W86 did not refuse the ${root_role}/${kind} parent ACL before mutation."
                   status=1
                 fi
-                after_state="$(docker exec "\${db_container}" psql -U postgres -d postgres -X -qAt -v ON_ERROR_STOP=1 -c "SELECT coalesce(c.relowner::text,'NULL') || '|' || coalesce(c.relacl::text,'NULL') || '|' || coalesce((SELECT string_agg(a.attnum::text || ':' || coalesce(a.attacl::text,'NULL'), ',' ORDER BY a.attnum) FROM pg_attribute a WHERE a.attrelid=c.oid AND a.attnum>0 AND NOT a.attisdropped),'') || '|' || has_table_privilege('service_role','public.agent_executions','DELETE')::text FROM pg_class c WHERE c.oid='public.agent_executions'::regclass" 2>&1)"
-                if [ -z "\${before_state}" ] || [ "\${before_state}" != "\${after_state}" ]; then
-                  echo "::error::W86 changed owner/table/column ACL state before refusing \${root_role}/\${kind}."
+                after_state="$(docker exec "${db_container}" psql -U postgres -d postgres -X -qAt -v ON_ERROR_STOP=1 -c "SELECT coalesce(c.relowner::text,'NULL') || '|' || coalesce(c.relacl::text,'NULL') || '|' || coalesce((SELECT string_agg(a.attnum::text || ':' || coalesce(a.attacl::text,'NULL'), ',' ORDER BY a.attnum) FROM pg_attribute a WHERE a.attrelid=c.oid AND a.attnum>0 AND NOT a.attisdropped),'') || '|' || has_table_privilege('service_role','public.agent_executions','DELETE')::text FROM pg_class c WHERE c.oid='public.agent_executions'::regclass" 2>&1)"
+                if [ -z "${before_state}" ] || [ "${before_state}" != "${after_state}" ]; then
+                  echo "::error::W86 changed owner/table/column ACL state before refusing ${root_role}/${kind}."
                   status=1
                 else
-                  echo "W86_UNTRUSTED_PARENT_ACL_\${root_role^^}_\${kind^^}_NO_MUTATION_PASS" >> "\${RUNNER_TEMP}/W80_EVIDENCE.txt"
+                  echo "W86_UNTRUSTED_PARENT_ACL_${root_role^^}_${kind^^}_NO_MUTATION_PASS" >> "${RUNNER_TEMP}/W80_EVIDENCE.txt"
                 fi
               fi
             fi
 
-            cat > "\${cleanup}" <<SQL
-          DO \\$cleanup_parent_acl\\$
+            cat > "${cleanup}" <<SQL
+          DO \$cleanup_parent_acl\$
+          DECLARE column_names text;
           BEGIN
-            IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = '\${intermediate_role}') THEN
-              EXECUTE format('REVOKE %I FROM %I', '\${parent_role}', '\${intermediate_role}');
-              EXECUTE format('REVOKE %I FROM %I', '\${intermediate_role}', '\${root_role}');
-              EXECUTE format('DROP ROLE %I', '\${intermediate_role}');
+            IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = '${intermediate_role}') THEN
+              EXECUTE format('REVOKE %I FROM %I', '${parent_role}', '${intermediate_role}');
+              EXECUTE format('REVOKE %I FROM %I', '${intermediate_role}', '${root_role}');
+              EXECUTE format('DROP ROLE %I', '${intermediate_role}');
             END IF;
-            IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = '\${parent_role}') THEN
-              EXECUTE format('REVOKE %I FROM %I', '\${parent_role}', '\${root_role}');
-              EXECUTE format('REVOKE ALL PRIVILEGES ON TABLE public.agent_executions FROM %I', '\${parent_role}');
-              EXECUTE format('DROP ROLE %I', '\${parent_role}');
+            IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = '${parent_role}') THEN
+              EXECUTE format('REVOKE %I FROM %I', '${parent_role}', '${root_role}');
+              EXECUTE format('REVOKE ALL PRIVILEGES ON TABLE public.agent_executions FROM %I', '${parent_role}');
+              EXECUTE format('DROP ROLE %I', '${parent_role}');
             END IF;
             EXECUTE 'REVOKE ALL PRIVILEGES ON TABLE public.agent_executions FROM PUBLIC, anon, authenticated, service_role';
-            DECLARE column_names text;
+            SELECT string_agg(format('%I', a.attname), ', ' ORDER BY a.attnum)
+              INTO column_names
+              FROM pg_attribute a
+             WHERE a.attrelid = 'public.agent_executions'::regclass
+               AND a.attnum > 0 AND NOT a.attisdropped;
+            IF column_names IS NOT NULL THEN
+              EXECUTE format(
+                'REVOKE ALL PRIVILEGES (%s) ON TABLE public.agent_executions FROM PUBLIC, anon, authenticated, service_role',
+                column_names
+              );
+            END IF;
           END
-          \\$cleanup_parent_acl\\$;
+          \$cleanup_parent_acl\$;
           SQL
             set +e
-            docker cp "\${cleanup}" "\${db_container}:/tmp/\${prefix}_CLEANUP.sql"
-            docker exec "\${db_container}" psql -U postgres -d postgres -X -v ON_ERROR_STOP=1 -f "/tmp/\${prefix}_CLEANUP.sql" 2>&1 | tee "\${RUNNER_TEMP}/\${prefix}_CLEANUP_OUTPUT.txt"
-            cleanup_status="\${PIPESTATUS[0]}"
+            docker cp "${cleanup}" "${db_container}:/tmp/${prefix}_CLEANUP.sql"
+            docker exec "${db_container}" psql -U postgres -d postgres -X -v ON_ERROR_STOP=1 -f "/tmp/${prefix}_CLEANUP.sql" 2>&1 | tee "${RUNNER_TEMP}/${prefix}_CLEANUP_OUTPUT.txt"
+            cleanup_status="${PIPESTATUS[0]}"
             set -e
-            echo "w86_untrusted_parent_acl_\${root_role}_\${kind}_cleanup_exit_code=\${cleanup_status}" >> "\${RUNNER_TEMP}/W80_EVIDENCE.txt"
-            if [ "\${cleanup_status}" -ne 0 ]; then
+            echo "w86_untrusted_parent_acl_${root_role}_${kind}_cleanup_exit_code=${cleanup_status}" >> "${RUNNER_TEMP}/W80_EVIDENCE.txt"
+            if [ "${cleanup_status}" -ne 0 ]; then
               status=1
               untrusted_parent_acl_guard_status=1
             else
               set +e
-              docker exec "\${db_container}" psql -U postgres -d postgres -X -v ON_ERROR_STOP=1 -f /tmp/w86_agent_executions_acl_correction.sql 2>&1 | tee "\${RUNNER_TEMP}/\${prefix}_REAPPLY.txt"
-              reapply_status="\${PIPESTATUS[0]}"
+              docker exec "${db_container}" psql -U postgres -d postgres -X -v ON_ERROR_STOP=1 -f /tmp/w86_agent_executions_acl_correction.sql 2>&1 | tee "${RUNNER_TEMP}/${prefix}_REAPPLY.txt"
+              reapply_status="${PIPESTATUS[0]}"
               set -e
-              echo "w86_untrusted_parent_acl_\${root_role}_\${kind}_reapply_exit_code=\${reapply_status}" >> "\${RUNNER_TEMP}/W80_EVIDENCE.txt"
-              if [ "\${reapply_status}" -ne 0 ]; then
+              echo "w86_untrusted_parent_acl_${root_role}_${kind}_reapply_exit_code=${reapply_status}" >> "${RUNNER_TEMP}/W80_EVIDENCE.txt"
+              if [ "${reapply_status}" -ne 0 ]; then
                 status=1
                 untrusted_parent_acl_guard_status=1
               else
-                run_pgtap W66_AFTER_UNTRUSTED_PARENT_ACL_\${root_role^^}_\${kind^^}_CLEANUP supabase/tests/w66_service_role_table_privilege_hardening.sql 11 || status=1
-                run_pgtap W86_AFTER_UNTRUSTED_PARENT_ACL_\${root_role^^}_\${kind^^}_CLEANUP supabase/tests/w86_agent_executions_acl_correction.sql 24 || status=1
+                run_pgtap W66_AFTER_UNTRUSTED_PARENT_ACL_${root_role^^}_${kind^^}_CLEANUP supabase/tests/w66_service_role_table_privilege_hardening.sql 11 || status=1
+                run_pgtap W86_AFTER_UNTRUSTED_PARENT_ACL_${root_role^^}_${kind^^}_CLEANUP supabase/tests/w86_agent_executions_acl_correction.sql 24 || status=1
               fi
             fi
-            echo "w86_untrusted_parent_acl_\${root_role}_\${kind}_status=\${status}" >> "\${RUNNER_TEMP}/W80_EVIDENCE.txt"
-            if [ "\${status}" -ne 0 ]; then untrusted_parent_acl_guard_status=1; fi
-            return "\${status}"
+            echo "w86_untrusted_parent_acl_${root_role}_${kind}_status=${status}" >> "${RUNNER_TEMP}/W80_EVIDENCE.txt"
+            if [ "${status}" -ne 0 ]; then untrusted_parent_acl_guard_status=1; fi
+            return "${status}"
           }
 
           run_untrusted_parent_acl_negative_control anon inherit || untrusted_parent_acl_guard_status=1
@@ -1565,7 +1576,7 @@ jobs:
           run_untrusted_parent_acl_negative_control authenticated inherit || untrusted_parent_acl_guard_status=1
           run_untrusted_parent_acl_negative_control authenticated set || untrusted_parent_acl_guard_status=1
           run_untrusted_parent_acl_negative_control authenticated mixed || untrusted_parent_acl_guard_status=1
-          echo "untrusted_parent_acl_guard_status=\${untrusted_parent_acl_guard_status}" >> "\${RUNNER_TEMP}/W80_EVIDENCE.txt"
+          echo "untrusted_parent_acl_guard_status=${untrusted_parent_acl_guard_status}" >> "${RUNNER_TEMP}/W80_EVIDENCE.txt"
 
           # Exercise both ways to obtain table-owner authority (SET ROLE and INHERIT).
           # Each test runs only in the disposable PostgreSQL instance and always attempts cleanup.
