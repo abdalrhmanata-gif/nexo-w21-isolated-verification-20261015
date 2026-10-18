@@ -58,3 +58,17 @@
 Stop repeating the same visible-ref and Library-ZIP searches. The next search needs evidence outside these snapshots: original developer-machine clones including reflogs/stashes/unpushed branches, external/private/deleted repositories accessible to the owner, deployment job logs/artifacts, controlled migration deployment archives, and backup/change records. Preserve each candidate's chain of custody and SHA-256. Only a trusted deployment record that ties actual SQL bytes to the exact project/migration can close a deployed-byte row.
 
 This report is a branch-tip file-path/blob-identity check only. It is not a live database review, SQL equivalence finding, owner approval or release approval.
+
+
+## Supplementary GitHub Actions artifact check — 2026-10-18
+
+To test whether recent original-repository validation artifacts held overlooked SQL, I reviewed artifact metadata for the 11 `ZAVQERA W21 Local Launch Gate` runs surfaced in the recent Oct 15–17 run window. They contain only tiny `zavqera-w21-evidence` artifacts (326–328 bytes) and/or `zavqera-w21-browser-diagnostics` artifacts (742–744 bytes); no artifact in this reviewed set was a migration/source archive by name or size.
+
+I downloaded and unpacked one pair from run `39003536607` for content inspection:
+
+- Evidence artifact [12090475405](https://github.com/abdalrhmanata-gif/Nexo/actions/runs/39003536607/artifacts/12090475405), ZIP SHA-256 `77107ebae0517f9a4d349de8dccb6ea1507c4a38a67c89aabaf53ae44f32cdde`. It contains only `W21_EVIDENCE.txt` (264 bytes) recording a successful local E2E run, tested source SHA `bd40ab09498dd07088eb77d862dbf6da9cc69370`, PostgreSQL major 17, disposable project ID, and verified container/volume cleanup.
+- Browser diagnostics artifact [12089583550](https://github.com/abdalrhmanata-gif/Nexo/actions/runs/39003536607/artifacts/12089583550), ZIP SHA-256 `a847a4833ab30eb231fda96f016f110c297fe092897484420bd7dcfb017bdd32`. It contains only `test-e2e.log` (972 bytes), showing the unregistered adapter was denied before provider call, two browser E2E tests passed, and disposable fixtures were cleaned up.
+
+These artifacts are useful as **local behavior/cleanup evidence**, not as historical hosted migration sources or deployment receipts. The W21 run records do not close any of the 22 hosted-version conflicts or six hosted-only migration rows. This artifact check is limited to the 11 recent W21 runs surfaced for inspection; it is not a claim that every artifact from every repository workflow was downloaded or unpacked.
+
+**Recovery decision:** the current visible Git branch snapshots, the 112-archive Library scan, and this bounded W21 artifact check produced no historic deployed-SQL bytes or trusted per-migration deployment receipt. The next viable evidence source is outside those checked materials: owner-device Git clones/reflogs/stashes/unpushed refs, external/private/deleted repositories, deployment-run logs/artifacts that recorded actual SQL, or controlled backups/change records. If none can establish the historical bytes, keep the affected rows UNKNOWN and require a separately reviewed re-baselining decision rather than inventing SQL.
