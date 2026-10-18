@@ -99,48 +99,57 @@ class LaunchChecklistValidatorTests(unittest.TestCase):
     def test_disposable_test_evidence_cannot_satisfy_hosted_gate(self):
         candidate = "e123ead90684b64a9809ad6d4ba7b8ddcb155155"
         mutated = select_candidate(self.text, candidate)
-        gate_d_start = mutated.index("### Gate D")
-        gate_e_start = mutated.index("### Gate E")
-        gate_d = mutated[gate_d_start:gate_e_start].replace("**Status:** BLOCKED", "**Status:** PASS", 1)
-        gate_d = gate_d.replace(
-            "No fresh 13-query hosted capture is recorded here.",
-            "No fresh 13-query hosted capture is recorded here. scope=hosted_read_only_capture_and_review",
-            1,
+        gate_d = replace_gate_field(mutated, "D", "Status", "PASS")
+        gate_d = replace_gate_field(
+            gate_d,
+            "D",
+            "Evidence / exact source SHA",
+            f"candidate_sha={candidate}; tested_sha={candidate}; scope=hosted_read_only_capture_and_review; owner_approval=PASS by Alice; independent_review=PASS by Bob.",
         )
-        mutated = mutated[:gate_d_start] + gate_d + mutated[gate_e_start:]
-        errors = validate_checklist(mutated)
+        gate_d = replace_gate_field(
+            gate_d,
+            "D",
+            "Accountable owner / independent reviewer",
+            "Alice (authorized Development database owner) / Bob (independent database-platform reviewer).",
+        )
+        errors = validate_checklist(gate_d)
         self.assertTrue(any("does not claim required scope=HOSTED_READ_ONLY_CAPTURE" in error for error in errors))
 
     def test_production_scope_rejects_explicitly_disposable_evidence(self):
         candidate = "e123ead90684b64a9809ad6d4ba7b8ddcb155155"
         mutated = select_candidate(self.text, candidate)
-        start, end = mutated.index("### Gate D"), mutated.index("### Gate E")
-        gate_d = mutated[start:end].replace("**Status:** BLOCKED", "**Status:** PASS", 1)
-        gate_d = gate_d.replace(
-            "No fresh 13-query hosted capture is recorded here.",
-            f"No fresh 13-query hosted capture is recorded here. candidate_sha={candidate}; scope=hosted_read_only_capture; owner_approval=PASS by Alice; independent_review=PASS by Bob.",
-            1,
+        gate_d = replace_gate_field(mutated, "D", "Status", "PASS")
+        gate_d = replace_gate_field(
+            gate_d,
+            "D",
+            "Evidence / exact source SHA",
+            f"not a fresh hosted capture; candidate_sha={candidate}; tested_sha={candidate}; scope=hosted_read_only_capture; owner_approval=PASS by Alice; independent_review=PASS by Bob.",
         )
-        gate_d = gate_d.replace(
-            "**Accountable owner / independent reviewer:** Authorized Development database owner / independent database-platform reviewer (named assignments pending).",
-            "**Accountable owner / independent reviewer:** Alice (authorized Development database owner) / Bob (independent database-platform reviewer).",
-            1,
+        gate_d = replace_gate_field(
+            gate_d,
+            "D",
+            "Accountable owner / independent reviewer",
+            "Alice (authorized Development database owner) / Bob (independent database-platform reviewer).",
         )
-        mutated = mutated[:start] + gate_d + mutated[end:]
-        self.assertTrue(any("explicitly disclaims required scope=HOSTED_READ_ONLY_CAPTURE" in error for error in validate_checklist(mutated)))
+        self.assertTrue(any("explicitly disclaims required scope=HOSTED_READ_ONLY_CAPTURE" in error for error in validate_checklist(gate_d)))
 
     def test_scope_prefix_does_not_satisfy_a_different_scope(self):
         candidate = "e123ead90684b64a9809ad6d4ba7b8ddcb155155"
         mutated = select_candidate(self.text, candidate)
-        start, end = mutated.index("### Gate D"), mutated.index("### Gate E")
-        gate_d = mutated[start:end].replace("**Status:** BLOCKED", "**Status:** PASS", 1)
-        gate_d = gate_d.replace(
-            "No fresh 13-query hosted capture is recorded here.",
-            f"No fresh 13-query hosted capture is recorded here. candidate_sha={candidate}; scope=hosted_read_only_capture_and_review",
-            1,
+        gate_d = replace_gate_field(mutated, "D", "Status", "PASS")
+        gate_d = replace_gate_field(
+            gate_d,
+            "D",
+            "Evidence / exact source SHA",
+            f"candidate_sha={candidate}; tested_sha={candidate}; scope=hosted_read_only_capture_and_review; owner_approval=PASS by Alice; independent_review=PASS by Bob.",
         )
-        mutated = mutated[:start] + gate_d + mutated[end:]
-        errors = validate_checklist(mutated)
+        gate_d = replace_gate_field(
+            gate_d,
+            "D",
+            "Accountable owner / independent reviewer",
+            "Alice (authorized Development database owner) / Bob (independent database-platform reviewer).",
+        )
+        errors = validate_checklist(gate_d)
         self.assertTrue(any("does not claim required scope=HOSTED_READ_ONLY_CAPTURE" in error for error in errors))
 
     def test_conflicting_duplicate_claims_fail_closed(self):
