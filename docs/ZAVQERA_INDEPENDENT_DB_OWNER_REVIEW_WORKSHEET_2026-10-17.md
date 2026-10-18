@@ -268,3 +268,17 @@ Two additional reports extend the recovery search:
 - [Full Library SQL filename inventory](ZAVQERA_LIBRARY_SQL_FILENAME_INVENTORY_2026-10-18.md): all 866 visible Library item metadata entries across nine pages; 137 direct `.sql` file names, zero matches to the 28 target stems or 14-digit timestamped filenames.
 
 These are negative source-discovery results and do not establish that historical source SQL never existed or was not deployed. They do not replace actual byte provenance. Continue to leave the 22 version conflicts and six hosted-only rows unresolved until owner-controlled local/external source and trusted deployment evidence are found, or a separately reviewed re-baselining project is approved. Release remains NO-GO; no hosted write is authorized.
+
+
+## 12. Follow-up recovery work — all visible branch-tip snapshots checked (2026-10-18)
+
+The recursive Git tree has now been checked at **all 27 branch tips visible from GitHub** across the original Nexo repository (23 branches) and isolated verification repository (4 branches). All 27 tree responses were complete (truncated=false). The exact 28 filenames corresponding to the 22 hosted version conflicts plus six hosted-only ledger rows were checked; **zero hosted-side filename candidates were found at any branch tip**.
+
+- Detailed report: [all-branch migration filename recovery scan](ZAVQERA_ALL_BRANCH_MIGRATION_FILENAME_RECOVERY_SCAN_2026-10-18.md).
+- Machine-readable evidence: [all-branch recovery scan JSON](ZAVQERA_ALL_BRANCH_MIGRATION_FILENAME_RECOVERY_SCAN_2026-10-18.json).
+- At audited source commit fbbcb080904acd88aad83a082803f627859026e2, the tree contains 89 SQL migration files and all 89 source-side filenames referenced by the register are present. The 22 source sides of the version conflicts can therefore be identified and hashed; this still says nothing conclusive about the SQL bytes originally executed for the differently versioned hosted ledger rows.
+- GitHub marks source-side 20260921180052_w4_table_privilege_hardening.sql as added in commit [772f011624c199adc021a61d039a4cf13e9a3740](https://github.com/abdalrhmanata-gif/nexo-w21-isolated-verification-20261015/commit/772f011624c199adc021a61d039a4cf13e9a3740), dated 2026-09-25 21:11:21 UTC, message “merge: stage ZAVQERA integration without historical artifact”. This is source-repository history, not proof of the deployed historical bytes.
+
+**Recovery conclusion:** The snapshot-level search of available Library ZIPs and visible GitHub branch tips has been exhausted. Private/deleted/unreachable history, forks, owner-device repositories, hosting/provider deployment logs and backup exports have not been exhaustively inspected and remain possible evidence sources. Absence from current branch tips does not prove non-deployment.
+
+**Owner disposition unchanged:** all 22 version conflicts and six hosted-only rows remain blocking unless a trusted historic source plus deployment record is recovered. Keep owner review pending, verified deployed SQL hashes and deployment URIs blank when unsupported, hosted_write_authorized=false, trusted dispatch adapters empty/fail-closed, PR #1/#2 open/draft/unmerged, and release **NO-GO**. Do not edit the hosted migration ledger or apply a migration based on these branch-snapshot results.
