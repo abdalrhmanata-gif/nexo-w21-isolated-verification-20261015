@@ -293,3 +293,12 @@ The current database still reports 74 ledger rows through W65; the direct table 
 **Read-only limitation:** The Supabase MCP session identified itself as postgres and returned transaction_read_only=off. Every SQL statement I submitted was SELECT-only and no mutation was attempted, but this was not a session-enforced read-only capture or the pinned 13-query runner. Do not treat it as a replacement for the scoped formal capture. No database state, migration ledger, deployment, secrets, billing or DNS were changed.
 
 **Decision unchanged:** The spot-check is materially consistent with the 2026-10-17 findings. Release remains NO-GO, hosted_write_authorized=false, and trusted dispatch adapters stay empty/fail-closed. The 22 version conflicts and six hosted-only migration rows remain blocking without trusted historic source and deployment evidence.
+
+
+## 14. Live W86 role-path preflight spot-check — 2026-10-18
+
+A supplemental SELECT reproduced the candidate's recursive role membership reachability checks for `service_role`, `anon`, `authenticated`, and the `public.agent_executions` owner. At the spot-check instant it returned no reachable parent role for `service_role`, no path `service_role`→`authenticated`, no path from `service_role` to the table owner, no path `anon`→`authenticated`, no `anon`/`authenticated` path to the table owner, and no inherited parent table/column ACL privilege rows. The table owner is `postgres`.
+
+Effective direct privileges remain the core problem: `service_role` still has direct SELECT/INSERT/UPDATE/DELETE/TRUNCATE/REFERENCES/TRIGGER/MAINTAIN; `authenticated` has SELECT; `anon` does not have SELECT. Thus, the role-path checks clear only preflight predicates at one point in time and do not fix the direct grant. They do not clear missing schema/trigger/functions, historical migration provenance, independent owner review, backup/recovery gates, or separate hosted-write authorization.
+
+This was still performed through the MCP session that reported `current_user=postgres`, `session_user=postgres`, `transaction_read_only=off`; the statement was SELECT-only and no mutation was attempted, but the session was not server-enforced read-only. Treat this as supplemental investigation, not the pinned 13-query evidence. See [the spot-check report](ZAVQERA_LIVE_CATALOG_SPOT_CHECK_2026-10-18.md).
