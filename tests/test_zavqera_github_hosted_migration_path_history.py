@@ -95,7 +95,7 @@ class GitHubHostedMigrationPathHistoryTests(unittest.TestCase):
                 self.assertEqual(row["source_path_present_at_source_head"], "true")
                 self.assertRegex(row["source_git_blob_sha1"], GIT_BLOB_SHA1)
                 self.assertGreater(int(row["source_size_bytes"]), 0)
-                self.assertIn("source-side", row["interpretation"].lower())
+                self.assertIn("source-version file exists", row["interpretation"].lower())
                 self.assertNotIn("EXACT_SOURCE_BYTES_VERIFIED", row["interpretation"])
 
     def test_hosted_only_rows_do_not_fabricate_source_blob_metadata(self) -> None:
