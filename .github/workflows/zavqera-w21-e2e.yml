@@ -370,7 +370,14 @@ jobs:
               echo "restore_smoke_proof=missing"
             fi
           } > "$RUNNER_TEMP/W21_EVIDENCE.txt"
-          if [ ! -f "$RUNNER_TEMP/W21_CLEANUP_PROOF.txt" ] || ! grep -q '^cleanup_verified=true
+          if [ ! -f "$RUNNER_TEMP/W21_CLEANUP_PROOF.txt" ] || ! grep -q '^cleanup_verified=true$' "$RUNNER_TEMP/W21_CLEANUP_PROOF.txt"; then
+            echo "Cleanup proof missing or not verified; see W21 evidence artifact." >&2
+            exit 1
+          fi
+          if [ "${{ job.status }}" = "success" ] && { [ ! -f "$RUNNER_TEMP/W21_RESTORE_SMOKE_PROOF.txt" ] || ! grep -q '^restore_smoke=PASS$' "$RUNNER_TEMP/W21_RESTORE_SMOKE_PROOF.txt"; }; then
+            echo "Restore smoke proof missing or not passing; see W21 evidence artifact." >&2
+            exit 1
+          fi
 
       - name: Upload browser diagnostics
         if: always()
