@@ -15,6 +15,12 @@ on:
       - 'docs/ZAVQERA_HISTORICAL_MIGRATION_SOURCE_RECOVERY_SCAN_2026-10-17.md'
       - 'docs/ZAVQERA_LIBRARY_ARCHIVE_MIGRATION_SOURCE_RECOVERY_2026-10-17.md'
       - 'docs/ZAVQERA_LOCAL_MIGRATION_HISTORY_RECOVERY_RUNBOOK_2026-10-17.md'
+      - 'docs/ZAVQERA_GITHUB_HOSTED_MIGRATION_PATH_HISTORY_2026-10-18.csv'
+      - 'docs/ZAVQERA_GITHUB_HOSTED_MIGRATION_PATH_HISTORY_2026-10-18.md'
+      - 'tests/test_zavqera_github_hosted_migration_path_history.py'
+      - 'docs/ZAVQERA_GITHUB_HOSTED_MIGRATION_PATH_HISTORY_2026-10-18.csv'
+      - 'docs/ZAVQERA_GITHUB_HOSTED_MIGRATION_PATH_HISTORY_2026-10-18.md'
+      - 'tests/test_zavqera_github_hosted_migration_path_history.py'
       - '.github/workflows/zavqera-owner-intake-validation.yml'
   pull_request:
     paths:
@@ -49,5 +55,7 @@ jobs:
         run: python -m unittest discover -s tests -p 'test_zavqera_migration_owner_intake.py' -v
       - name: Test local Git history recovery scan with temporary repositories
         run: python -m unittest discover -s tests -p 'test_scan_zavqera_local_migration_history.py' -v
+      - name: Validate GitHub hosted-migration path-history matrix (offline)
+        run: python -m unittest discover -s tests -p 'test_zavqera_github_hosted_migration_path_history.py' -v
       - name: Validate the owner intake with no network access
         run: python tools/validate_zavqera_migration_owner_intake.py
