@@ -55,3 +55,20 @@ To reduce dependence on the isolated verification repository's imported history,
 - The original-repository check found no source SQL under the exact hosted timestamp filenames for the 22 conflicts or six hosted-only rows. It does not exclude the same SQL content under some other path/version, nor deleted/unreachable refs, forks, external/private repositories, device clones, backups, or deployment-run payloads.
 
 This strengthens the statement that the specific hosted timestamp filenames have no reachable path history in the two checked repository views. It still does **not** identify the bytes executed in Development. A Git path-history result is not a deployment receipt; all 28 rows remain unresolved without authoritative historical SQL and trusted deployment evidence.
+
+
+## Selected original GitHub Actions diagnostic artifacts — contents verified (2026-10-18)
+
+To test whether legacy CI artifacts contain the missing SQL/deployment receipt, downloaded and inspected the ZIP member listings of five distinct diagnostic artifacts attached to migration-era workflows in the original `abdalrhmanata-gif/Nexo` repository. Each archive passed ZIP listing/integrity inspection locally; every archive was content-only diagnostics, not a SQL source pack:
+
+| Workflow context | Run ID | Artifact ID | ZIP SHA-256 | Contents found |
+|---|---:|---:|---|---|
+| W18 version alignment (2026-09-29 18:26) | 36612065406 | 11053214288 | `220fc15de145ebffdb4ad72cad843d68677484922b036e8b930a8d30f9fe892b` | `pubspec.lock` only (23,621 bytes) |
+| W18 “applied follow-up” record (2026-09-29 18:26) | 36612111359 | 11054395161 | `dda2da70d453230a83cff065984e5edeacc52c0ae267bfa880201114c86255ba` | `pubspec.lock` only (23,621 bytes) |
+| W18 pattern-fix run (2026-09-29 18:37) | 36613367234 | 11054680993 | `a7be7606ea7a11ae827675819d7349437c0a4f977a639187b276fc0fafa5011c` | `pubspec.lock` only (23,621 bytes) |
+| W19 audit/product record (2026-09-29 18:55) | 36615565276 | 11054519770 | `7a09c6d5a14c704de630f4ce23a9ea3db73068f5f4b470e5bf163378ae428c62` | `pubspec.lock` only (23,621 bytes) |
+| W4–W16 baseline integration attempt (2026-09-25 21:16) | 36190524611 | 10887469132 | `c253179223db6d3b69a0937c32c241e4c98e7d54bd51a27f8a4f86fd7f41ee8d` | `pubspec.lock` (23,416 bytes) and `.dart_tool/package_config.json` (19,551 bytes) |
+
+None of these five ZIPs includes `supabase/migrations/*.sql`, a database deployment receipt, SQL hash manifest, schema dump, or query capture. This directly closes the content question for those five specific artifacts only. It is **not** an exhaustive scan of every artifact attached to all 108 Actions runs from 2026-09-20 through 2026-10-01, much less all historical Actions artifacts. The remaining search target is original deployment-tool output or an older local/private/archive source not represented in these sampled CI diagnostics.
+
+This artifact check does not change any ledger disposition: all 22 conflicts and six hosted-only rows remain unresolved; deployed SQL SHA fields and deployment URIs must stay blank until authoritative evidence is found. No DB connection, SQL execution, hosted write, deployment or secret change occurred.
