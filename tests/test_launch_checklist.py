@@ -1,3 +1,4 @@
+import re
 import unittest
 from pathlib import Path
 
@@ -5,6 +6,28 @@ from tools.validate_launch_checklist import validate_checklist
 
 
 CHECKLIST = Path(__file__).resolve().parents[1] / "docs" / "ZAVQERA_LAUNCH_READINESS_CHECKLIST_2026-10-18.md"
+
+
+def select_candidate(text, candidate):
+    return re.sub(
+        r"(?m)^\*\*Release candidate SHA:\*\*.*$",
+        f"**Release candidate SHA:** {candidate}",
+        text,
+        count=1,
+    )
+
+
+def replace_gate_field(text, gate_id, field, value):
+    start = text.index(f"### Gate {gate_id} —")
+    end = text.find("\n### Gate ", start + 1)
+    if end == -1:
+        end = len(text)
+    gate = text[start:end]
+    pattern = re.compile(rf"(?m)^- \*\*{re.escape(field)}:\*\*.*$")
+    replaced, count = pattern.subn(f"- **{field}:** {value}", gate, count=1)
+    if count != 1:
+        raise AssertionError(f"Gate {gate_id} must contain exactly one {field} field")
+    return text[:start] + replaced + text[end:]
 
 
 class LaunchChecklistValidatorTests(unittest.TestCase):
@@ -19,10 +42,8 @@ class LaunchChecklistValidatorTests(unittest.TestCase):
         self.assertTrue(any("invalid status" in error for error in validate_checklist(mutated)))
 
     def test_rejects_missing_full_source_sha(self):
-        mutated = self.text.replace(
-            "**Evidence / exact source SHA:** W86/W80 run `39136888615`, SHA `e123ead90684b64a9809ad6d4ba7b8ddcb155155`, W86 25/25 and W80 49/49, artifact `12140396685` (disposable PostgreSQL 17.11 only). Recovery smoke run `39139497594`, SHA `dcffaf1a138b1ddfee596fbdc0c76081272ce985`, artifact `12141246974`. Current review checkout HEAD `61208ffcdb3a6154aa616cdd152b78221bbeaca6` has uncommitted changes; it is not a tested release candidate.",
-            "**Evidence / exact source SHA:** Old test result with no resolvable source commit.",
-            1,
+        mutated = replace_gate_field(
+            self.text, "A", "Evidence / exact source SHA", "Old test result with no resolvable source commit."
         )
         self.assertTrue(any("full 40-character source SHA" in error for error in validate_checklist(mutated)))
 
@@ -50,32 +71,26 @@ class LaunchChecklistValidatorTests(unittest.TestCase):
 
     def test_pass_cannot_reuse_evidence_from_an_older_sha(self):
         candidate = "f" * 40
-        mutated = self.text.replace(
-            "**Release candidate SHA:** NONE (current checkout is dirty; no release candidate selected)",
-            f"**Release candidate SHA:** {candidate}",
-            1,
-        ).replace("**Status:** BLOCKED", "**Status:** PASS", 1)
+        mutated = select_candidate(self.text, candidate).replace("**Status:** BLOCKED", "**Status:** PASS", 1)
         errors = validate_checklist(mutated)
         self.assertTrue(any("must bind candidate_sha" in error for error in errors))
 
     def test_tested_sha_must_equal_candidate_even_when_candidate_is_also_mentioned(self):
         candidate = "f" * 40
-        mutated = self.text.replace(
-            "**Release candidate SHA:** NONE (current checkout is dirty; no release candidate selected)",
-            f"**Release candidate SHA:** {candidate}",
-            1,
-        )
+        mutated = select_candidate(self.text, candidate)
         start, end = mutated.index("### Gate A"), mutated.index("### Gate B")
         gate_a = mutated[start:end].replace("**Status:** BLOCKED", "**Status:** PASS", 1)
-        gate_a = gate_a.replace(
-            "**Evidence / exact source SHA:** W86/W80 run `39136888615`, SHA `e123ead90684b64a9809ad6d4ba7b8ddcb155155`, W86 25/25 and W80 49/49, artifact `12140396685` (disposable PostgreSQL 17.11 only). Recovery smoke run `39139497594`, SHA `dcffaf1a138b1ddfee596fbdc0c76081272ce985`, artifact `12141246974`. Current review checkout HEAD `61208ffcdb3a6154aa616cdd152b78221bbeaca6` has uncommitted changes; it is not a tested release candidate.",
-            f"**Evidence / exact source SHA:** candidate_sha={candidate}; tested_sha=e123ead90684b64a9809ad6d4ba7b8ddcb155155; scope=exact_candidate_ci; owner_approval=PASS by Alice; independent_review=PASS by Bob; artifact `12140396685`.",
-            1,
+        gate_a = replace_gate_field(
+            gate_a,
+            "A",
+            "Evidence / exact source SHA",
+            f"candidate_sha={candidate}; tested_sha=e123ead90684b64a9809ad6d4ba7b8ddcb155155; scope=exact_candidate_ci; owner_approval=PASS by Alice; independent_review=PASS by Bob; artifact `12140396685`.",
         )
-        gate_a = gate_a.replace(
-            "**Accountable owner / independent reviewer:** Release owner / independent release reviewer (named assignment pending).",
-            "**Accountable owner / independent reviewer:** Alice (release owner) / Bob (independent reviewer).",
-            1,
+        gate_a = replace_gate_field(
+            gate_a,
+            "A",
+            "Accountable owner / independent reviewer",
+            "Alice (release owner) / Bob (independent reviewer).",
         )
         mutated = mutated[:start] + gate_a + mutated[end:]
         errors = validate_checklist(mutated)
@@ -83,11 +98,7 @@ class LaunchChecklistValidatorTests(unittest.TestCase):
 
     def test_disposable_test_evidence_cannot_satisfy_hosted_gate(self):
         candidate = "e123ead90684b64a9809ad6d4ba7b8ddcb155155"
-        mutated = self.text.replace(
-            "**Release candidate SHA:** NONE (current checkout is dirty; no release candidate selected)",
-            f"**Release candidate SHA:** {candidate}",
-            1,
-        )
+        mutated = select_candidate(self.text, candidate)
         gate_d_start = mutated.index("### Gate D")
         gate_e_start = mutated.index("### Gate E")
         gate_d = mutated[gate_d_start:gate_e_start].replace("**Status:** BLOCKED", "**Status:** PASS", 1)
@@ -102,11 +113,7 @@ class LaunchChecklistValidatorTests(unittest.TestCase):
 
     def test_production_scope_rejects_explicitly_disposable_evidence(self):
         candidate = "e123ead90684b64a9809ad6d4ba7b8ddcb155155"
-        mutated = self.text.replace(
-            "**Release candidate SHA:** NONE (current checkout is dirty; no release candidate selected)",
-            f"**Release candidate SHA:** {candidate}",
-            1,
-        )
+        mutated = select_candidate(self.text, candidate)
         start, end = mutated.index("### Gate D"), mutated.index("### Gate E")
         gate_d = mutated[start:end].replace("**Status:** BLOCKED", "**Status:** PASS", 1)
         gate_d = gate_d.replace(
@@ -124,11 +131,7 @@ class LaunchChecklistValidatorTests(unittest.TestCase):
 
     def test_scope_prefix_does_not_satisfy_a_different_scope(self):
         candidate = "e123ead90684b64a9809ad6d4ba7b8ddcb155155"
-        mutated = self.text.replace(
-            "**Release candidate SHA:** NONE (current checkout is dirty; no release candidate selected)",
-            f"**Release candidate SHA:** {candidate}",
-            1,
-        )
+        mutated = select_candidate(self.text, candidate)
         start, end = mutated.index("### Gate D"), mutated.index("### Gate E")
         gate_d = mutated[start:end].replace("**Status:** BLOCKED", "**Status:** PASS", 1)
         gate_d = gate_d.replace(
@@ -143,16 +146,14 @@ class LaunchChecklistValidatorTests(unittest.TestCase):
     def test_conflicting_duplicate_claims_fail_closed(self):
         candidate = "e" * 40
         stale = "f" * 40
-        mutated = self.text.replace(
-            "**Release candidate SHA:** NONE (current checkout is dirty; no release candidate selected)",
-            f"**Release candidate SHA:** {candidate}", 1,
-        )
+        mutated = select_candidate(self.text, candidate)
         start, end = mutated.index("### Gate A"), mutated.index("### Gate B")
         gate_a = mutated[start:end].replace("**Status:** BLOCKED", "**Status:** PASS", 1)
-        gate_a = gate_a.replace(
-            "Current review checkout HEAD `61208ffcdb3a6154aa616cdd152b78221bbeaca6` has uncommitted changes; it is not a tested release candidate.",
+        gate_a = replace_gate_field(
+            gate_a,
+            "A",
+            "Evidence / exact source SHA",
             f"candidate_sha={candidate}; candidate_sha={stale}; tested_sha={candidate}; tested_sha=bad; scope=exact_candidate_ci; scope=runtime_security_review; owner_approval=PASS by Alice; owner_approval=PASS by Alice; independent_review=PASS by Bob",
-            1,
         ).replace(
             "**Accountable owner / independent reviewer:** Release owner / independent release reviewer (named assignment pending).",
             "**Accountable owner / independent reviewer:** Alice (release owner) / Bob (independent reviewer).", 1,
@@ -166,15 +167,14 @@ class LaunchChecklistValidatorTests(unittest.TestCase):
 
     def test_well_formed_candidate_bound_claims_are_accepted(self):
         candidate = "e" * 40
-        mutated = self.text.replace(
-            "**Release candidate SHA:** NONE (current checkout is dirty; no release candidate selected)",
-            f"**Release candidate SHA:** {candidate}", 1,
-        )
+        mutated = select_candidate(self.text, candidate)
         start, end = mutated.index("### Gate A"), mutated.index("### Gate B")
-        gate_a = mutated[start:end].replace("**Status:** BLOCKED", "**Status:** PASS", 1).replace(
-            "Current review checkout HEAD `61208ffcdb3a6154aa616cdd152b78221bbeaca6` has uncommitted changes; it is not a tested release candidate.",
+        gate_a = mutated[start:end].replace("**Status:** BLOCKED", "**Status:** PASS", 1)
+        gate_a = replace_gate_field(
+            gate_a,
+            "A",
+            "Evidence / exact source SHA",
             f"candidate_sha={candidate}; tested_sha={candidate}; scope=exact_candidate_ci; owner_approval=PASS by Alice; independent_review=PASS by Bob",
-            1,
         ).replace(
             "**Accountable owner / independent reviewer:** Release owner / independent release reviewer (named assignment pending).",
             "**Accountable owner / independent reviewer:** Alice (release owner) / Bob (independent reviewer).", 1,
@@ -197,17 +197,14 @@ class LaunchChecklistValidatorTests(unittest.TestCase):
             ("N/A", "**Accountable owner / independent reviewer:** N/A approved by Release Owner; independent review by Security Reviewer."),
         ):
             with self.subTest(status=status):
-                mutated = self.text.replace(
-                    "**Release candidate SHA:** NONE (current checkout is dirty; no release candidate selected)",
-                    f"**Release candidate SHA:** {candidate}",
-                    1,
-                )
+                mutated = select_candidate(self.text, candidate)
                 start, end = mutated.index("### Gate A"), mutated.index("### Gate B")
                 gate_a = mutated[start:end].replace("**Status:** BLOCKED", f"**Status:** {status}", 1)
-                gate_a = gate_a.replace(
-                    "Current review checkout HEAD `61208ffcdb3a6154aa616cdd152b78221bbeaca6` has uncommitted changes; it is not a tested release candidate.",
+                gate_a = replace_gate_field(
+                    gate_a,
+                    "A",
+                    "Evidence / exact source SHA",
                     f"candidate_sha={candidate}; tested_sha={candidate}; scope=exact_candidate_ci",
-                    1,
                 )
                 gate_a = gate_a.replace(
                     "**Accountable owner / independent reviewer:** Release owner / independent release reviewer (named assignment pending).",

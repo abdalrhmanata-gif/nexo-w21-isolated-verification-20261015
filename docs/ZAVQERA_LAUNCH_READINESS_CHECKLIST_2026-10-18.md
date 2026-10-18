@@ -2,7 +2,7 @@
 
 ## Release decision: NO-GO
 
-**Release candidate SHA:** NONE (current checkout is dirty; no release candidate selected)
+**Release candidate SHA:** NONE (no release candidate selected; the review workspace still has an untracked local output directory)
 
 Every gate below is mandatory. Status describes current evidence only; no older-SHA result is attributed to a newer source. `N/A` requires documented approval by the accountable owner and independent reviewer. A `PASS` is valid only for the exact source SHA and scope stated in its evidence field. No gate authorizes hosted writes, migration rollout, production deployment, or provider activation.
 
@@ -11,7 +11,7 @@ Every gate below is mandatory. Status describes current evidence only; no older-
 - **Status:** BLOCKED
 - **Required evidence scope:** EXACT_CANDIDATE_CI
 - **Exit condition:** A clean, explicitly selected release-candidate commit is recorded; all required build/test jobs pass on that exact SHA; artifacts identify the same SHA and are retained.
-- **Evidence / exact source SHA:** W86/W80 run `39136888615`, SHA `e123ead90684b64a9809ad6d4ba7b8ddcb155155`, W86 25/25 and W80 49/49, artifact `12140396685` (disposable PostgreSQL 17.11 only). Recovery smoke run `39139497594`, SHA `dcffaf1a138b1ddfee596fbdc0c76081272ce985`, artifact `12141246974`. Current review checkout HEAD `61208ffcdb3a6154aa616cdd152b78221bbeaca6` has uncommitted changes; it is not a tested release candidate.
+- **Evidence / exact source SHA:** W86/W80 run `39136888615`, SHA `e123ead90684b64a9809ad6d4ba7b8ddcb155155`, W86 25/25 and W80 49/49, artifact `12140396685` (disposable PostgreSQL 17.11 only). Recovery smoke run `39139497594`, SHA `dcffaf1a138b1ddfee596fbdc0c76081272ce985`, artifact `12141246974`. Latest published PR #3 source head `ea35fa39da580ac26881e1005ff439942aeaacd0` passed Flutter CI run `39146639759` on PR merge ref `232d3919b63db094e5402d985c4d66f74ffb1935`; this is isolated branch verification, not a selected release-candidate result.
 - **Accountable owner / independent reviewer:** Release owner / independent release reviewer (named assignment pending).
 - **Stop condition:** Candidate SHA is missing, dirty, differs from CI evidence, or an artifact cannot be matched to it.
 - **Closure action:** Select and freeze a clean candidate SHA, run only required jobs that lack exact-SHA evidence, inspect artifacts, and record the matching results and reviewer.
@@ -51,7 +51,7 @@ Every gate below is mandatory. Status describes current evidence only; no older-
 - **Status:** BLOCKED
 - **Required evidence scope:** AUTHORITATIVE_MIGRATION_PROVENANCE
 - **Exit condition:** Every current migration and hosted ledger entry has an evidence-backed mapping, including historical rename/timestamp changes; SQL effects are classified as confirmed, likely, or unresolved, and no unresolved item is treated as equivalent.
-- **Evidence / exact source SHA:** Reconciliation material in the current review checkout at `61208ffcdb3a6154aa616cdd152b78221bbeaca6`; recorded unresolved set is 22 timestamp conflicts and six hosted-only ledger names without recoverable exact-path SQL in reviewed refs. This documentation checkout has uncommitted changes and is not a tested release candidate.
+- **Evidence / exact source SHA:** Historical W86 review checkpoint `61208ffcdb3a6154aa616cdd152b78221bbeaca6` contains `docs/ZAVQERA_HOSTED_MIGRATION_HISTORY_RECONCILIATION_2026-10-15.md`; that report is not part of this isolated launch branch. Its recorded unresolved set is 22 timestamp conflicts and six hosted-only ledger names without recoverable exact-path SQL in reviewed refs. The report is historical evidence, not proof of deployed SQL equivalence.
 - **Accountable owner / independent reviewer:** Migration-history owner / independent database-platform reviewer (named assignments pending).
 - **Stop condition:** Any ledger version/name lacks authoritative source/deployment evidence or a proposed mapping depends on guessed SQL equivalence.
 - **Closure action:** Obtain authoritative historical SQL/deployment records, reconcile each item with provenance, and independently review the mapping before any separately authorized rollout proposal.
@@ -81,7 +81,7 @@ Every gate below is mandatory. Status describes current evidence only; no older-
 - **Status:** BLOCKED
 - **Required evidence scope:** OPERATIONAL_EXERCISE
 - **Exit condition:** Production runbooks, alert ownership, incident escalation, rollback/recovery procedures, access controls, and operational acceptance are reviewed and exercised for the approved release candidate.
-- **Evidence / exact source SHA:** Operations guide in the current review checkout at `61208ffcdb3a6154aa616cdd152b78221bbeaca6`; current checkout has uncommitted changes. No production exercise or operational acceptance is evidenced by the cited W80/W86 runs.
+- **Evidence / exact source SHA:** Operations guide [`ZAVQERA_LAUNCH_RUNBOOK.md`](ZAVQERA_LAUNCH_RUNBOOK.md) is present at launch branch source `ea35fa39da580ac26881e1005ff439942aeaacd0`. No production exercise or operational acceptance is evidenced by the cited W80/W86 runs.
 - **Accountable owner / independent reviewer:** Operations owner and incident-response owner / independent operations reviewer (named assignments pending).
 - **Stop condition:** Any critical alert/runbook lacks an accountable responder, rollback cannot be exercised safely, or production access/recovery procedure is unreviewed.
 - **Closure action:** Assign owners, exercise the procedures in a non-production environment, record results and remediate failures before independent operational sign-off.
@@ -101,7 +101,7 @@ Every gate below is mandatory. Status describes current evidence only; no older-
 - **Status:** BLOCKED
 - **Required evidence scope:** INDEPENDENT_RELEASE_APPROVAL
 - **Exit condition:** Gates A-I are PASS or explicitly approved N/A with evidence, all mandatory independent reviews are recorded against the exact release-candidate SHA, and the authorized release owner records a go decision.
-- **Evidence / exact source SHA:** Current review checkout HEAD `61208ffcdb3a6154aa616cdd152b78221bbeaca6` is dirty and is not a release candidate. Prior exact-SHA artifacts are scoped to their respective commits above. No release authorization is recorded.
+- **Evidence / exact source SHA:** The latest published PR #3 source head `ea35fa39da580ac26881e1005ff439942aeaacd0` has passing Flutter CI run `39146639759` on merge ref `232d3919b63db094e5402d985c4d66f74ffb1935`, but remains an open Draft PR without a recorded independent review. No release candidate or release authorization is selected; prior artifacts remain scoped to their exact commits above.
 - **Accountable owner / independent reviewer:** Authorized release owner / independent security, database, recovery, and operations reviewers (named assignments pending).
 - **Stop condition:** Any mandatory gate is FAIL/BLOCKED, evidence SHA is stale or absent, an approval is missing, or a safety constraint is violated.
 - **Closure action:** Close each prerequisite gate, assemble the evidence index keyed by exact SHA, obtain independent approvals, and record the authorized decision. Until then, keep release NO-GO.
