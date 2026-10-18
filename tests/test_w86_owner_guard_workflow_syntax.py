@@ -14,7 +14,7 @@ WORKFLOW = (
     / "zavqera-w80-isolated-pgtap.yml"
 )
 START_MARKER = "          # Exercise both ways to obtain table-owner authority (SET ROLE and INHERIT)."
-EXPECTED_FINAL_GATE = 'if [ "${regression_status}" -ne 0 ] || [ "${later_status}" -ne 0 ] || [ "${w84_status}" -ne 0 ] || [ "${w85_status}" -ne 0 ] || [ "${w86_status}" -ne 0 ] || [ "${query_pack_status}" -ne 0 ] || [ "${w86_authenticated_parent_guard_status}" -ne 0 ] || [ "${anon_authenticated_guard_status:-1}" -ne 0 ] || [ "${owner_path_guard_status}" -ne 0 ] || [ "${untrusted_owner_guard_status:-1}" -ne 0 ] || [ "${mixed_path_no_mutation_status:-1}" -ne 0 ]; then exit 1; fi'
+EXPECTED_FINAL_GATE = 'if [ "${regression_status}" -ne 0 ] || [ "${later_status}" -ne 0 ] || [ "${w84_status}" -ne 0 ] || [ "${w85_status}" -ne 0 ] || [ "${w86_status}" -ne 0 ] || [ "${query_pack_status}" -ne 0 ] || [ "${w86_authenticated_parent_guard_status}" -ne 0 ] || [ "${anon_authenticated_guard_status:-1}" -ne 0 ] || [ "${untrusted_parent_acl_guard_status:-1}" -ne 0 ] || [ "${owner_path_guard_status}" -ne 0 ] || [ "${untrusted_owner_guard_status:-1}" -ne 0 ] || [ "${mixed_path_no_mutation_status:-1}" -ne 0 ]; then exit 1; fi'
 END_MARKER = EXPECTED_FINAL_GATE
 
 
@@ -38,7 +38,7 @@ class W86OwnerPathWorkflowSyntaxTests(unittest.TestCase):
         self.assertIn("W86_ANON_AUTH_${kind^^}_REACHABILITY_PASS", helper)
         self.assertIn("W86_ANON_AUTH_${kind^^}_NO_MUTATION_PASS", helper)
         self.assertIn("W86 refused: anon can reach authenticated via a parent role path", helper)
-        self.assertIn('echo "expected_w86_pgtap_assertions=23"', workflow)
+        self.assertIn('echo "expected_w86_pgtap_assertions=24"', workflow)
         self.assertIn("REVOKE authenticated FROM anon", helper)
         self.assertIn(r"DO \$cleanup_anon_auth\$", workflow)
         self.assertIn("anon_authenticated_guard_status=1", helper)
@@ -66,7 +66,7 @@ class W86OwnerPathWorkflowSyntaxTests(unittest.TestCase):
         self.assertIn('[ "${before_state}" != "${after_state}" ]', helper)
         self.assertIn("REVOKE CREATE ON SCHEMA public FROM ${owner_role}", helper)
         self.assertIn("W86_AFTER_UNTRUSTED_OWNER_${owner_role^^}_CLEANUP", helper)
-        self.assertIn("supabase/tests/w86_agent_executions_acl_correction.sql 23", helper)
+        self.assertIn("supabase/tests/w86_agent_executions_acl_correction.sql 24", helper)
         self.assertIn("run_untrusted_owner_mixed_path_negative_control", helper)
         self.assertIn("GRANT ${intermediate_role} TO authenticated WITH INHERIT FALSE, SET TRUE;", helper)
         self.assertIn("GRANT ${owner_role} TO ${intermediate_role} WITH INHERIT TRUE, SET FALSE;", helper)
@@ -76,7 +76,35 @@ class W86OwnerPathWorkflowSyntaxTests(unittest.TestCase):
         self.assertIn("W86_AFTER_UNTRUSTED_OWNER_MIXED_PATH_CLEANUP", helper)
         self.assertIn("untrusted_owner_guard_status=1", workflow)
         self.assertIn('[ "${untrusted_owner_guard_status:-1}" -ne 0 ]', workflow)
-        self.assertIn('echo "expected_w86_pgtap_assertions=23"', workflow)
+        self.assertIn('echo "expected_w86_pgtap_assertions=24"', workflow)
+
+    def test_untrusted_api_role_parent_acl_guard_covers_all_reachability_modes(self):
+        workflow = WORKFLOW.read_text(encoding="utf-8")
+        start_marker = "          # Negative control: W86 must refuse reachable parent-role table/column ACLs for anon/authenticated before any mutation."
+        end_marker = "          # Exercise both ways to obtain table-owner authority (SET ROLE and INHERIT)."
+        self.assertIn(start_marker, workflow)
+        self.assertIn(end_marker, workflow)
+        start = workflow.index(start_marker)
+        end = workflow.index(end_marker, start)
+        helper = textwrap.dedent(workflow[start:end])
+        result = subprocess.run(
+            ["bash", "-n"], input=helper, text=True, capture_output=True, check=False
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        for call in (
+            "run_untrusted_parent_acl_negative_control anon inherit",
+            "run_untrusted_parent_acl_negative_control anon set",
+            "run_untrusted_parent_acl_negative_control anon mixed",
+            "run_untrusted_parent_acl_negative_control authenticated inherit",
+            "run_untrusted_parent_acl_negative_control authenticated set",
+            "run_untrusted_parent_acl_negative_control authenticated mixed",
+        ):
+            self.assertIn(call, helper)
+        self.assertIn("W86_UNTRUSTED_PARENT_ACL_\\${root_role^^}_\\${kind^^}_NO_MUTATION_PASS", helper)
+        self.assertIn("W86 refused: anon/authenticated can obtain agent_executions privileges via parent roles", helper)
+        self.assertIn("untrusted_parent_acl_guard_status=1", helper)
+        self.assertIn('[ "\\${untrusted_parent_acl_guard_status:-1}" -ne 0 ]', workflow)
+        self.assertIn("supabase/tests/w86_agent_executions_acl_correction.sql 24", helper)
 
     def test_owner_path_helper_is_valid_bash_and_covers_both_membership_modes(self):
         workflow = WORKFLOW.read_text(encoding="utf-8")

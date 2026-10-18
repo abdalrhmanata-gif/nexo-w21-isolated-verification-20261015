@@ -13,6 +13,7 @@
 do $w86_inherited_acl_preflight$
 declare
   inherited_entries text;
+  untrusted_inherited_entries text;
   reachable_authenticated_parent text;
   reachable_anon_authenticated_parent text;
   reachable_untrusted_owner_path text;
@@ -64,6 +65,58 @@ begin
     select role_name, privilege_description from inherited_table_acl
     union all
     select role_name, privilege_description from inherited_column_acl
+  ),
+  -- Direct revokes on anon/authenticated do not remove privileges granted to
+  -- parent roles they can INHERIT from or SET ROLE to. Inspect both roots before
+  -- any ACL mutation, including mixed membership paths.
+  untrusted_acl_role_path (
+    root_role_name, role_oid, role_name, depth, oid_path,
+    inherits_all, can_set_role, reachable_via_membership_options
+  ) as (
+    select r.rolname, r.oid, r.rolname, 0, array[r.oid]::oid[], true, true, true
+      from pg_roles r
+     where r.rolname in ('anon', 'authenticated')
+    union all
+    select child.root_role_name,
+           parent.oid,
+           parent.rolname,
+           child.depth + 1,
+           child.oid_path || parent.oid,
+           child.inherits_all and membership.inherit_option,
+           child.can_set_role and membership.set_option,
+           (child.reachable_via_membership_options and membership.inherit_option)
+             or (child.can_set_role and membership.set_option)
+      from untrusted_acl_role_path child
+      join pg_auth_members membership on membership.member = child.role_oid
+      join pg_roles parent on parent.oid = membership.roleid
+     where not parent.oid = any(child.oid_path)
+  ),
+  untrusted_parent_table_acl as (
+    select rp.root_role_name, rp.role_name,
+           'table ' || acl.privilege_type as privilege_description
+      from untrusted_acl_role_path rp
+      join pg_class c on c.oid = 'public.agent_executions'::regclass
+      cross join lateral aclexplode(coalesce(c.relacl, acldefault('r', c.relowner))) acl
+     where rp.depth > 0
+       and rp.reachable_via_membership_options
+       and acl.grantee = rp.role_oid
+  ),
+  untrusted_parent_column_acl as (
+    select rp.root_role_name, rp.role_name,
+           format('column %I %s', a.attname, acl.privilege_type) as privilege_description
+      from untrusted_acl_role_path rp
+      join pg_attribute a on a.attrelid = 'public.agent_executions'::regclass
+      cross join lateral aclexplode(a.attacl) acl
+     where a.attnum > 0
+       and not a.attisdropped
+       and rp.depth > 0
+       and rp.reachable_via_membership_options
+       and acl.grantee = rp.role_oid
+  ),
+  untrusted_parent_acl as (
+    select root_role_name, role_name, privilege_description from untrusted_parent_table_acl
+    union all
+    select root_role_name, role_name, privilege_description from untrusted_parent_column_acl
   ),
   reachable_authenticated as (
     select string_agg(format('role %I', rp.role_name), ', ' order by rp.role_name) as role_names
@@ -138,8 +191,14 @@ begin
        from role_path rp
        join pg_class c on c.oid = 'public.agent_executions'::regclass
       where rp.role_name = pg_get_userbyid(c.relowner)
-        and (rp.depth = 0 or rp.reachable_via_membership_options))
-    into inherited_entries, reachable_authenticated_parent, reachable_anon_authenticated_parent, reachable_untrusted_owner_path, reachable_owner_role_path;
+        and (rp.depth = 0 or rp.reachable_via_membership_options)),
+    (select string_agg(
+       format('%s via role %I reachable from %I', privilege_description, role_name, root_role_name),
+       '; ' order by root_role_name, role_name, privilege_description
+     )
+       from (select distinct root_role_name, role_name, privilege_description
+               from untrusted_parent_acl) parent_acl)
+    into inherited_entries, reachable_authenticated_parent, reachable_anon_authenticated_parent, reachable_untrusted_owner_path, reachable_owner_role_path, untrusted_inherited_entries;
 
   -- Ownership carries powers that are not reliably represented by grant rows:
   -- service_role must not be the owner or be able to inherit owner authority
@@ -173,6 +232,14 @@ begin
     raise exception
       'W86 refused: anon/authenticated can own or reach owner of public.agent_executions (%); direct ACL revokes do not remove owner authority',
       reachable_untrusted_owner_path;
+  end if;
+
+  -- A direct REVOKE from anon/authenticated is insufficient if either role
+  -- can obtain table/column ACLs from a reachable parent role. Stop pre-mutation.
+  if untrusted_inherited_entries is not null then
+    raise exception
+      'W86 refused: anon/authenticated can obtain agent_executions privileges via parent roles (INHERIT or SET ROLE): %',
+      untrusted_inherited_entries;
   end if;
 
   if inherited_entries is not null then

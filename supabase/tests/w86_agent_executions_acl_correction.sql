@@ -2,7 +2,7 @@
 -- Intended for the disposable PostgreSQL 17 replay only.
 begin;
 create extension if not exists pgtap;
-select plan(23);
+select plan(24);
 
 select ok(not has_table_privilege('service_role', 'public.agent_executions', 'SELECT'),
   'service_role cannot directly read execution rows');
@@ -131,6 +131,51 @@ select ok(not exists (
      and role_name = 'authenticated'
      and reachable_via_membership_options
 ), 'anon has no INHERIT or SET ROLE path to authenticated SELECT grant target');
+
+select ok(not exists (
+  with recursive untrusted_acl_role_path (
+    root_role_name, role_oid, role_name, depth, oid_path,
+    inherits_all, can_set_role, reachable_via_membership_options
+  ) as (
+    select r.rolname, r.oid, r.rolname, 0, array[r.oid]::oid[], true, true, true
+      from pg_roles r
+     where r.rolname in ('anon', 'authenticated')
+    union all
+    select child.root_role_name,
+           parent.oid,
+           parent.rolname,
+           child.depth + 1,
+           child.oid_path || parent.oid,
+           child.inherits_all and membership.inherit_option,
+           child.can_set_role and membership.set_option,
+           (child.reachable_via_membership_options and membership.inherit_option)
+             or (child.can_set_role and membership.set_option)
+      from untrusted_acl_role_path child
+      join pg_auth_members membership on membership.member = child.role_oid
+      join pg_roles parent on parent.oid = membership.roleid
+     where not parent.oid = any(child.oid_path)
+  ),
+  inherited_parent_acl as (
+    select rp.root_role_name, rp.role_name, acl.privilege_type::text as privilege_description
+      from untrusted_acl_role_path rp
+      join pg_class c on c.oid = 'public.agent_executions'::regclass
+      cross join lateral aclexplode(coalesce(c.relacl, acldefault('r', c.relowner))) acl
+     where rp.depth > 0
+       and rp.reachable_via_membership_options
+       and acl.grantee = rp.role_oid
+    union all
+    select rp.root_role_name, rp.role_name, format('column %I %s', a.attname, acl.privilege_type)
+      from untrusted_acl_role_path rp
+      join pg_attribute a on a.attrelid = 'public.agent_executions'::regclass
+      cross join lateral aclexplode(a.attacl) acl
+     where a.attnum > 0
+       and not a.attisdropped
+       and rp.depth > 0
+       and rp.reachable_via_membership_options
+       and acl.grantee = rp.role_oid
+  )
+  select 1 from inherited_parent_acl
+), 'anon/authenticated have no reachable inherited table or column ACLs');
 
 select ok(not exists (
   with recursive untrusted_owner_role_path (
