@@ -12,6 +12,8 @@ on:
       - "apps/web/**"
       - "supabase/**"
       - "tool/**"
+      - "tools/**"
+      - "tests/**"
   pull_request:
     branches:
       - "zavqera/alternative-web-deployment"
