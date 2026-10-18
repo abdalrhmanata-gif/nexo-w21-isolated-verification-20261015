@@ -160,6 +160,48 @@ class LaunchChecklistValidatorTests(unittest.TestCase):
         errors = validate_checklist(mutated)
         self.assertTrue(any("owner and independent reviewer must be different identities" in error for error in errors), errors)
 
+    def test_owner_reviewer_separator_must_be_unambiguous(self):
+        candidate = "e" * 40
+        mutated = select_candidate(self.text, candidate)
+        start, end = mutated.index("### Gate A"), mutated.index("### Gate B")
+        gate_a = mutated[start:end].replace("**Status:** BLOCKED", "**Status:** PASS", 1)
+        gate_a = replace_gate_field(
+            gate_a,
+            "A",
+            "Evidence / exact source SHA",
+            f"candidate_sha={candidate}; tested_sha={candidate}; scope=exact_candidate_ci; owner_approval=PASS by Alice; independent_review=PASS by Bob / Alice",
+        )
+        gate_a = replace_gate_field(
+            gate_a,
+            "A",
+            "Accountable owner / independent reviewer",
+            "Alice (release owner) / Bob (independent reviewer) / Alice.",
+        )
+        mutated = mutated[:start] + gate_a + mutated[end:]
+        errors = validate_checklist(mutated)
+        self.assertTrue(any("exactly one ' / ' separator" in error for error in errors), errors)
+
+    def test_unrecognized_parenthetical_cannot_hide_an_identity(self):
+        candidate = "e" * 40
+        mutated = select_candidate(self.text, candidate)
+        start, end = mutated.index("### Gate A"), mutated.index("### Gate B")
+        gate_a = mutated[start:end].replace("**Status:** BLOCKED", "**Status:** PASS", 1)
+        gate_a = replace_gate_field(
+            gate_a,
+            "A",
+            "Evidence / exact source SHA",
+            f"candidate_sha={candidate}; tested_sha={candidate}; scope=exact_candidate_ci; owner_approval=PASS by Alice; independent_review=PASS by Bob",
+        )
+        gate_a = replace_gate_field(
+            gate_a,
+            "A",
+            "Accountable owner / independent reviewer",
+            "Alice (release owner) / Bob (Alice).",
+        )
+        mutated = mutated[:start] + gate_a + mutated[end:]
+        errors = validate_checklist(mutated)
+        self.assertTrue(any("independent_review approver must exactly match the named independent reviewer" in error for error in errors), errors)
+
     def test_approver_must_not_match_only_a_substring_of_owner_identity(self):
         candidate = "e" * 40
         mutated = select_candidate(self.text, candidate)

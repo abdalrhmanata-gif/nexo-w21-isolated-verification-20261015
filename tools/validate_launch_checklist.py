@@ -53,9 +53,36 @@ SCOPE_LIMITATIONS = {
 }
 
 
+ROLE_ANNOTATIONS = frozenset({
+    "release owner",
+    "independent release reviewer",
+    "application security owner",
+    "independent security reviewer",
+    "dispatch security owner and provider integration owner",
+    "authorized development database owner",
+    "independent database-platform reviewer",
+    "migration-history owner",
+    "backup/recovery owner",
+    "independent recovery reviewer",
+    "operations owner and incident-response owner",
+    "independent operations reviewer",
+    "product owner and support/accessibility/privacy owners",
+    "independent qa reviewer",
+    "authorized release owner",
+    "independent security, database, recovery, and operations reviewers",
+    "independent reviewer",
+    "owner",
+    "reviewer",
+})
+
+
 def normalize_approval_identity(value: str) -> str:
-    """Normalize an identity while excluding parenthetical role descriptions."""
-    return re.sub(r"\s*\([^)]*\)", "", value).strip(" \t\r\n.,:;").casefold()
+    """Normalize names and strip only recognized trailing role annotations."""
+    normalized = value.strip(" \t\r\n.,:;").casefold()
+    annotation = re.search(r"\s*\(([^()]*)\)$", normalized)
+    if annotation and annotation.group(1).strip() in ROLE_ANNOTATIONS:
+        normalized = normalized[:annotation.start()].strip(" \t\r\n.,:;")
+    return normalized
 
 
 def validate_checklist(text: str) -> list[str]:
@@ -113,8 +140,9 @@ def validate_checklist(text: str) -> list[str]:
             errors.append(f"Gate {gate_id}: evidence must include a full 40-character source SHA")
 
         owner = record.get("Accountable owner / independent reviewer", "")
-        if "/" not in owner or not owner.strip(" /"):
-            errors.append(f"Gate {gate_id}: owner and independent reviewer must both be identified")
+        owner_parts = owner.split(" / ")
+        if len(owner_parts) != 2 or any(not part.strip(" /\t\r\n") for part in owner_parts):
+            errors.append(f"Gate {gate_id}: owner and independent reviewer must be identified using exactly one ' / ' separator")
 
     decision_matches = re.findall(r"^##\s+Release decision:\s*(NO-GO|GO)\s*$", text, re.MULTILINE)
     if len(decision_matches) != 1:
@@ -150,7 +178,7 @@ def validate_checklist(text: str) -> list[str]:
             if scope and (len(scope_claims) != 1 or scope_claims[0] != scope.lower()):
                 errors.append(f"Gate {gate_id}: {status} evidence does not claim required scope={scope}")
             owner_field = record.get("Accountable owner / independent reviewer", "").lower()
-            owner_reviewer_parts = owner_field.split("/", 1)
+            owner_reviewer_parts = owner_field.split(" / ")
             owner_identity = normalize_approval_identity(owner_reviewer_parts[0]) if len(owner_reviewer_parts) == 2 else ""
             reviewer_identity = normalize_approval_identity(owner_reviewer_parts[1]) if len(owner_reviewer_parts) == 2 else ""
             if owner_identity and reviewer_identity and owner_identity == reviewer_identity:
