@@ -229,3 +229,19 @@ The supplied evidence does not establish that any of sections A–F is an *inten
 - Explicit separate authorization for any hosted change: **NOT PROVIDED; writes remain prohibited**.
 
 **Final recommendation:** Do not apply W86 or another migration, do not revise the hosted migration ledger, and do not revoke/drop/replace a routine based only on this capture. Proceed first with authorized-owner review and source provenance recovery. Only then develop and test a forward-only, least-privilege remediation candidate in disposable PostgreSQL, with a verified recovery plan. This assessment approves **neither schema remediation nor release**; at most it establishes a documented interim review assessment.
+
+
+### 9.4 Exact source-checkout GitHub path-history sweep — 2026-10-18
+
+A further check compared the **exact source checkout HEAD recorded in the existing capture review**, `fbbcb080904acd88aad83a082803f627859026e2`, rather than relying only on current branch names.
+
+- The recursive tree was not truncated (641 entries) and contains 89 migration SQL files.
+- All 89/89 source-version filename tuples in the 95-row intake exist in that exact source tree. This establishes checked-in source-file presence at that commit; it does not establish what was deployed.
+- Of the 74 hosted filename tuples, 46 exact-version/name paths exist at that source tree; all 22 different-version hosted paths and all six hosted-only paths are absent.
+- GitHub commit-path-history lookups for each of the exact 28 absent hosted-version filenames at that source HEAD returned zero commits. The detailed [sweep report](ZAVQERA_GITHUB_HOSTED_MIGRATION_PATH_HISTORY_2026-10-18.md) and [28-row comparison CSV](ZAVQERA_GITHUB_HOSTED_MIGRATION_PATH_HISTORY_2026-10-18.csv) record the exact path-by-path result and source Git blob SHAs where a source counterpart exists.
+
+#### W4 source-history caveat
+
+The source-side W4 file path `20260921180052_w4_table_privilege_hardening.sql` has Git blob SHA `2745a06c66b9f325683beaa973e10f6d21631555` at the captured source HEAD. GitHub path history reports one commit for that source path: [`772f011624c199adc021a61d039a4cf13e9a3740`](https://github.com/abdalrhmanata-gif/nexo-w21-isolated-verification-20261015/commit/772f011624c199adc021a61d039a4cf13e9a3740), dated 2026-09-25, with subject `merge: stage ZAVQERA integration without historical artifact`. The subject does not establish that the SQL is wrong, but this commit is not a per-migration deployment receipt and does not bridge the source filename `20260921180052` to hosted ledger version `20260921180138`.
+
+**Updated interpretation:** current source bytes are recoverable in the captured checkout, but the path-history sweep does not recover the bytes bearing the 28 exact hosted-version filenames. This is a bounded reachable-history result, not proof that no such SQL ever existed in any deleted/unreachable ref, external repository, private/local clone, backup or deployment system. Do not populate deployed SQL digests or resolve the affected dispositions from this result alone. Keep the 22 conflicts and six hosted-only rows **OPEN / UNKNOWN**, and release **NO-GO**.
