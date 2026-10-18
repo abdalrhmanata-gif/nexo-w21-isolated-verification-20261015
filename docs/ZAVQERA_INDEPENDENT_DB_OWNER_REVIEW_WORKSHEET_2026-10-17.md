@@ -192,3 +192,40 @@ The CSV preserves all 95 current reconciliation units and initializes each owner
 
 
 The same CSV is guarded by an offline, no-network validator and tamper-regression tests: [validator](../tools/validate_zavqera_migration_owner_intake.py), [tests](../tests/test_zavqera_migration_owner_intake.py), and [CI workflow](../.github/workflows/zavqera-owner-intake-validation.yml). The guard proves the intake has not been silently altered; it does not close any owner or historical-source gate.
+
+
+---
+
+## 9. Evidence-based reviewer assessment — 2026-10-18
+
+**Review type:** Independent analytical review of the recorded 2026-10-17 13-query metadata capture and related checked-in reports. This is not a live database review or a representation that the author is the legal/administrative database owner. No new connection was opened and no SQL was executed in this review. The capture’s archive SHA-256 is `9cee349552ddc4daf3a30c109ac570963313d35915b11308130916cb4773d79d`.
+
+**Overall disposition: REVIEWED — MORE EVIDENCE REQUIRED. Release remains NO-GO. No hosted changes authorized.**
+
+### 9.1 Evidence-supported findings
+
+| Area | Assessment from the captured evidence | Provisional disposition | Evidence required to close |
+|---|---|---|---|
+| Direct `service_role` privileges on `public.agent_executions` | The capture reports direct table privileges for SELECT, INSERT, UPDATE, DELETE, TRUNCATE, REFERENCES, TRIGGER and MAINTAIN; RLS is enabled but not forced. Query 13 reports no inherited ACL path, owner path, or role path to authenticated. | **UNRESOLVED — security-significant grant exists.** The captured state is established for capture time; intent and exploitability are not established. | Owner-approved privilege matrix, exact SQL grants/ACL before and after expected state, authoritative caller/adapter mapping, isolated negative tests proving disallowed direct DML fails and approved guarded RPC flow works. |
+| Missing Mission Authority relations/columns/constraints/indexes/trigger | Two budget relations, 26 expected columns, 10 of 11 queried constraints, eight indexes and the success-receipt trigger are reported absent relative to the audited candidate expectations. | **UNRESOLVED — material contract/catalog drift relative to candidate.** Not yet proven to be unintended production drift because candidate-vs-current release applicability has not been independently established. | Identify the exact intended release/contract commit and map every expected object to authoritative migration and application caller; document whether required for the current deployed product or only a future candidate; isolated full replay and catalog assertions. |
+| Routine signatures and grants | 23/40 expectation rows mismatch: 19 expected signatures absent and four signatures expected absent remain present. The report notes SECURITY DEFINER legacy routines and EXECUTE grants. | **UNRESOLVED — high-risk permission/interface drift requiring routine-by-routine analysis.** Signature mismatch alone is not proof of exploit. | For every signature: definition/body, owner, SECURITY DEFINER, fixed safe search_path, all EXECUTE grants, exposed-schema configuration, dependent callers, behavior tests, and explicit KEEP/RESTRICT/REPLACE/REMOVE decision by authorized owner. |
+| Private-schema USAGE and default ACLs | Effective `private` USAGE is reported false for anon and true for authenticated/service_role; eight public-schema default EXECUTE ACL rows are reported for creator roles postgres and supabase_admin. | **UNRESOLVED — least-privilege policy not evidenced.** Cannot classify as intentional. | Approved exposure policy; per-creator default ACL matrix; tests for existing and future routine privileges; app/RPC compatibility review. |
+| Migration history | 89 source files, 74 hosted rows, 46 exact metadata tuples, 22 version conflicts and six hosted-only names. The full Library ZIP scan found one source-side W4 candidate but no per-migration deployment record tying it to the differently versioned hosted row. | **UNRESOLVED — no exact source/deployed SQL equivalence proven for the ledger.** | Authoritative historical SQL per row plus trusted deployment evidence tying bytes to project/version/time; independent row-by-row review. Keep UNKNOWN where missing. |
+| Audit-role/capture hygiene | Capture was described as read-only and metadata-only; role reports `rolbypassrls=true`. ZIP scan found no recognizable token string but was explicitly not universal. | **CONDITIONAL — procedure is read-only, but elevated audit-role attribute and credential hygiene need owner confirmation.** | Confirm least-privileged metadata-only scope, credential owner and lifecycle, verify credential was not committed/disclosed through owner’s secret-handling procedures, and rotate/revoke if exposure is suspected. No credential belongs in review files. |
+| Mission Authority enforcement boundary | The database metadata capture cannot prove provider-independent JIT authorization at every external side effect, correct lease/revision/approval/budget enforcement, concurrency safety, or outcome reconciliation. | **NOT ESTABLISHED by this evidence.** | Separate application/server/adapter source audit and isolated authenticated E2E tests including bypass attempts, stale/revoked authority, approval denial, budget races, replay/idempotency and unknown provider outcomes. |
+
+### 9.2 Intentional legacy versus accidental drift
+
+The supplied evidence does not establish that any of sections A–F is an *intentional* legacy state. Nor does it independently prove the observed discrepancies are accidental changes from a previously approved target. Therefore, this review does **not** label them as intentional or accidental. Provisional classifications remain **UNRESOLVED** until the owner identifies the authoritative target contract/release and documents rationale using the evidence listed above.
+
+### 9.3 Gate decision
+
+- Evidence archive identity and completeness: **REPORTED PASS in the existing review**; independent recomputation of the ZIP SHA was not performed in this new review.
+- Read-only capture protocol and 13-query evidence: **REPORTED PASS**, based on the checked-in review; not a fresh hosted recapture.
+- Direct grants / schema / routines / default ACL owner decisions: **OPEN**.
+- Historical SQL provenance (22 conflicts and six hosted-only): **OPEN / BLOCKING**.
+- Independent authorization, restorable backup and recovery rehearsal: **OPEN**.
+- Exact isolated remediation candidate and full negative/positive acceptance evidence: **OPEN**.
+- Explicit separate authorization for any hosted change: **NOT PROVIDED; writes remain prohibited**.
+
+**Final recommendation:** Do not apply W86 or another migration, do not revise the hosted migration ledger, and do not revoke/drop/replace a routine based only on this capture. Proceed first with authorized-owner review and source provenance recovery. Only then develop and test a forward-only, least-privilege remediation candidate in disposable PostgreSQL, with a verified recovery plan. This assessment approves **neither schema remediation nor release**; at most it establishes a documented interim review assessment.
