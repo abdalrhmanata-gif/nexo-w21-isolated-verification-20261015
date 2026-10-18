@@ -245,3 +245,16 @@ A further check compared the **exact source checkout HEAD recorded in the existi
 The source-side W4 file path `20260921180052_w4_table_privilege_hardening.sql` has Git blob SHA `2745a06c66b9f325683beaa973e10f6d21631555` at the captured source HEAD. GitHub path history reports one commit for that source path: [`772f011624c199adc021a61d039a4cf13e9a3740`](https://github.com/abdalrhmanata-gif/nexo-w21-isolated-verification-20261015/commit/772f011624c199adc021a61d039a4cf13e9a3740), dated 2026-09-25, with subject `merge: stage ZAVQERA integration without historical artifact`. The subject does not establish that the SQL is wrong, but this commit is not a per-migration deployment receipt and does not bridge the source filename `20260921180052` to hosted ledger version `20260921180138`.
 
 **Updated interpretation:** current source bytes are recoverable in the captured checkout, but the path-history sweep does not recover the bytes bearing the 28 exact hosted-version filenames. This is a bounded reachable-history result, not proof that no such SQL ever existed in any deleted/unreachable ref, external repository, private/local clone, backup or deployment system. Do not populate deployed SQL digests or resolve the affected dispositions from this result alone. Keep the 22 conflicts and six hosted-only rows **OPEN / UNKNOWN**, and release **NO-GO**.
+
+
+---
+
+## 10. GitHub visible-branch source recovery — 2026-10-18
+
+The supplementary scan [ZAVQERA_GITHUB_BRANCH_SOURCE_RECOVERY_SCAN_2026-10-18.md](ZAVQERA_GITHUB_BRANCH_SOURCE_RECOVERY_SCAN_2026-10-18.md) inspected all 23 branch tips returned by the original `abdalrhmanata-gif/Nexo` repository's branch listing at the scan time. All recursive trees were complete (`truncated=false`).
+
+- No exact hosted filename was found for any of the 22 same-name/version conflicts or six hosted-only ledger tuples (0/28 contested paths across the 23 visible branch-tip trees).
+- The 22 source-side conflict filenames were present in migration-bearing branch snapshots; the blob SHAs for each source-side conflict filename matched the scan baseline wherever present. No alternate source blob was observed in these visible branch tips.
+- This is only current visible-ref/path/blob evidence. It does not scan deleted/unreachable Git objects, owner-device reflogs/stashes/unpushed refs, external/private repos, deployment artifacts or backups, and it does not prove what SQL was executed.
+
+**Disposition unchanged:** All historical deployed-byte rows remain unresolved pending trusted deployment/source evidence. Do not rewrite the hosted ledger or infer equality from names. Release remains **NO-GO**, and no hosted change is authorized. The next recovery attempt must target the external/local artifact classes explicitly excluded by this scan, or record that the historic bytes cannot be established and design a separately reviewed re-baselining path.
