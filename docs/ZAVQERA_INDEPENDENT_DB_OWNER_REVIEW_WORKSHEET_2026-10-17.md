@@ -258,3 +258,13 @@ The supplementary scan [ZAVQERA_GITHUB_BRANCH_SOURCE_RECOVERY_SCAN_2026-10-18.md
 - This is only current visible-ref/path/blob evidence. It does not scan deleted/unreachable Git objects, owner-device reflogs/stashes/unpushed refs, external/private repos, deployment artifacts or backups, and it does not prove what SQL was executed.
 
 **Disposition unchanged:** All historical deployed-byte rows remain unresolved pending trusted deployment/source evidence. Do not rewrite the hosted ledger or infer equality from names. Release remains **NO-GO**, and no hosted change is authorized. The next recovery attempt must target the external/local artifact classes explicitly excluded by this scan, or record that the historic bytes cannot be established and design a separately reviewed re-baselining path.
+
+
+## 11. Complete Actions metadata and Library SQL filename check — 2026-10-18
+
+Two additional reports extend the recovery search:
+
+- [Full original-repository GitHub Actions metadata scan](ZAVQERA_GITHUB_ACTIONS_FULL_HISTORY_METADATA_SCAN_2026-10-18.md): all 10,590 available run metadata records over 106 pages were reviewed. Targeted W21/W25 artifact samples were local/disposable test evidence; no hosted migration receipt or original historic SQL archive was identified.
+- [Full Library SQL filename inventory](ZAVQERA_LIBRARY_SQL_FILENAME_INVENTORY_2026-10-18.md): all 866 visible Library item metadata entries across nine pages; 137 direct `.sql` file names, zero matches to the 28 target stems or 14-digit timestamped filenames.
+
+These are negative source-discovery results and do not establish that historical source SQL never existed or was not deployed. They do not replace actual byte provenance. Continue to leave the 22 version conflicts and six hosted-only rows unresolved until owner-controlled local/external source and trusted deployment evidence are found, or a separately reviewed re-baselining project is approved. Release remains NO-GO; no hosted write is authorized.
