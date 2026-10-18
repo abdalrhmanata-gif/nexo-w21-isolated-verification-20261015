@@ -92,8 +92,11 @@ class LaunchChecklistWorkflowClassificationTests(unittest.TestCase):
 
     def test_existing_required_workflow_runs_fast_checks_and_keeps_full_path(self):
         workflow = WORKFLOW.read_text(encoding="utf-8")
-        self.assertIn('branches: ["**"]', workflow)
-        self.assertRegex(workflow, r"(?m)^\s+pull_request:\s*$")
+        push_trigger = workflow.split("\non:", 1)[1].split("\npermissions:", 1)[0]
+        self.assertRegex(
+            push_trigger,
+            r'(?ms)^  push:\s*\n    branches: \["\*\*", "!codex/launch-readiness-gates-20261018"\]\s*\n  pull_request:\s*$'
+        )
         self.assertIn("classify-changes:", workflow)
         self.assertIn("needs: classify-changes", workflow)
         self.assertIn("if: always()", workflow)
@@ -116,6 +119,19 @@ class LaunchChecklistWorkflowClassificationTests(unittest.TestCase):
         ):
             step = workflow.split(f"- name: {full_validation_step}", 1)[1].split("\n      - name:", 1)[0]
             self.assertIn("needs.classify-changes.outputs.checklist_only != 'true'", step)
+
+    def test_launch_branch_push_is_excluded_but_its_pr_keeps_full_verification(self):
+        workflow = WORKFLOW.read_text(encoding="utf-8")
+        triggers = workflow.split("\non:", 1)[1].split("\npermissions:", 1)[0]
+        self.assertIn('branches: ["**", "!codex/launch-readiness-gates-20261018"]', triggers)
+        self.assertRegex(triggers, r"(?m)^  pull_request:\s*$")
+        self.assertNotIn("branches-ignore", triggers)
+        self.assertNotRegex(triggers, r"(?m)^\s+types:\s*\[.*\]\s*$")
+
+        verify = workflow.split("\n  verify:", 1)[1].split("\njobs:", 1)[0]
+        self.assertIn("needs: classify-changes", verify)
+        self.assertIn("if: always()", verify)
+        self.assertIn("needs.classify-changes.result != 'success' || needs.classify-changes.outputs.checklist_only != 'true'", verify)
 
 
 if __name__ == "__main__":
