@@ -115,6 +115,10 @@ DUMP_BYTES="$(docker exec --user postgres "$DB_CONTAINER" stat -c '%s' "$DUMP_PA
 
 docker exec --user postgres "$DB_CONTAINER" createdb \
   --encoding=UTF8 --template=template0 --owner=postgres "$RESTORE_DB"
+# template0 on this PostgreSQL image already initializes public; remove that
+# empty default only in the disposable target so pg_restore can recreate it.
+docker exec --user postgres "$DB_CONTAINER" psql -Xv ON_ERROR_STOP=1 -U postgres -d "$RESTORE_DB" \
+  -c "DROP SCHEMA public CASCADE"
 docker exec --user postgres "$DB_CONTAINER" pg_restore \
   --exit-on-error --no-owner --no-acl --dbname="$RESTORE_DB" "$DUMP_PATH"
 
