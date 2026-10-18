@@ -15,6 +15,8 @@ DUMP_SHA256="not-created"
 DUMP_BYTES="0"
 SOURCE_RELATIONS="unknown"
 RESTORE_RELATIONS="unknown"
+SOURCE_EXTENSION_RELATIONS="unknown"
+RESTORE_EXTENSION_RELATIONS="unknown"
 RESTORE_OK="false"
 RESTORE_DB_REMOVED="false"
 DUMP_REMOVED="false"
@@ -57,6 +59,9 @@ finish() {
     echo "dump_bytes=$DUMP_BYTES"
     echo "source_app_relation_count=$SOURCE_RELATIONS"
     echo "restored_app_relation_count=$RESTORE_RELATIONS"
+    echo "source_extension_relation_count=$SOURCE_EXTENSION_RELATIONS"
+    echo "restored_extension_relation_count=$RESTORE_EXTENSION_RELATIONS"
+    echo "extension_membership_note=extension-owned members may be recreated by CREATE EXTENSION and are not compared as application relations"
     echo "restore_database_removed=$RESTORE_DB_REMOVED"
     echo "dump_removed=$DUMP_REMOVED"
     echo "restore_cleanup_verified=$CLEANUP_VERIFIED"
@@ -122,10 +127,14 @@ docker exec --user postgres "$DB_CONTAINER" psql -Xv ON_ERROR_STOP=1 -U postgres
 docker exec --user postgres "$DB_CONTAINER" pg_restore \
   --exit-on-error --no-owner --no-acl --dbname="$RESTORE_DB" "$DUMP_PATH"
 
-relation_query="SELECT count(*) FROM pg_catalog.pg_class c JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace WHERE n.nspname IN ('public','private','auth','extensions','supabase_migrations') AND c.relkind IN ('r','p','v','m','S','f')"
+relation_query="SELECT count(*) FROM pg_catalog.pg_class c JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace WHERE n.nspname IN ('public','private','auth','supabase_migrations') AND c.relkind IN ('r','p','v','m','S','f')"
+extension_relation_query="SELECT count(*) FROM pg_catalog.pg_class c JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace WHERE n.nspname = 'extensions' AND c.relkind IN ('r','p','v','m','S','f')"
 SOURCE_RELATIONS="$(docker exec --user postgres "$DB_CONTAINER" psql -XAt -U postgres -d postgres -c "$relation_query")"
 RESTORE_RELATIONS="$(docker exec --user postgres "$DB_CONTAINER" psql -XAt -U postgres -d "$RESTORE_DB" -c "$relation_query")"
+SOURCE_EXTENSION_RELATIONS="$(docker exec --user postgres "$DB_CONTAINER" psql -XAt -U postgres -d postgres -c "$extension_relation_query")"
+RESTORE_EXTENSION_RELATIONS="$(docker exec --user postgres "$DB_CONTAINER" psql -XAt -U postgres -d "$RESTORE_DB" -c "$extension_relation_query")"
 [[ "$SOURCE_RELATIONS" =~ ^[0-9]+$ && "$RESTORE_RELATIONS" =~ ^[0-9]+$ ]]
+[[ "$SOURCE_EXTENSION_RELATIONS" =~ ^[0-9]+$ && "$RESTORE_EXTENSION_RELATIONS" =~ ^[0-9]+$ ]]
 [[ "$SOURCE_RELATIONS" == "$RESTORE_RELATIONS" ]]
 
 for relation in \
