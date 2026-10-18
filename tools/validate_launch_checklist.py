@@ -153,6 +153,8 @@ def validate_checklist(text: str) -> list[str]:
             owner_reviewer_parts = owner_field.split("/", 1)
             owner_identity = normalize_approval_identity(owner_reviewer_parts[0]) if len(owner_reviewer_parts) == 2 else ""
             reviewer_identity = normalize_approval_identity(owner_reviewer_parts[1]) if len(owner_reviewer_parts) == 2 else ""
+            if owner_identity and reviewer_identity and owner_identity == reviewer_identity:
+                errors.append(f"Gate {gate_id}: owner and independent reviewer must be different identities")
             approval_patterns = (
                 ("owner_approval", re.compile(r"\bowner_approval\s*=\s*pass\s+by\s+([^;|]+)", re.IGNORECASE), "owner", owner_identity),
                 ("independent_review", re.compile(r"\bindependent_review\s*=\s*pass\s+by\s+([^;|]+)", re.IGNORECASE), "independent reviewer", reviewer_identity),
