@@ -198,3 +198,35 @@ The disposable W80 PostgreSQL 17 workflow now exercises three negative controls:
 Each control verifies its exact path shape, expects the explicit pre-mutation W86 refusal, verifies authenticated and anon still lack SELECT while the service_role DELETE no-mutation canary survives, removes the membership fixture and ACL canaries, reapplies W86, and reruns W66 11/11 and W86 22/22. W86 pgTAP plan increased from 21 to 22 with a baseline assertion that anon has no INHERIT/SET ROLE path to authenticated.
 
 This is isolated-only candidate evidence. It does not prove hosted role memberships, reconcile hosted migration history, or authorize applying the migration to hosted Development/Main. Keep release NO-GO and no hosted writes pending query_13 capture, provenance reconciliation, and independent database-owner review.
+
+
+## 2026-10-18 — inherited parent ACLs for untrusted API roles (exact-source verification PASS)
+
+### Finding and guard change
+
+A candidate-only static review found that W86 already rejected parent table/column ACLs reachable from `service_role`, owner-role paths, and `anon` paths to the final `authenticated SELECT` grant target. It did not yet independently reject a table or column ACL granted to another role reachable from either root `anon` or `authenticated`. A direct revoke from the API role cannot remove privileges granted to a parent role that it can reach through membership options.
+
+The W86 preflight now computes role reachability from both untrusted roots and checks every reachable parent's table ACL and non-dropped column ACL before the first table/column `REVOKE` or final `GRANT`. It includes direct `INHERIT`, `SET ROLE`, and mixed-edge paths using the established cumulative reachability recurrence. If any such ACL exists, W86 fails closed with:
+
+`W86 refused: anon/authenticated can obtain agent_executions privileges via parent roles (INHERIT or SET ROLE)`
+
+The disposable pgTAP contract is now `plan(24)`, including the assertion that neither untrusted role can reach table or column ACLs through a parent role.
+
+### Exact-source CI evidence
+
+- Candidate source/test HEAD: `81faecf986756c9b7a27d75b617727da38d9e3d4`.
+- W80 PostgreSQL 17 isolated run: [39124625537 — SUCCESS](https://github.com/abdalrhmanata-gif/nexo-w21-isolated-verification-20261015/actions/runs/39124625537).
+- Flutter CI on the same HEAD: [39124625539 — SUCCESS](https://github.com/abdalrhmanata-gif/nexo-w21-isolated-verification-20261015/actions/runs/39124625539); matching Flutter run [39124628989 — SUCCESS](https://github.com/abdalrhmanata-gif/nexo-w21-isolated-verification-20261015/actions/runs/39124628989).
+- Verified W80 artifact ID `12135736166`, file size **81,919 bytes**, SHA-256 `cd568401611dc5d0fe2002b48aa5b52cd50e9084aa7f64ad9cfc96b1659c1e2a`. The downloaded ZIP integrity test passed.
+- Exact artifact reports PostgreSQL `server_version_num=170011` (17.11), successful migration replay through W83 and remaining later migrations, and successful idempotent reapply/rechecks.
+- Twelve disposable negative controls passed: `anon` and `authenticated` × `INHERIT`, `SET ROLE`, and mixed membership × table ACL and column ACL. Across all 12 cases, the fixture and reachability probe exited 0, W86 exited 3 with the expected refusal, table/column ACL and owner-state before/after comparisons were identical (a no-mutation marker for every case), cleanup exited 0, W86 reapply exited 0, each case status was 0, and both global parent-ACL guard status and cleanup gate passed.
+- After each fixture cleanup, W66 reported **11/11** and W86 **24/24**, with zero failed assertions. Baseline/reapply suites also passed: W44 **17/17** before and after W83 reapply; W46 **8/8** before and after; W80 **49/49** before and after; W84 **21/21** after the later migration chain and after idempotent reapply; W85 Supabase-admin audit **12/12**. Disposable cleanup proof: `cleanup=VERIFIED`, no remaining project containers or volumes.
+- The earlier run on SHA `8d10f3c5e9ad138b6cc98f1370361d1c757a1eea` failed during the static test gate because table/column evidence markers did not yet include the ACL type. It did not reach database replay and is not counted as passing evidence. The marker correction at `81faecf986756c9b7a27d75b617727da38d9e3d4` was then re-run, and the complete W80 plus Flutter result above passed on that exact HEAD.
+
+### Boundaries and disposition
+
+These results prove the isolated candidate code/tests only. The temporary PostgreSQL database is disposable evidence, not hosted parity. No hosted Development/Main database was written to; W86 was not applied to either hosted project; no protected PR was merged; no deployment, credential, billing, DNS, or secret change was made.
+
+The formal hosted Development capture in the handoff remains a read-only capture taken at its recorded capture time, not a new live reread. Migration-history provenance still has 22 same-name/different-version conflicts and six hosted-only names; version/name ledger records do not establish historical SQL byte equivalence. Independent authorized database-owner review, authoritative historical SQL and trusted deployment receipts (or an explicit UNKNOWN disposition), routine/owner/body/search_path/ACL/caller decisions, least-privilege contract, Mission Authority end-to-end denial/replay/concurrency/unknown-outcome tests, recovery rehearsal, and separate explicit written authorization remain open.
+
+Keep PR #1 and PR #2, and original PR #39, open/draft/unmerged. `hosted_write_authorized=false`; `TRUSTED_DISPATCH_ADAPTERS` remains empty/fail-closed; release remains **NO-GO**.
