@@ -83,3 +83,12 @@ The path-history recovery sweep and the new offline matrix validator have now be
 - The isolated W86 candidate's [PostgreSQL 17.11 W80 run 39025388240](https://github.com/abdalrhmanata-gif/nexo-w21-isolated-verification-20261015/actions/runs/39025388240) remains a local-only proof: W66 11/11, W86 23/23, negative controls and disposable cleanup passed. This is not a hosted deployment result.
 
 Current review disposition remains **REVIEWED — MORE EVIDENCE REQUIRED**. The 22 name/version conflicts and six hosted-only rows remain unresolved; direct grants, catalog drift, routine/default-ACL intent, and independent owner decisions remain open. PR #1 and PR #2 remain OPEN/DRAFT/UNMERGED. No hosted DB/ledger write, migration, deployment, secret change or merge has occurred. `hosted_write_authorized=false`; trusted dispatch adapters remain empty/fail-closed; release remains **NO-GO**.
+
+
+### Additional action-artifact recovery pass — verified contents (2026-10-18)
+
+Five distinct diagnostic ZIP artifacts associated with selected W18/W19 migration-era original-repository runs were downloaded and their actual member lists inspected. Four contained only `pubspec.lock`; the W4–W16 baseline artifact contained only `pubspec.lock` and `.dart_tool/package_config.json`. None contained SQL migration files, database deployment receipts, schema dumps, or SQL hash manifests. Exact artifact IDs, run IDs and SHA-256 hashes are listed in the [expanded path-history recovery report](ZAVQERA_GITHUB_HOSTED_MIGRATION_PATH_HISTORY_2026-10-18.md).
+
+Scope note: this inspects those five specific artifacts only, not every artifact attached to all 108 Actions runs in the date window. It narrows the sampled-artifact avenue; it does not establish all historic artifacts are empty.
+
+Latest report commit for these findings: `5921eae01c7fe6f16d25f98aa925826fe050e0b9`. The 28-row matrix remains protected by seven offline regression tests; latest green exact-head checks on the previous source-history commit are preserved above. The new report/checkpoint changes trigger the owner validation workflow again, and their resulting exact-head checks must be verified before calling the new head validated.
