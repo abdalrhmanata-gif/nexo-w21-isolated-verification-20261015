@@ -1383,8 +1383,9 @@ jobs:
           run_untrusted_parent_acl_negative_control() {
             local root_role="$1"
             local kind="$2"
-            local prefix="W86_UNTRUSTED_PARENT_ACL_${root_role^^}_${kind^^}"
-            local parent_role="w86_parent_acl_${root_role}_${kind}_probe"
+            local acl_kind="$3"
+            local prefix="W86_UNTRUSTED_PARENT_ACL_${root_role^^}_${kind^^}_${acl_kind^^}"
+            local parent_role="w86_parent_acl_${root_role}_${kind}_${acl_kind}_probe"
             local intermediate_role="w86_parent_acl_${root_role}_${kind}_intermediate"
             local fixture="${RUNNER_TEMP}/${prefix}_FIXTURE.sql"
             local reachability="${RUNNER_TEMP}/${prefix}_REACHABILITY.sql"
@@ -1407,6 +1408,11 @@ jobs:
               *) echo "::error::Unsupported parent ACL membership mode: ${kind}"; return 1 ;;
             esac
 
+            case "${acl_kind}" in
+              table|column) ;;
+              *) echo "::error::Unsupported parent ACL type: ${acl_kind}"; return 1 ;;
+            esac
+
             cat > "${fixture}" <<SQL
           REVOKE ALL PRIVILEGES ON TABLE public.agent_executions FROM PUBLIC, anon, authenticated, service_role;
           DO \$revoke_parent_acl_columns\$
@@ -1426,8 +1432,29 @@ jobs:
           END
           \$revoke_parent_acl_columns\$;
           CREATE ROLE ${parent_role} NOLOGIN;
-          GRANT UPDATE ON TABLE public.agent_executions TO ${parent_role};
           SQL
+            if [ "${acl_kind}" = "table" ]; then
+              echo "GRANT UPDATE ON TABLE public.agent_executions TO ${parent_role};" >> "${fixture}"
+            else
+              cat >> "${fixture}" <<SQL
+          DO \$grant_parent_acl_column\$
+          DECLARE first_column text;
+          BEGIN
+            SELECT a.attname
+              INTO first_column
+              FROM pg_attribute a
+             WHERE a.attrelid = 'public.agent_executions'::regclass
+               AND a.attnum > 0 AND NOT a.attisdropped
+             ORDER BY a.attnum
+             LIMIT 1;
+            IF first_column IS NULL THEN
+              RAISE EXCEPTION 'W86 test fixture requires at least one non-dropped column';
+            END IF;
+            EXECUTE format('GRANT SELECT (%I) ON TABLE public.agent_executions TO %I', first_column, '${parent_role}');
+          END
+          \$grant_parent_acl_column\$;
+          SQL
+            fi
             if [ "${kind}" = "mixed" ]; then
               cat >> "${fixture}" <<SQL
           CREATE ROLE ${intermediate_role} NOLOGIN;
@@ -1524,6 +1551,17 @@ jobs:
             END IF;
             IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = '${parent_role}') THEN
               EXECUTE format('REVOKE %I FROM %I', '${parent_role}', '${root_role}');
+              SELECT string_agg(format('%I', a.attname), ', ' ORDER BY a.attnum)
+                INTO column_names
+                FROM pg_attribute a
+               WHERE a.attrelid = 'public.agent_executions'::regclass
+                 AND a.attnum > 0 AND NOT a.attisdropped;
+              IF column_names IS NOT NULL THEN
+                EXECUTE format(
+                  'REVOKE ALL PRIVILEGES (%s) ON TABLE public.agent_executions FROM %I',
+                  column_names, '${parent_role}'
+                );
+              END IF;
               EXECUTE format('REVOKE ALL PRIVILEGES ON TABLE public.agent_executions FROM %I', '${parent_role}');
               EXECUTE format('DROP ROLE %I', '${parent_role}');
             END IF;
@@ -1570,12 +1608,18 @@ jobs:
             return "${status}"
           }
 
-          run_untrusted_parent_acl_negative_control anon inherit || untrusted_parent_acl_guard_status=1
-          run_untrusted_parent_acl_negative_control anon set || untrusted_parent_acl_guard_status=1
-          run_untrusted_parent_acl_negative_control anon mixed || untrusted_parent_acl_guard_status=1
-          run_untrusted_parent_acl_negative_control authenticated inherit || untrusted_parent_acl_guard_status=1
-          run_untrusted_parent_acl_negative_control authenticated set || untrusted_parent_acl_guard_status=1
-          run_untrusted_parent_acl_negative_control authenticated mixed || untrusted_parent_acl_guard_status=1
+          run_untrusted_parent_acl_negative_control anon inherit table || untrusted_parent_acl_guard_status=1
+          run_untrusted_parent_acl_negative_control anon set table || untrusted_parent_acl_guard_status=1
+          run_untrusted_parent_acl_negative_control anon mixed table || untrusted_parent_acl_guard_status=1
+          run_untrusted_parent_acl_negative_control authenticated inherit table || untrusted_parent_acl_guard_status=1
+          run_untrusted_parent_acl_negative_control authenticated set table || untrusted_parent_acl_guard_status=1
+          run_untrusted_parent_acl_negative_control authenticated mixed table || untrusted_parent_acl_guard_status=1
+          run_untrusted_parent_acl_negative_control anon inherit column || untrusted_parent_acl_guard_status=1
+          run_untrusted_parent_acl_negative_control anon set column || untrusted_parent_acl_guard_status=1
+          run_untrusted_parent_acl_negative_control anon mixed column || untrusted_parent_acl_guard_status=1
+          run_untrusted_parent_acl_negative_control authenticated inherit column || untrusted_parent_acl_guard_status=1
+          run_untrusted_parent_acl_negative_control authenticated set column || untrusted_parent_acl_guard_status=1
+          run_untrusted_parent_acl_negative_control authenticated mixed column || untrusted_parent_acl_guard_status=1
           echo "untrusted_parent_acl_guard_status=${untrusted_parent_acl_guard_status}" >> "${RUNNER_TEMP}/W80_EVIDENCE.txt"
 
           # Exercise both ways to obtain table-owner authority (SET ROLE and INHERIT).

@@ -66,6 +66,7 @@ class W86OwnerPathWorkflowSyntaxTests(unittest.TestCase):
         self.assertIn('[ "${before_state}" != "${after_state}" ]', helper)
         self.assertIn("REVOKE CREATE ON SCHEMA public FROM ${owner_role}", helper)
         self.assertIn("W86_AFTER_UNTRUSTED_OWNER_${owner_role^^}_CLEANUP", helper)
+        self.assertIn("GRANT SELECT (%I) ON TABLE public.agent_executions TO %I", helper)
         self.assertIn("supabase/tests/w86_agent_executions_acl_correction.sql 24", helper)
         self.assertIn("run_untrusted_owner_mixed_path_negative_control", helper)
         self.assertIn("GRANT ${intermediate_role} TO authenticated WITH INHERIT FALSE, SET TRUE;", helper)
@@ -92,15 +93,21 @@ class W86OwnerPathWorkflowSyntaxTests(unittest.TestCase):
         )
         self.assertEqual(result.returncode, 0, result.stderr)
         for call in (
-            "run_untrusted_parent_acl_negative_control anon inherit",
-            "run_untrusted_parent_acl_negative_control anon set",
-            "run_untrusted_parent_acl_negative_control anon mixed",
-            "run_untrusted_parent_acl_negative_control authenticated inherit",
-            "run_untrusted_parent_acl_negative_control authenticated set",
-            "run_untrusted_parent_acl_negative_control authenticated mixed",
+            "run_untrusted_parent_acl_negative_control anon inherit table",
+            "run_untrusted_parent_acl_negative_control anon set table",
+            "run_untrusted_parent_acl_negative_control anon mixed table",
+            "run_untrusted_parent_acl_negative_control authenticated inherit table",
+            "run_untrusted_parent_acl_negative_control authenticated set table",
+            "run_untrusted_parent_acl_negative_control authenticated mixed table",
+            "run_untrusted_parent_acl_negative_control anon inherit column",
+            "run_untrusted_parent_acl_negative_control anon set column",
+            "run_untrusted_parent_acl_negative_control anon mixed column",
+            "run_untrusted_parent_acl_negative_control authenticated inherit column",
+            "run_untrusted_parent_acl_negative_control authenticated set column",
+            "run_untrusted_parent_acl_negative_control authenticated mixed column",
         ):
             self.assertIn(call, helper)
-        self.assertIn("W86_UNTRUSTED_PARENT_ACL_${root_role^^}_${kind^^}_NO_MUTATION_PASS", helper)
+        self.assertIn("W86_UNTRUSTED_PARENT_ACL_${root_role^^}_${kind^^}_${acl_kind^^}_NO_MUTATION_PASS", helper)
         self.assertIn("W86 refused: anon/authenticated can obtain agent_executions privileges via parent roles", helper)
         self.assertIn("untrusted_parent_acl_guard_status=1", helper)
         self.assertIn('[ "${untrusted_parent_acl_guard_status:-1}" -ne 0 ]', workflow)
