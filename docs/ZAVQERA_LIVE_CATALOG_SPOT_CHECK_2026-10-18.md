@@ -82,3 +82,17 @@ The live catalog spot-check is materially consistent with the 2026-10-17 evidenc
 5. Before proposing hosted remediation, establish the intended release contract, test the exact full candidate migration range on disposable PostgreSQL, and document a verified backup/recovery and post-change acceptance plan.
 
 `TRUSTED_DISPATCH_ADAPTERS` remains empty/fail-closed. PR #1 and PR #2 remain open/draft/unmerged. No hosted writes, migrations, deployment or secret changes were made by this review.
+
+
+## Follow-up W86 role-path preflight spot-check — 2026-10-18
+
+A second catalog-only SELECT reproduced the W86 recursive role-path logic for `service_role`, `anon`, `authenticated`, and the owner of `public.agent_executions`. The result at the time of the check was:
+
+- Table owner: `postgres`.
+- No reachable parent-role path reported from `service_role` under the candidate's INHERIT/SET ROLE reachability rule.
+- No `service_role` path to `authenticated` or table owner was reported.
+- No `anon` path to `authenticated` and no `anon`/`authenticated` path to table owner was reported.
+- No inherited parent table/column ACL privilege rows were reported.
+- Effective direct privileges remain: `service_role` SELECT=true and INSERT=true; `authenticated` SELECT=true; `anon` SELECT=false.
+
+This clears only those role-path predicates at the instant of this supplemental spot-check. It does **not** clear the direct `service_role` table ACL, absent success-receipt trigger/budget tables, old callable overloads, historical SQL provenance, owner review, or write authorization. The query used the same MCP session which reported `transaction_read_only=off`; although it was SELECT-only, it was not session-enforced read-only. Formal evidence still must come from the pinned runner and scoped read-only capture.
