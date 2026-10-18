@@ -282,3 +282,14 @@ The recursive Git tree has now been checked at **all 27 branch tips visible from
 **Recovery conclusion:** The snapshot-level search of available Library ZIPs and visible GitHub branch tips has been exhausted. Private/deleted/unreachable history, forks, owner-device repositories, hosting/provider deployment logs and backup exports have not been exhaustively inspected and remain possible evidence sources. Absence from current branch tips does not prove non-deployment.
 
 **Owner disposition unchanged:** all 22 version conflicts and six hosted-only rows remain blocking unless a trusted historic source plus deployment record is recovered. Keep owner review pending, verified deployed SQL hashes and deployment URIs blank when unsupported, hosted_write_authorized=false, trusted dispatch adapters empty/fail-closed, PR #1/#2 open/draft/unmerged, and release **NO-GO**. Do not edit the hosted migration ledger or apply a migration based on these branch-snapshot results.
+
+
+## 13. Live Development catalog spot-check — 2026-10-18
+
+A supplemental catalog-only spot-check was run against project ref mrwmmbytcymqgwvcoywd at 2026-10-18 11:00:35 UTC. See [full spot-check report](ZAVQERA_LIVE_CATALOG_SPOT_CHECK_2026-10-18.md).
+
+The current database still reports 74 ledger rows through W65; the direct table ACL for public.agent_executions still grants service_role SELECT/INSERT/UPDATE/DELETE/TRUNCATE/REFERENCES/TRIGGER/MAINTAIN; RLS is enabled but not forced; the success-receipt trigger and the two Mission Authority budget relations are absent. The legacy reserve_ai_generation(text) and six-argument read-only research completion overloads remain present with the recorded EXECUTE grants. The current security advisor also reports leaked-password protection disabled.
+
+**Read-only limitation:** The Supabase MCP session identified itself as postgres and returned transaction_read_only=off. Every SQL statement I submitted was SELECT-only and no mutation was attempted, but this was not a session-enforced read-only capture or the pinned 13-query runner. Do not treat it as a replacement for the scoped formal capture. No database state, migration ledger, deployment, secrets, billing or DNS were changed.
+
+**Decision unchanged:** The spot-check is materially consistent with the 2026-10-17 findings. Release remains NO-GO, hosted_write_authorized=false, and trusted dispatch adapters stay empty/fail-closed. The 22 version conflicts and six hosted-only migration rows remain blocking without trusted historic source and deployment evidence.
