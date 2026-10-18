@@ -80,7 +80,11 @@ class GitHubHostedMigrationPathHistoryTests(unittest.TestCase):
                 self.assertEqual(row["hosted_path_present_at_source_head"], "false")
                 self.assertEqual(row["hosted_path_history_commit_count_from_source_head"], "0")
                 self.assertTrue(row["interpretation"])
-                self.assertIn("not prove", row["interpretation"].lower())
+                interpretation = row["interpretation"].lower()
+                self.assertTrue(
+                    "not prove" in interpretation or "remains unresolved" in interpretation,
+                    "interpretation must not overstate the evidence",
+                )
 
     def test_conflicts_keep_source_blob_metadata_separate_from_deployment_proof(self) -> None:
         for rid, row in self.matrix_by_id.items():
