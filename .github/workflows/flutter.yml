@@ -48,7 +48,7 @@ jobs:
             exit 0
           fi
 
-          git diff --name-only --no-renames -z "$base...$head" > "$RUNNER_TEMP/changed-files.txt"
+          git diff --raw --no-renames -z "$base...$head" > "$RUNNER_TEMP/changed-files.txt"
           python3 tools/classify_launch_checklist_changes.py "$RUNNER_TEMP/changed-files.txt" >> "$GITHUB_OUTPUT"
           echo "diff_base=$base" >> "$GITHUB_OUTPUT"
           echo "diff_head=$head" >> "$GITHUB_OUTPUT"
