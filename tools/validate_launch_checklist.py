@@ -33,6 +33,24 @@ ALLOWED_SCOPES = {
 }
 PLACEHOLDERS = re.compile(r"\b(?:TODO|TBD|FIXME|REPLACE ME)\b", re.IGNORECASE)
 SHA = re.compile(r"(?<![0-9a-f])[0-9a-f]{40}(?![0-9a-f])", re.IGNORECASE)
+SCOPE_LIMITATIONS = {
+    "HOSTED_READ_ONLY_CAPTURE": re.compile(
+        r"\b(?:no fresh (?:13-query )?hosted capture|not a fresh hosted capture|only in disposable|test-only|local-only)\b",
+        re.IGNORECASE,
+    ),
+    "HOSTED_READ_ONLY_CAPTURE_AND_REVIEW": re.compile(
+        r"\b(?:no fresh (?:13-query )?hosted capture|not a fresh hosted capture|only in disposable|test-only|local-only)\b",
+        re.IGNORECASE,
+    ),
+    "APPLICATION_BACKUP_RESTORE": re.compile(
+        r"\b(?:synthetic .*smoke test|not full application recovery|not application recovery|not a full application restore)\b",
+        re.IGNORECASE,
+    ),
+    "PROVIDER_CONTRACT_REVIEW": re.compile(
+        r"\b(?:fake-provider tests are not proof|fake provider only|no real-provider guarantees)\b",
+        re.IGNORECASE,
+    ),
+}
 
 
 def validate_checklist(text: str) -> list[str]:
@@ -41,7 +59,10 @@ def validate_checklist(text: str) -> list[str]:
     current_id: str | None = None
 
     for line_number, line in enumerate(text.splitlines(), start=1):
+        any_gate_heading = re.match(r"^###\s+Gate\s+([A-Z0-9]+)\s+—\s+.+$", line)
         heading = re.match(r"^###\s+Gate\s+([A-J])\s+—\s+.+$", line)
+        if any_gate_heading and not heading:
+            errors.append(f"line {line_number}: unsupported gate id {any_gate_heading.group(1)}")
         if heading:
             gate_id = heading.group(1)
             if gate_id in gates:
@@ -95,11 +116,11 @@ def validate_checklist(text: str) -> list[str]:
         if "/" not in owner or not owner.strip(" /"):
             errors.append(f"Gate {gate_id}: owner and independent reviewer must both be identified")
 
-    decision_match = re.search(r"^##\s+Release decision:\s*(NO-GO|GO)\s*$", text, re.MULTILINE)
-    if not decision_match:
-        errors.append("release decision must be explicitly GO or NO-GO")
+    decision_matches = re.findall(r"^##\s+Release decision:\s*(NO-GO|GO)\s*$", text, re.MULTILINE)
+    if len(decision_matches) != 1:
+        errors.append("checklist must contain exactly one explicit GO or NO-GO release decision")
         return errors
-    decision = decision_match.group(1)
+    decision = decision_matches[0]
     candidate_matches = re.findall(
         r"^\*\*Release candidate SHA:\*\*\s*(NONE|[0-9a-f]{40})(?:\s|$)",
         text,
@@ -122,13 +143,38 @@ def validate_checklist(text: str) -> list[str]:
         if status in {"PASS", "N/A"}:
             if candidate_sha is None:
                 errors.append(f"Gate {gate_id}: {status} requires a selected release candidate SHA")
-            elif candidate_sha not in evidence:
-                errors.append(f"Gate {gate_id}: {status} evidence does not identify the current candidate SHA")
-            if scope and f"scope={scope.lower()}" not in evidence:
+            candidate_claims = re.findall(r"\bcandidate_sha\s*=\s*([^\s;|]+)", evidence)
+            if candidate_sha and (len(candidate_claims) != 1 or candidate_claims[0] != candidate_sha):
+                errors.append(f"Gate {gate_id}: {status} evidence must bind candidate_sha to the selected candidate")
+            scope_claims = re.findall(r"\bscope\s*=\s*([^\s;|]+)", evidence)
+            if scope and (len(scope_claims) != 1 or scope_claims[0] != scope.lower()):
                 errors.append(f"Gate {gate_id}: {status} evidence does not claim required scope={scope}")
-            for approval in ("independent_review=pass", "owner_approval=pass"):
-                if approval not in evidence:
-                    errors.append(f"Gate {gate_id}: {status} evidence lacks {approval}")
+            approval_patterns = (
+                ("owner_approval", re.compile(r"\bowner_approval\s*=\s*pass\s+by\s+([^;|]+)", re.IGNORECASE)),
+                ("independent_review", re.compile(r"\bindependent_review\s*=\s*pass\s+by\s+([^;|]+)", re.IGNORECASE)),
+            )
+            owner_field = record.get("Accountable owner / independent reviewer", "").lower()
+            for approval, pattern in approval_patterns:
+                matches = list(pattern.finditer(evidence))
+                if len(matches) != 1:
+                    errors.append(f"Gate {gate_id}: {status} evidence lacks {approval}=PASS by an accountable person/team")
+                    continue
+                approver = matches[0].group(1).strip().lower()
+                if not approver or PLACEHOLDERS.search(approver) or approver in {"pending", "unassigned", "owner", "reviewer"}:
+                    errors.append(f"Gate {gate_id}: {approval} must name an accountable person or team")
+                elif approver not in owner_field:
+                    errors.append(f"Gate {gate_id}: {approval} approver is absent from the owner/reviewer field")
+            if "pending" in owner_field or "unassigned" in owner_field:
+                errors.append(f"Gate {gate_id}: {status} cannot pass with an unassigned owner or reviewer")
+
+            tested_sha_claims = re.findall(r"\btested_sha\s*=\s*([^\s;|]+)", evidence)
+            tested_sha_values = [value for value in tested_sha_claims if re.fullmatch(r"[0-9a-f]{40}", value)]
+            if tested_sha_claims and len(tested_sha_values) != len(tested_sha_claims):
+                errors.append(f"Gate {gate_id}: malformed tested_sha evidence")
+            if candidate_sha and any(value != candidate_sha for value in tested_sha_values):
+                errors.append(f"Gate {gate_id}: tested_sha differs from the selected release candidate")
+            if scope in SCOPE_LIMITATIONS and SCOPE_LIMITATIONS[scope].search(evidence):
+                errors.append(f"Gate {gate_id}: evidence explicitly disclaims required scope={scope}")
 
     if decision == "GO":
         if candidate_sha is None:
