@@ -736,3 +736,38 @@ Supersedes the earlier inherited-only description in section 12.
 - Query 13 digest is now `700939087d9708fc3d6a72ebe10064b4c0db7f5d26b08556c7e641e1aa09a919`; base query pack remains `a7aba3461786dbb5854f71dc4f87b7e0498d12509add535ab3df4a7ec231a284`.
 
 The fresh hosted 13-query Development capture is still required. No hosted write was performed; historical migration provenance remains unresolved; original PR #39 and Issue #23 remain open as required; dispatch adapters stay empty/fail-closed; release remains **NO-GO**.
+
+## 2026-10-18 continuation checkpoint — W86 test coverage follow-up
+
+### Live repository state, read-only verified
+
+- W86 candidate repository: `abdalrhmanata-gif/nexo-w21-isolated-verification-20261015`; local review clone is on `codex/w86-agent-executions-acl-correction-20261015`.
+- Remote PR #1 remains OPEN / DRAFT / UNMERGED. Remote head at verification: `a3f389e1aa757b2c803a51255c12c8307b11c2e5`. The verified W86 source/test SHA behind its latest documentation-only commit is `81faecf986756c9b7a27d75b617727da38d9e3d4`.
+- Audit PR #2 remains OPEN / DRAFT / UNMERGED at `a3d68afb31a8c0ef373f7810e05a1286c30048dd`.
+- Original Nexo PR #39 remains OPEN / DRAFT / UNMERGED at `9d752a59f0683ea7149633138dc85bb33cf9a41b`; Issue #23 remains OPEN.
+- W80 run [39124625537](https://github.com/abdalrhmanata-gif/nexo-w21-isolated-verification-20261015/actions/runs/39124625537) completed SUCCESS on W86 source/test SHA `81faecf...`; its artifact is `12135736166`, SHA-256 `cd568401611dc5d0fe2002b48aa5b52cd50e9084aa7f64ad9cfc96b1659c1e2a`. The artifact/report records PostgreSQL 17.11, the 24-assertion W86 plan, twelve inherited-ACL negative controls, migration replay/reapply and verified cleanup. This result predates the local test addition below.
+- Flutter CI completed SUCCESS twice on `81faecf...`: runs [39124625539](https://github.com/abdalrhmanata-gif/nexo-w21-isolated-verification-20261015/actions/runs/39124625539) and [39124628989](https://github.com/abdalrhmanata-gif/nexo-w21-isolated-verification-20261015/actions/runs/39124628989). Original PR #39 W21 run [38713041690](https://github.com/abdalrhmanata-gif/Nexo/actions/runs/38713041690) is SUCCESS on its exact head `9d752a...`; it is not W86 evidence.
+
+### Concrete local change
+
+Review found the W86 pgTAP test verified service-role column privilege absence but did not directly assert that no stored column ACL remains for `PUBLIC`, `anon`, or `authenticated`. The migration already revokes those direct grants; the gap was in regression coverage. On local candidate commit `9eb07ba629070a54976cba860d137f97e96ee299` (parent `a3f389e...`):
+
+- W86 pgTAP plan increased from 24 to 25 with an explicit `pg_attribute.attacl` assertion for `PUBLIC`, `anon`, `authenticated`, and `service_role`.
+- The isolated drift fixture seeds `anon` column SELECT and `authenticated` column UPDATE grants, checks the fixture before applying W86, and then relies on W86 pgTAP assertions after correction/reapply.
+- The W86 migration behavior is unchanged. The local commit has **not** been pushed; remote PR #1 head remains unchanged.
+
+### Checks run on local commit `9eb07ba...`
+
+- W86 workflow/pgTAP contract Python tests: **8/8 PASS**.
+- Read-only catalog audit tests: **8/8 PASS**; self-test PASS, eight pinned SELECT queries, no network.
+- Migration-effect audit tests: **10/10 PASS**; self-test PASS, twelve pinned SELECT queries, no network.
+- Offline hosted-ledger reviewer tests: **7/7 PASS**.
+- Workflow YAML parse and `git diff --check`: PASS.
+- Docker, Supabase CLI, `psql`, and `pg_prove` are unavailable in the local environment. The changed W86 pgTAP assertion has not run against PostgreSQL 17 on this commit. The previous remote W80 pass cannot substitute for it.
+- A first test launch lacked Git Bash on PATH and errored; adding Git for Windows Bash to PATH made the focused suite pass. No test code failure remains from that attempt.
+
+### Remaining gates and next action
+
+Next technical verification is an exact-commit W80 run on `9eb07ba...` (or its eventual documentation-only descendant), with artifact inspection confirming W86 **25/25**, both direct API-role column grants were present in the pre-migration fixture and absent afterward, all existing negative controls still pass, and disposable cleanup is verified. No such run has been dispatched from this session.
+
+The Development capture in the 2026-10-18 handoff is recorded evidence, not a fresh live reread; it still reports the W66 service-role privilege boundary and broader schema/routine differences. The 22 migration-version conflicts and six hosted-only names remain unresolved. Independent database-owner review, historical SQL/deployment provenance, hosted parity, Mission Authority universal egress/provider/reconciliation/recovery proof and explicit hosted authorization remain blockers. Do not apply migrations or write to Development/Main/Production. Keep `hosted_write_authorized=false`, `TRUSTED_DISPATCH_ADAPTERS` empty/fail-closed, all protected PRs open/draft/unmerged, Issue #23 open, and release **NO-GO**.

@@ -230,3 +230,26 @@ These results prove the isolated candidate code/tests only. The temporary Postgr
 The formal hosted Development capture in the handoff remains a read-only capture taken at its recorded capture time, not a new live reread. Migration-history provenance still has 22 same-name/different-version conflicts and six hosted-only names; version/name ledger records do not establish historical SQL byte equivalence. Independent authorized database-owner review, authoritative historical SQL and trusted deployment receipts (or an explicit UNKNOWN disposition), routine/owner/body/search_path/ACL/caller decisions, least-privilege contract, Mission Authority end-to-end denial/replay/concurrency/unknown-outcome tests, recovery rehearsal, and separate explicit written authorization remain open.
 
 Keep PR #1 and PR #2, and original PR #39, open/draft/unmerged. `hosted_write_authorized=false`; `TRUSTED_DISPATCH_ADAPTERS` remains empty/fail-closed; release remains **NO-GO**.
+
+
+## 2026-10-18 follow-up — direct column ACL regression coverage (local; PG17 rerun pending)
+
+### Finding and change
+
+Review of the W86 migration and its pgTAP contract found a coverage gap: the migration revokes direct column-level privileges from `PUBLIC`, `anon`, `authenticated`, and `service_role`, but the existing 24-assertion contract only checked effective column privileges for `service_role` and stored table ACLs. It did not explicitly reject stored direct column ACL entries for the API roles or `PUBLIC`. The migration itself was not changed.
+
+The local W86 candidate now adds one pgTAP assertion (25 total) requiring `pg_attribute.attacl` to contain no grants to `PUBLIC`, `anon`, `authenticated`, or `service_role`. The disposable drift fixture now injects a column `SELECT` grant for `anon` and a column `UPDATE` grant for `authenticated`, and verifies both grants exist before W86 is applied. All W86 workflow invocations and expected assertion counts now require 25.
+
+### Local verification
+
+- Local source/test commit: `9eb07ba629070a54976cba860d137f97e96ee299`, parent `a3f389e1aa757b2c803a51255c12c8307b11c2e5`. It is local only and has not been pushed.
+- W86 focused Python contract/workflow tests: 8/8 passed; the workflow YAML parsed; `git diff --check` passed.
+- Existing W80 offline preflight suites also passed on the exact local HEAD: catalog audit 8/8; migration-effect audit 10/10; offline reviewer 7/7; self-tests passed (8-query and 12-query packs, no network requests).
+- The initial focused-test invocation could not find `bash` on PATH; rerunning with Git for Windows Bash added to PATH passed all 8 tests. This was an environment PATH issue.
+- Docker, Supabase CLI, `psql`, and `pg_prove` are unavailable locally. The W80 disposable PostgreSQL 17 workflow has **not** run on `9eb07ba...`; therefore the new SQL assertion and seeded direct API-role column grants still need exact-head PG17 evidence.
+
+### Evidence and remaining gates
+
+The previous exact-source W80 pass remains run [39124625537](https://github.com/abdalrhmanata-gif/nexo-w21-isolated-verification-20261015/actions/runs/39124625537) on `81faecf986756c9b7a27d75b617727da38d9e3d4` (artifact `12135736166`, SHA-256 `cd568401611dc5d0fe2002b48aa5b52cd50e9084aa7f64ad9cfc96b1659c1e2a`). It does not contain the new 25th assertion and is not evidence for this local change. The latest PR #1 remote head at review time is docs-only `a3f389e1aa757b2c803a51255c12c8307b11c2e5`; no remote branch or PR head was changed.
+
+No hosted database was queried or changed. Historical migration provenance, current hosted ACL/schema parity, independent database-owner review/authorization, and full Mission Authority/provider/recovery evidence remain unresolved. PR #1/#2 and original PR #39 remain OPEN/DRAFT/UNMERGED; Issue #23 remains OPEN; `hosted_write_authorized=false`; trusted adapters remain empty/fail-closed; release remains **NO-GO**.
