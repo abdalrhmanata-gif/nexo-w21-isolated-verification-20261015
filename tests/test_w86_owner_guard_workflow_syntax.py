@@ -1,6 +1,7 @@
 """Static syntax guard for the isolated W86 owner-path test helper in CI."""
 from __future__ import annotations
 
+import re
 import subprocess
 import textwrap
 import unittest
@@ -38,7 +39,7 @@ class W86OwnerPathWorkflowSyntaxTests(unittest.TestCase):
         self.assertIn("W86_ANON_AUTH_${kind^^}_REACHABILITY_PASS", helper)
         self.assertIn("W86_ANON_AUTH_${kind^^}_NO_MUTATION_PASS", helper)
         self.assertIn("W86 refused: anon can reach authenticated via a parent role path", helper)
-        self.assertIn('echo "expected_w86_pgtap_assertions=24"', workflow)
+        self.assertIn('echo "expected_w86_pgtap_assertions=25"', workflow)
         self.assertIn("REVOKE authenticated FROM anon", helper)
         self.assertIn(r"DO \$cleanup_anon_auth\$", workflow)
         self.assertIn("anon_authenticated_guard_status=1", helper)
@@ -67,7 +68,7 @@ class W86OwnerPathWorkflowSyntaxTests(unittest.TestCase):
         self.assertIn("REVOKE CREATE ON SCHEMA public FROM ${owner_role}", helper)
         self.assertIn("W86_AFTER_UNTRUSTED_OWNER_${owner_role^^}_CLEANUP", helper)
         self.assertIn("GRANT SELECT (%I) ON TABLE public.agent_executions TO %I", helper)
-        self.assertIn("supabase/tests/w86_agent_executions_acl_correction.sql 24", helper)
+        self.assertIn("supabase/tests/w86_agent_executions_acl_correction.sql 25", helper)
         self.assertIn("run_untrusted_owner_mixed_path_negative_control", helper)
         self.assertIn("GRANT ${intermediate_role} TO authenticated WITH INHERIT FALSE, SET TRUE;", helper)
         self.assertIn("GRANT ${owner_role} TO ${intermediate_role} WITH INHERIT TRUE, SET FALSE;", helper)
@@ -77,7 +78,7 @@ class W86OwnerPathWorkflowSyntaxTests(unittest.TestCase):
         self.assertIn("W86_AFTER_UNTRUSTED_OWNER_MIXED_PATH_CLEANUP", helper)
         self.assertIn("untrusted_owner_guard_status=1", workflow)
         self.assertIn('[ "${untrusted_owner_guard_status:-1}" -ne 0 ]', workflow)
-        self.assertIn('echo "expected_w86_pgtap_assertions=24"', workflow)
+        self.assertIn('echo "expected_w86_pgtap_assertions=25"', workflow)
 
     def test_untrusted_api_role_parent_acl_guard_covers_all_reachability_modes(self):
         workflow = WORKFLOW.read_text(encoding="utf-8")
@@ -111,7 +112,7 @@ class W86OwnerPathWorkflowSyntaxTests(unittest.TestCase):
         self.assertIn("W86 refused: anon/authenticated can obtain agent_executions privileges via parent roles", helper)
         self.assertIn("untrusted_parent_acl_guard_status=1", helper)
         self.assertIn('[ "${untrusted_parent_acl_guard_status:-1}" -ne 0 ]', workflow)
-        self.assertIn("supabase/tests/w86_agent_executions_acl_correction.sql 24", helper)
+        self.assertIn("supabase/tests/w86_agent_executions_acl_correction.sql 25", helper)
 
     def test_owner_path_helper_is_valid_bash_and_covers_both_membership_modes(self):
         workflow = WORKFLOW.read_text(encoding="utf-8")
@@ -170,6 +171,40 @@ class W86OwnerPathWorkflowSyntaxTests(unittest.TestCase):
         self.assertIn("GRANT DELETE ON TABLE public.agent_executions TO service_role", workflow)
         self.assertIn("W86_MIXED_PATH_NO_MUTATION_PASS", workflow)
         self.assertIn("w86_mixed_path_no_mutation_exit_code", workflow)
+
+    def test_pgtap_contract_covers_explicit_column_acl_cleanup(self):
+        root = Path(__file__).resolve().parents[1]
+        sql_path = root / "supabase" / "tests" / "w86_agent_executions_acl_correction.sql"
+        sql = sql_path.read_text(encoding="utf-8")
+        workflow = WORKFLOW.read_text(encoding="utf-8")
+
+        plans = re.findall(r"(?mi)^\s*select\s+plan\((\d+)\);", sql)
+        assertions = re.findall(r"(?mi)^\s*select\s+ok\s*\(", sql)
+        self.assertEqual(["25"], plans)
+        self.assertEqual(25, len(assertions), "pgTAP plan must match the actual assertion count")
+        self.assertIn("no stored column ACLs remain for PUBLIC, anon, authenticated, or service_role", sql)
+        self.assertIn(
+            "acl.grantee in (\n       0,\n       'anon'::regrole,\n       'authenticated'::regrole,\n       'service_role'::regrole",
+            sql,
+        )
+
+        # The disposable drift fixture must seed direct API-role column grants
+        # so the runtime pgTAP assertion proves W86 actually removes them.
+        self.assertIn("'grant select (%I) on table public.agent_executions to anon'", workflow)
+        self.assertIn("'grant update (%I) on table public.agent_executions to authenticated'", workflow)
+        self.assertIn("acl.grantee = 'anon'::regrole", workflow)
+        self.assertIn("acl.grantee = 'authenticated'::regrole", workflow)
+        self.assertIn('echo "expected_w86_pgtap_assertions=25"', workflow)
+        invocations = re.findall(
+            r"run_pgtap[^\n]*w86_agent_executions_acl_correction\.sql\s+(\d+)",
+            workflow,
+        )
+        self.assertTrue(invocations, "workflow must invoke the W86 pgTAP test")
+        self.assertEqual(
+            {"25"},
+            set(invocations),
+            "every W86 workflow invocation must expect 25 assertions",
+        )
 
 
 if __name__ == "__main__":

@@ -2,7 +2,7 @@
 -- Intended for the disposable PostgreSQL 17 replay only.
 begin;
 create extension if not exists pgtap;
-select plan(24);
+select plan(25);
 
 select ok(not has_table_privilege('service_role', 'public.agent_executions', 'SELECT'),
   'service_role cannot directly read execution rows');
@@ -29,6 +29,21 @@ select ok(not has_any_column_privilege('service_role', 'public.agent_executions'
   'service_role has no column-level UPDATE bypass');
 select ok(not has_any_column_privilege('service_role', 'public.agent_executions', 'REFERENCES'),
   'service_role has no column-level REFERENCES bypass');
+
+select ok(not exists (
+  select 1
+    from pg_attribute a
+    cross join lateral aclexplode(a.attacl) acl
+   where a.attrelid = 'public.agent_executions'::regclass
+     and a.attnum > 0
+     and not a.attisdropped
+     and acl.grantee in (
+       0,
+       'anon'::regrole,
+       'authenticated'::regrole,
+       'service_role'::regrole
+     )
+), 'no stored column ACLs remain for PUBLIC, anon, authenticated, or service_role');
 
 select ok(not exists (
   select 1
