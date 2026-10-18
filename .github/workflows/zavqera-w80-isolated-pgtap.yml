@@ -1502,8 +1502,8 @@ jobs:
             SELECT 1 FROM root_role_path
              WHERE role_name = '${parent_role}' AND depth > 0
                AND reachable_via_membership_options
-          ) THEN 'W86_UNTRUSTED_PARENT_ACL_${root_role^^}_${kind^^}_REACHABILITY_PASS'
-            ELSE 'W86_UNTRUSTED_PARENT_ACL_${root_role^^}_${kind^^}_REACHABILITY_FAIL'
+          ) THEN 'W86_UNTRUSTED_PARENT_ACL_${root_role^^}_${kind^^}_${acl_kind^^}_REACHABILITY_PASS'
+            ELSE 'W86_UNTRUSTED_PARENT_ACL_${root_role^^}_${kind^^}_${acl_kind^^}_REACHABILITY_FAIL'
           END;
           SQL
               set +e
@@ -1512,7 +1512,7 @@ jobs:
               reachability_status="${PIPESTATUS[0]}"
               set -e
               echo "w86_untrusted_parent_acl_${root_role}_${kind}_reachability_exit_code=${reachability_status}" >> "${RUNNER_TEMP}/W80_EVIDENCE.txt"
-              if [ "${reachability_status}" -ne 0 ] || ! grep -Fq "W86_UNTRUSTED_PARENT_ACL_${root_role^^}_${kind^^}_REACHABILITY_PASS" "${RUNNER_TEMP}/${prefix}_REACHABILITY_CHECK.txt"; then
+              if [ "${reachability_status}" -ne 0 ] || ! grep -Fq "W86_UNTRUSTED_PARENT_ACL_${root_role^^}_${kind^^}_${acl_kind^^}_REACHABILITY_PASS" "${RUNNER_TEMP}/${prefix}_REACHABILITY_CHECK.txt"; then
                 echo "::error::The ${root_role}/${kind} fixture did not establish the intended reachable parent-role ACL path."
                 status=1
               else
@@ -1535,7 +1535,7 @@ jobs:
                   echo "::error::W86 changed owner/table/column ACL state before refusing ${root_role}/${kind}."
                   status=1
                 else
-                  echo "W86_UNTRUSTED_PARENT_ACL_${root_role^^}_${kind^^}_NO_MUTATION_PASS" >> "${RUNNER_TEMP}/W80_EVIDENCE.txt"
+                  echo "W86_UNTRUSTED_PARENT_ACL_${root_role^^}_${kind^^}_${acl_kind^^}_NO_MUTATION_PASS" >> "${RUNNER_TEMP}/W80_EVIDENCE.txt"
                 fi
               fi
             fi
