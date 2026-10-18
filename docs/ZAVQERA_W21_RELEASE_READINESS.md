@@ -1,5 +1,7 @@
 # W21 release readiness
 
+> **Current status addendum — 2026-10-18:** The historical audit below remains a record of the 2026-10-01 evidence, not the current E2E status. W21 browser E2E has since passed 2/2 in [GitHub Actions run 39154053027](https://github.com/abdalrhmanata-gif/nexo-w21-isolated-verification-20261015/actions/runs/39154053027) on source HEAD `0fd69902305ef9603e90aef4ae446a95161306d1`; W21 completed 26/26 steps and verified no remaining disposable containers/volumes. [Web Unit](https://github.com/abdalrhmanata-gif/nexo-w21-isolated-verification-20261015/actions/runs/39154055655), [Web CI/build](https://github.com/abdalrhmanata-gif/nexo-w21-isolated-verification-20261015/actions/runs/39154055648), and [Flutter CI](https://github.com/abdalrhmanata-gif/nexo-w21-isolated-verification-20261015/actions/runs/39154055664) also passed on that exact head. This only corrects the old “browser E2E not executed” status. Hosted schema/ACL drift, migration provenance, independent security/database review, backup/restore/RPO/RTO, production-operations exercise, and complete user acceptance remain unresolved; public release remains NO-GO.
+
 Audit date: 2026-10-01. **W21 PASS / RELEASE READY for launch preparation**
 under the owner's latest final-blocker-fix Phase 11 criteria, including the
 explicitly permitted owner-run E2E setup alternative. **Browser E2E has not

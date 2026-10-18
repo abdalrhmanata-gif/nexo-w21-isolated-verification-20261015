@@ -4,8 +4,9 @@ Audit: 2026-10-01. Repository baseline:
 `3f5fea95b9c17ede66e591b37a9dc64988b5b0de`.
 Branch: `zavqera/alternative-web-deployment`.
 
-**TECHNICAL MVP: GREEN / PASS**, with the W21 owner-run E2E alternative retained.
-**PUBLIC PRODUCTION: OWNER DECISION REQUIRED; NOT AUTHORIZED.**
+**ISOLATED CI VERIFICATION: PASS** on exact source HEAD `0fd69902305ef9603e90aef4ae446a95161306d1` (W21 26/26
+steps; Web Unit, Web CI/build, Flutter CI, and 37 launch-validator tests passed).
+**HOSTED DATABASE / PUBLIC RELEASE: BLOCKED — NO-GO.**
 **PRODUCTION BACKEND STATUS: OWNER DECISION REQUIRED before real public users.**
 
 Public launch is not authorized by green code. The primary site returns 404,
@@ -28,16 +29,17 @@ RED = BLOCKED for public production, not necessarily a code defect.
 |---|---|---|
 | CODE | GREEN / READY | No runtime diff after tested `a89d0a1`; no new defect found |
 | TESTS | GREEN / READY | 128 passed, 0 failed, 0 skipped; typecheck/lint/build passed |
-| DATABASE | GREEN / READY for Development | W20/W21 present; guards, RLS, grants and history rechecked read-only |
-| AUTH | YELLOW / OWNER DECISION REQUIRED | Source checks and anonymous redirects pass; real-auth browser E2E unexecuted |
-| SECURITY | YELLOW / OWNER DECISION REQUIRED | No source-review finding; 0 advisor errors, 6 warnings including disabled leaked-password protection |
+| DATABASE | RED / BLOCKED | The 2026-10-17 13-query capture found direct `service_role` privileges on `public.agent_executions`, missing expected relations/columns/constraints/indexes/trigger, routine/default-ACL drift, and unresolved deployed SQL provenance. No hosted fix is authorized. |
+| MIGRATION PROVENANCE | RED / BLOCKED | 22 same-name/different-version conflicts and six hosted-only names remain unresolved; checked-in files and ledger metadata do not prove which SQL bytes were deployed. |
+| AUTH | YELLOW / PARTIALLY VERIFIED | Disposable Supabase auth/browser E2E passed 2/2 at W21 run 39154053027; hosted auth callback, SMTP/OAuth, session, and production redirect configuration remain unverified. |
+| SECURITY | RED / BLOCKED | Independent security/database review is missing; the hosted capture has direct table grants and permission/schema/function discrepancies. Six prior advisor warnings, including disabled leaked-password protection, remain unresolved. |
 | DEPLOYMENT | YELLOW / OWNER DECISION REQUIRED | Primary URL currently unusable (404); tested branch ready; production publishing reported paused |
 | ENVIRONMENT | YELLOW / OWNER DECISION REQUIRED | Netlify production context points to Development; dedicated production backend preferable |
 | DOMAIN | YELLOW / OWNER DECISION REQUIRED | Custom domain NOT CONFIGURED; working branch subdomain can support an explicitly approved controlled beta |
 | MONITORING | YELLOW / OWNER DECISION REQUIRED | Provider dashboards/commit checks exist; no established uptime/error alerting or staffed incident contact |
 | BACKUP/RECOVERY | YELLOW / OWNER DECISION REQUIRED | Recovery not established; choose managed backups or encrypted off-site dumps and prove restore |
 | ROLLBACK | YELLOW / OWNER DECISION REQUIRED | Procedure documented, existing branch artifact ready; production execution/permissions not rehearsed |
-| USER EVIDENCE | GREEN / READY, owner-confirmed | T01-T05 PASS; missing detail is a limitation, not a blocker |
+| USER EVIDENCE | YELLOW / INCOMPLETE | T01-T05 carry owner-confirmed PASS labels, but detailed session observations were not recorded; independent end-to-end acceptance is still needed. |
 
 ## Repository and runtime
 
@@ -196,11 +198,16 @@ session refresh, persistence or cross-user behavior in a browser.
 2. Netlify capacity: wait for the new billing cycle, or explicitly upgrade.
 3. Backup strategy: Supabase Pro managed backups, or external encrypted db dumps.
 4. Domain: continue the temporary Netlify URL, or connect a custom domain.
-5. E2E: execute owner-run local Docker tests, or explicitly accept unexecuted E2E.
+5. E2E: automated W21 browser E2E now passed 2/2 in GitHub Actions on
+   `0fd69902305ef9603e90aef4ae446a95161306d1`; the separate owner-run local Docker test remains unperformed.
+   Decide explicitly whether this disposable CI evidence satisfies the chosen
+   stage, or complete the owner-run local checklist. Neither choice waives the
+   hosted database, security, or recovery gates.
 
-All five remain UNDECIDED. Contact assignments, capacity/promotion checks,
-restore evidence and limited-beta safeguards are implementation conditions,
-not decisions silently made here. Supporting packages:
+Decisions 1-4 remain UNDECIDED. Decision 5 still needs an explicit recorded
+acceptance of CI evidence or completion of the owner-run local test. Contact
+assignments, capacity/promotion checks, restore evidence and limited-beta
+safeguards are implementation conditions, not decisions silently made here. Supporting packages:
 [backup/recovery](ZAVQERA_PRODUCTION_BACKUP_AND_RECOVERY.md),
 [operations](ZAVQERA_PRODUCTION_OPERATIONS.md),
 [domain plan](ZAVQERA_DOMAIN_LAUNCH_PLAN.md) and

@@ -218,9 +218,25 @@ Publishable Supabase keys may be browser-visible; service-role keys, database
 passwords and management tokens may not. Never add privileged `NEXT_PUBLIC_*`.
 Show key names, scopes and target-match booleans, not values.
 
-Known limits: browser E2E unexecuted; no restore rehearsal; no staffed incident
-channel; primary URL 404; production deploy pause; no custom domain; disabled
-leaked-password protection; intentional SECURITY DEFINER advisor warnings;
-historical replay mismatch; T01-T05 owner-confirmed without detailed observations.
-These are not authorization to weaken security, modify protected systems or
-expand product scope.
+Current automated browser evidence (2026-10-18): W21 passed on exact source
+HEAD `0fd69902305ef9603e90aef4ae446a95161306d1` ([run 39154053027](https://github.com/abdalrhmanata-gif/nexo-w21-isolated-verification-20261015/actions/runs/39154053027));
+both browser E2E tests passed. The isolated route check denied the unregistered
+Mission Action adapter with HTTP 503, `unregistered_adapter_denied`, and
+`providerCall=not_attempted`. Evidence confirms PostgreSQL 17, repository
+migrations only, cleanup exit code 0, no residual containers/volumes, and
+`cleanup_verified=true`. Web Unit (374 tests: 373 pass, 0 fail, 1 skipped),
+Web CI/build, Flutter CI, and 37 launch-validator regression tests also passed
+on that source HEAD: [Web Unit](https://github.com/abdalrhmanata-gif/nexo-w21-isolated-verification-20261015/actions/runs/39154055655),
+[Web CI](https://github.com/abdalrhmanata-gif/nexo-w21-isolated-verification-20261015/actions/runs/39154055648),
+[Flutter CI](https://github.com/abdalrhmanata-gif/nexo-w21-isolated-verification-20261015/actions/runs/39154055664).
+
+Still open: no full backup/restore rehearsal or measured RPO/RTO; no staffed
+incident channel or operations exercise; the primary URL has a recorded 404,
+production publishing was recorded as paused, no custom domain is configured,
+leaked-password protection is disabled, intentional SECURITY DEFINER advisor
+warnings require disposition, historical hosted migration replay differs, and
+T01-T05 have owner-confirmed PASS labels but no detailed session observations.
+CI E2E does not establish hosted database parity, real-provider behavior,
+production auth/SMTP, restore readiness, or final user acceptance. These limits
+do not authorize weakening security, modifying protected systems, or expanding
+product scope.
