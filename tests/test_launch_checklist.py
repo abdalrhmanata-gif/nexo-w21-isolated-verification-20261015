@@ -67,7 +67,7 @@ class LaunchChecklistValidatorTests(unittest.TestCase):
     def test_na_requires_owner_approval(self):
         mutated = self.text.replace("**Status:** BLOCKED", "**Status:** N/A", 1)
         errors = validate_checklist(mutated)
-        self.assertTrue(any("N/A lacks explicit owner/reviewer approval" in error for error in errors))
+        self.assertTrue(any("evidence lacks owner_approval=PASS by an accountable person/team" in error for error in errors))
 
     def test_pass_cannot_reuse_evidence_from_an_older_sha(self):
         candidate = "f" * 40
@@ -95,6 +95,70 @@ class LaunchChecklistValidatorTests(unittest.TestCase):
         mutated = mutated[:start] + gate_a + mutated[end:]
         errors = validate_checklist(mutated)
         self.assertTrue(any("tested_sha differs from the selected release candidate" in error for error in errors))
+
+    def test_pass_requires_tested_sha_even_when_candidate_sha_is_claimed(self):
+        candidate = "f" * 40
+        mutated = select_candidate(self.text, candidate)
+        start, end = mutated.index("### Gate A"), mutated.index("### Gate B")
+        gate_a = mutated[start:end].replace("**Status:** BLOCKED", "**Status:** PASS", 1)
+        gate_a = replace_gate_field(
+            gate_a,
+            "A",
+            "Evidence / exact source SHA",
+            f"candidate_sha={candidate}; scope=exact_candidate_ci; owner_approval=PASS by Alice; independent_review=PASS by Bob",
+        )
+        gate_a = replace_gate_field(
+            gate_a,
+            "A",
+            "Accountable owner / independent reviewer",
+            "Alice (release owner) / Bob (independent reviewer).",
+        )
+        mutated = mutated[:start] + gate_a + mutated[end:]
+        errors = validate_checklist(mutated)
+        self.assertTrue(any("must include exactly one tested_sha claim" in error for error in errors), errors)
+
+    def test_approvals_must_match_their_named_roles(self):
+        candidate = "e" * 40
+        mutated = select_candidate(self.text, candidate)
+        start, end = mutated.index("### Gate A"), mutated.index("### Gate B")
+        gate_a = mutated[start:end].replace("**Status:** BLOCKED", "**Status:** PASS", 1)
+        gate_a = replace_gate_field(
+            gate_a,
+            "A",
+            "Evidence / exact source SHA",
+            f"candidate_sha={candidate}; tested_sha={candidate}; scope=exact_candidate_ci; owner_approval=PASS by Bob; independent_review=PASS by Alice",
+        )
+        gate_a = replace_gate_field(
+            gate_a,
+            "A",
+            "Accountable owner / independent reviewer",
+            "Alice (release owner) / Bob (independent reviewer).",
+        )
+        mutated = mutated[:start] + gate_a + mutated[end:]
+        errors = validate_checklist(mutated)
+        self.assertTrue(any("owner_approval approver must exactly match the named owner" in error for error in errors), errors)
+        self.assertTrue(any("independent_review approver must exactly match the named independent reviewer" in error for error in errors), errors)
+
+    def test_approver_must_not_match_only_a_substring_of_owner_identity(self):
+        candidate = "e" * 40
+        mutated = select_candidate(self.text, candidate)
+        start, end = mutated.index("### Gate A"), mutated.index("### Gate B")
+        gate_a = mutated[start:end].replace("**Status:** BLOCKED", "**Status:** PASS", 1)
+        gate_a = replace_gate_field(
+            gate_a,
+            "A",
+            "Evidence / exact source SHA",
+            f"candidate_sha={candidate}; tested_sha={candidate}; scope=exact_candidate_ci; owner_approval=PASS by Alice; independent_review=PASS by Bob",
+        )
+        gate_a = replace_gate_field(
+            gate_a,
+            "A",
+            "Accountable owner / independent reviewer",
+            "Malice (release owner) / Bob (independent reviewer).",
+        )
+        mutated = mutated[:start] + gate_a + mutated[end:]
+        errors = validate_checklist(mutated)
+        self.assertTrue(any("owner_approval approver must exactly match the named owner" in error for error in errors), errors)
 
     def test_disposable_test_evidence_cannot_satisfy_hosted_gate(self):
         candidate = "e123ead90684b64a9809ad6d4ba7b8ddcb155155"
@@ -203,7 +267,7 @@ class LaunchChecklistValidatorTests(unittest.TestCase):
         candidate = "e123ead90684b64a9809ad6d4ba7b8ddcb155155"
         for status, approval_record in (
             ("PASS", "**Accountable owner / independent reviewer:** Release owner / independent release reviewer."),
-            ("N/A", "**Accountable owner / independent reviewer:** N/A approved by Release Owner; independent review by Security Reviewer."),
+            ("N/A", "**Accountable owner / independent reviewer:** Alice (release owner) / Bob (independent release reviewer)."),
         ):
             with self.subTest(status=status):
                 mutated = select_candidate(self.text, candidate)

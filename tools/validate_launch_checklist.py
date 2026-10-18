@@ -53,6 +53,11 @@ SCOPE_LIMITATIONS = {
 }
 
 
+def normalize_approval_identity(value: str) -> str:
+    """Normalize an identity while excluding parenthetical role descriptions."""
+    return re.sub(r"\s*\([^)]*\)", "", value).strip(" \t\r\n.,:;").casefold()
+
+
 def validate_checklist(text: str) -> list[str]:
     errors: list[str] = []
     gates: dict[str, dict[str, str]] = {}
@@ -103,11 +108,6 @@ def validate_checklist(text: str) -> list[str]:
         status = record.get("Status", "").strip()
         if status not in ALLOWED_STATUSES:
             errors.append(f"Gate {gate_id}: invalid status {status!r}")
-        if status == "N/A":
-            approval = record.get("Accountable owner / independent reviewer", "")
-            if not re.search(r"N/A approved by .+; independent review by .+", approval, re.IGNORECASE):
-                errors.append(f"Gate {gate_id}: N/A lacks explicit owner/reviewer approval")
-
         evidence = record.get("Evidence / exact source SHA", "")
         if not SHA.search(evidence):
             errors.append(f"Gate {gate_id}: evidence must include a full 40-character source SHA")
@@ -149,28 +149,35 @@ def validate_checklist(text: str) -> list[str]:
             scope_claims = re.findall(r"\bscope\s*=\s*([^\s;|]+)", evidence)
             if scope and (len(scope_claims) != 1 or scope_claims[0] != scope.lower()):
                 errors.append(f"Gate {gate_id}: {status} evidence does not claim required scope={scope}")
-            approval_patterns = (
-                ("owner_approval", re.compile(r"\bowner_approval\s*=\s*pass\s+by\s+([^;|]+)", re.IGNORECASE)),
-                ("independent_review", re.compile(r"\bindependent_review\s*=\s*pass\s+by\s+([^;|]+)", re.IGNORECASE)),
-            )
             owner_field = record.get("Accountable owner / independent reviewer", "").lower()
-            for approval, pattern in approval_patterns:
+            owner_reviewer_parts = owner_field.split("/", 1)
+            owner_identity = normalize_approval_identity(owner_reviewer_parts[0]) if len(owner_reviewer_parts) == 2 else ""
+            reviewer_identity = normalize_approval_identity(owner_reviewer_parts[1]) if len(owner_reviewer_parts) == 2 else ""
+            approval_patterns = (
+                ("owner_approval", re.compile(r"\bowner_approval\s*=\s*pass\s+by\s+([^;|]+)", re.IGNORECASE), "owner", owner_identity),
+                ("independent_review", re.compile(r"\bindependent_review\s*=\s*pass\s+by\s+([^;|]+)", re.IGNORECASE), "independent reviewer", reviewer_identity),
+            )
+            for approval, pattern, role, expected_identity in approval_patterns:
                 matches = list(pattern.finditer(evidence))
                 if len(matches) != 1:
                     errors.append(f"Gate {gate_id}: {status} evidence lacks {approval}=PASS by an accountable person/team")
                     continue
-                approver = matches[0].group(1).strip().lower()
+                approver = normalize_approval_identity(matches[0].group(1))
                 if not approver or PLACEHOLDERS.search(approver) or approver in {"pending", "unassigned", "owner", "reviewer"}:
                     errors.append(f"Gate {gate_id}: {approval} must name an accountable person or team")
-                elif approver not in owner_field:
-                    errors.append(f"Gate {gate_id}: {approval} approver is absent from the owner/reviewer field")
+                elif not expected_identity or approver != expected_identity:
+                    errors.append(f"Gate {gate_id}: {approval} approver must exactly match the named {role} in the owner/reviewer field")
             if "pending" in owner_field or "unassigned" in owner_field:
                 errors.append(f"Gate {gate_id}: {status} cannot pass with an unassigned owner or reviewer")
 
             tested_sha_claims = re.findall(r"\btested_sha\s*=\s*([^\s;|]+)", evidence)
             tested_sha_values = [value for value in tested_sha_claims if re.fullmatch(r"[0-9a-f]{40}", value)]
+            if not tested_sha_claims:
+                errors.append(f"Gate {gate_id}: {status} evidence must include exactly one tested_sha claim")
             if tested_sha_claims and len(tested_sha_values) != len(tested_sha_claims):
                 errors.append(f"Gate {gate_id}: malformed tested_sha evidence")
+            if len(tested_sha_claims) > 1:
+                errors.append(f"Gate {gate_id}: evidence must include exactly one tested_sha claim")
             if candidate_sha and any(value != candidate_sha for value in tested_sha_values):
                 errors.append(f"Gate {gate_id}: tested_sha differs from the selected release candidate")
             if scope in SCOPE_LIMITATIONS and SCOPE_LIMITATIONS[scope].search(evidence):
