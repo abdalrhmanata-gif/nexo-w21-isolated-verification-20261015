@@ -44,3 +44,14 @@ The commit subject does not prove the SQL was wrong or fabricated. It does mean 
 4. Keep W86 and all other hosted migrations blocked pending the independent owner review, migration-chain assessment, isolated acceptance, recovery rehearsal, and separate written authorization naming the exact target/change set/operator/window.
 
 This sweep did not connect to Supabase, execute SQL, change a hosted database, deploy, alter secrets, or merge a PR. `hosted_write_authorized=false`; release remains **NO-GO**.
+
+
+## Additional original-repository path-history pass — 2026-10-18
+
+To reduce dependence on the isolated verification repository's imported history, the same 28 exact hosted-version filenames were queried against the original `abdalrhmanata-gif/Nexo` repository at branch `codex/mission-action-runtime-seam-test-20261014`, commit `9d752a59f0683ea7149633138dc85bb33cf9a41b` (2026-10-17).
+
+- **28/28 exact hosted-version path-history lookups returned zero commits** at that original-repository ref as well.
+- This ref contains an 87-file migration inventory; it is a separate reachable history view from the 89-file checkout recorded by the captured audit.
+- The original-repository check found no source SQL under the exact hosted timestamp filenames for the 22 conflicts or six hosted-only rows. It does not exclude the same SQL content under some other path/version, nor deleted/unreachable refs, forks, external/private repositories, device clones, backups, or deployment-run payloads.
+
+This strengthens the statement that the specific hosted timestamp filenames have no reachable path history in the two checked repository views. It still does **not** identify the bytes executed in Development. A Git path-history result is not a deployment receipt; all 28 rows remain unresolved without authoritative historical SQL and trusted deployment evidence.
