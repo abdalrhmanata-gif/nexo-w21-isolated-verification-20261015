@@ -111,7 +111,7 @@ jobs:
         run: npm run typecheck
 
       - name: Run launch checklist validator and regression tests
-        if: needs.classify-changes.result == 'success' && needs.classify-changes.outputs.checklist_only == 'true'
+        if: always()
         env:
           DIFF_BASE: ${{ needs.classify-changes.outputs.diff_base }}
           DIFF_HEAD: ${{ needs.classify-changes.outputs.diff_head }}
@@ -119,7 +119,11 @@ jobs:
           set -euo pipefail
           python3 tools/validate_launch_checklist.py
           python3 -m unittest tests/test_launch_checklist.py tests/test_launch_checklist_workflow.py -v
-          git diff --check "$DIFF_BASE...$DIFF_HEAD"
+          if [[ -n "$DIFF_BASE" && -n "$DIFF_HEAD" ]]; then
+            git diff --check "$DIFF_BASE...$DIFF_HEAD"
+          else
+            git diff --check
+          fi
 
       - name: Upload diagnostic bundle on failure
         if: failure()

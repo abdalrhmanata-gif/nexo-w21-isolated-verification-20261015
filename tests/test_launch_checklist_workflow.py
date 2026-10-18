@@ -106,7 +106,9 @@ class LaunchChecklistWorkflowClassificationTests(unittest.TestCase):
         self.assertIn("python3 -m unittest tests/test_launch_checklist.py tests/test_launch_checklist_workflow.py -v", workflow)
         self.assertIn('git diff --check "$DIFF_BASE...$DIFF_HEAD"', workflow)
         fast_step = workflow.split("- name: Run launch checklist validator and regression tests", 1)[1].split("\n      - name:", 1)[0]
+        self.assertIn("if: always()", fast_step)
         self.assertIn("set -euo pipefail", fast_step)
+        self.assertIn('if [[ -n "$DIFF_BASE" && -n "$DIFF_HEAD" ]]', fast_step)
         self.assertLess(fast_step.index("python3 tools/validate_launch_checklist.py"), fast_step.index("python3 -m unittest"))
         self.assertLess(fast_step.index("python3 -m unittest"), fast_step.index("git diff --check"))
         for full_validation_step in (
