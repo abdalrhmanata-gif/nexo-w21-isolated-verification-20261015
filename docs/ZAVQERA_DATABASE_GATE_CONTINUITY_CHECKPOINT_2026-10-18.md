@@ -69,3 +69,17 @@ These validate the documentation/intake/tooling state; they do not resolve histo
 Do not apply W86 or any other migration to hosted Development/Main/Production, do not revoke/drop/replace routines based only on signature differences, do not modify hosted migration history, do not enable trusted dispatch adapters, and do not merge PR #1/#2 while gates remain open.
 
 **Status at handoff:** evidence scanning, path-history capture, interim analytic review and isolated candidate verification are documented. The remaining blockers require original deployment/source artifacts and an authorized human database-owner decision; they cannot be resolved by further inference from the same sources.
+
+
+## Post-checkpoint execution update — 2026-10-18
+
+The path-history recovery sweep and the new offline matrix validator have now been completed after the initial checkpoint was written.
+
+- Latest verified documentation/source-history commit before this update: `592403e45bf5759e41635eaafb6d63e8f7034b8c`.
+- The independent path-history report now includes a second query set against the original `abdalrhmanata-gif/Nexo` repository at `codex/mission-action-runtime-seam-test-20261014`, HEAD `9d752a59f0683ea7149633138dc85bb33cf9a41b`; all 28 exact hosted-version filenames again returned zero reachable commits.
+- Added `tests/test_zavqera_github_hosted_migration_path_history.py`; the owner-intake CI now has a dedicated offline matrix check. The first run correctly exposed an over-strict assertion for the six hosted-only row descriptions; the test assertion was corrected without altering evidence rows or their dispositions.
+- Exact HEAD owner intake validation [run 39116416968](https://github.com/abdalrhmanata-gif/nexo-w21-isolated-verification-20261015/actions/runs/39116416968) passed 11 owner-intake tests, 5 synthetic local-Git-history tests and 7 path-history matrix tests, plus the no-network intake validator. Flutter CI [run 39116416970](https://github.com/abdalrhmanata-gif/nexo-w21-isolated-verification-20261015/actions/runs/39116416970) also passed on SHA `8efe66b726142032d239426343bbbcb7dd9ecdb5`.
+- The report-only corroboration commit `592403e45bf5759e41635eaafb6d63e8f7034b8c) has its exact-head owner intake validation [run 39116766669 — SUCCESS](https://github.com/abdalrhmanata-gif/nexo-w21-isolated-verification-20261015/actions/runs/39116766669) and Flutter CI [run 39116766667 — SUCCESS](https://github.com/abdalrhmanata-gif/nexo-w21-isolated-verification-20261015/actions/runs/39116766667).
+- The isolated W86 candidate's [PostgreSQL 17.11 W80 run 39025388240](https://github.com/abdalrhmanata-gif/nexo-w21-isolated-verification-20261015/actions/runs/39025388240) remains a local-only proof: W66 11/11, W86 23/23, negative controls and disposable cleanup passed. This is not a hosted deployment result.
+
+Current review disposition remains **REVIEWED — MORE EVIDENCE REQUIRED**. The 22 name/version conflicts and six hosted-only rows remain unresolved; direct grants, catalog drift, routine/default-ACL intent, and independent owner decisions remain open. PR #1 and PR #2 remain OPEN/DRAFT/UNMERGED. No hosted DB/ledger write, migration, deployment, secret change or merge has occurred. `hosted_write_authorized=false`; trusted dispatch adapters remain empty/fail-closed; release remains **NO-GO**.
