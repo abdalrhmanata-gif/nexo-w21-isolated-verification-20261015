@@ -302,3 +302,17 @@ A supplemental SELECT reproduced the candidate's recursive role membership reach
 Effective direct privileges remain the core problem: `service_role` still has direct SELECT/INSERT/UPDATE/DELETE/TRUNCATE/REFERENCES/TRIGGER/MAINTAIN; `authenticated` has SELECT; `anon` does not have SELECT. Thus, the role-path checks clear only preflight predicates at one point in time and do not fix the direct grant. They do not clear missing schema/trigger/functions, historical migration provenance, independent owner review, backup/recovery gates, or separate hosted-write authorization.
 
 This was still performed through the MCP session that reported `current_user=postgres`, `session_user=postgres`, `transaction_read_only=off`; the statement was SELECT-only and no mutation was attempted, but the session was not server-enforced read-only. Treat this as supplemental investigation, not the pinned 13-query evidence. See [the spot-check report](ZAVQERA_LIVE_CATALOG_SPOT_CHECK_2026-10-18.md).
+
+
+## 10. Supplemental GitHub source-path sweep — 2026-10-18
+
+A bounded read-only GitHub history sweep was completed and recorded in [ZAVQERA_GITHUB_BRANCH_SOURCE_PATH_SWEEP_2026-10-18.md](ZAVQERA_GITHUB_BRANCH_SOURCE_PATH_SWEEP_2026-10-18.md).
+
+- The captured-source commit `fbbcb080904acd88aad83a082803f627859026e2` has a complete recursive tree with 89 SQL migration files. All 89 source-side filenames in the 95-row intake are present at that exact source snapshot.
+- Of the 74 hosted ledger rows, 46 hosted version/name filenames appear in that tree. The remaining 28 hosted filenames are the 22 same-name/version-conflict rows and six hosted-only rows.
+- GitHub commit-by-path queries on the captured-source ref returned zero commits for each of those 28 hosted-version paths. The visible original repository branch inventory contained 23 branch heads; inspection of the branch-head trees did not recover an alternate hosted-timestamp W4 source.
+- W4 source candidate still exists as `20260921180052_w4_table_privilege_hardening.sql`, Git blob `2745a06c66b9f325683beaa973e10f6d21631555`, 559 bytes; archived LF SQL SHA-256 `3419a01a1b0ea66bd22877f478b61473cf1210006828ea3f28c5c08fb51ef0c8`. The hosted ledger path `20260921180138_w4_table_privilege_hardening.sql` remains absent from this accessible source history.
+
+**Limit:** This is bounded evidence for the accessible branch refs/history and source snapshot, not proof that private/local/deleted/unreachable sources or deployment artifacts never existed. It does not prove what SQL bytes ran on Development. Leave all 22 conflicts and six hosted-only rows unresolved until authoritative source plus trusted deployment evidence is available; ZMR-008 stays `NAME_VERSION_CONFLICT` / `OPEN` / `PENDING` and its verified deployed digest/receipt fields stay blank.
+
+No database action is authorized or performed. This finding does not alter the reviewer disposition: **REVIEWED — MORE EVIDENCE REQUIRED**, release **NO-GO**, `hosted_write_authorized=false`.
