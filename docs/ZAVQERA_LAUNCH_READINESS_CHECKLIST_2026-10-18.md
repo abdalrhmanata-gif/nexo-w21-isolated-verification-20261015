@@ -186,3 +186,17 @@ The source migration `supabase/migrations/20261006120927_anonymous_ai_plan_guard
 **Stop condition:** do not run the advisor's suggested `ALTER TABLE ... ENABLE ROW LEVEL SECURITY` statements blindly, and do not use a generic SQL endpoint to bypass the audit's least-privilege gate. No hosted DDL, migration, grants, revokes, or policy changes are authorized. Track the resolution in [Issue #5](https://github.com/abdalrhmanata-gif/nexo-w21-isolated-verification-20261015/issues/5). The separate `auth_leaked_password_protection` advisor warning also remains **WARN / Disabled**.
 
 Public production remains **NO-GO** until the effective-access question is resolved with evidence and independent review.
+
+
+## Anonymous AI quota RPC candidate validation — 2026-10-19
+
+Canonical source candidate: [Nexo PR #40](https://github.com/abdalrhmanata-gif/Nexo/pull/40), head `ce4f098d018741110f2f0d2c66d3f8188238041a`, remains **Draft / Unmerged**.
+
+- Added a forward-only W83 candidate migration with three `SECURITY INVOKER` wrappers in `public`, delegating to the existing `SECURITY DEFINER` implementations in the unexposed `private` schema. Effective EXECUTE is granted to `service_role` only; `PUBLIC`, `anon`, and `authenticated` are revoked. The private state tables are not exposed or granted to client roles.
+- The quota caller is marked `server-only` and supports modern `sb_secret_...` keys via `apikey` only, plus legacy JWT API keys via `apikey` and `Authorization: Bearer`. Unsupported key formats fail closed.
+- Exact-head [Web Unit](https://github.com/abdalrhmanata-gif/Nexo/actions/runs/39306124968), [Web CI/build](https://github.com/abdalrhmanata-gif/Nexo/actions/runs/39306124932), [Flutter CI](https://github.com/abdalrhmanata-gif/Nexo/actions/runs/39306124986), and [W83 isolated PostgreSQL 17 + Supabase REST + pgTAP](https://github.com/abdalrhmanata-gif/Nexo/actions/runs/39306124967) all **PASS**.
+- W83 evidence: migration replay through W83 passed; all 28 pgTAP assertions passed; replay after W83 passed; the disposable local REST gateway successfully reserved, consumed once, rejected repeated consume, released once, and rejected repeated release; cleanup verified no remaining containers or volumes. The local REST gateway test uses the legacy JWT key mode. The modern secret-key mode is covered by static contract assertions, not a live hosted test.
+
+This establishes the candidate's isolated migration, ACL-contract, and legacy-key REST behavior only. It does **not** establish the hosted Development key format, exposed-schema settings, effective live ACLs, or hosted migration parity. The three-table `rls_disabled` Security Advisor finding, historical migration provenance, independent security review, and `auth_leaked_password_protection` warning remain unresolved.
+
+**Decision remains NO-GO for hosted migration and public launch.** No hosted database/API settings/secrets or deployment changed. Keep PR #40 Draft/Unmerged, preserve `hosted_write_authorized=false`, and do not apply the candidate until read-only live evidence, provenance reconciliation, independent review, and explicit release authorization are complete.
