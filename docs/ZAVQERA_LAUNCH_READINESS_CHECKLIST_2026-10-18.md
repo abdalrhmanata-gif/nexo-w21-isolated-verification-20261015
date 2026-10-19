@@ -164,7 +164,9 @@ The only intended target is Development ref `mrwmmbytcymqgwvcoywd` (`eu-west-1`)
 - Inspect the evidence ZIP before sharing. It must contain one capture, a `CAPTURED_FOR_MANUAL_REVIEW` summary with `queries_completed=13`, `query_01.json` through `query_13.json`, project identity, run metadata, read-only gate, and `ledger_acl_review.json` / `.md`. Confirm token-saved fields are false and no token, connection config, shell history, or application-row data is included.
 - Confirm project ID/name/region exactly match `mrwmmbytcymqgwvcoywd` / `ZAVQERA Development` / `eu-west-1`; query 1 shows `current_user=supabase_read_only_user` and `transaction_read_only=true`.
 - Confirm both pack hashes; query 11 contains only ledger version/name tuples; query 12 is W66 ACL evidence; query 13 includes `public.agent_executions` owner/effective privileges, service-role membership paths with INHERIT/SET ROLE semantics, and inherited table/column ACL provenance.
-- Stop and keep NO-GO on wrong project/region, role/read-only failure, hash/count mismatch, missing/unknown query, token leakage, inherited `service_role` table/column ACL, or a path to table-owner authority through INHERIT or SET ROLE. Preserve partial evidence; do not## Latest verified code/test-head evidence — 2026-10-19
+- Stop and keep NO-GO on wrong project/region, role/read-only failure, hash/count mismatch, missing/unknown query, token leakage, inherited `service_role` table/column ACL, or a path to table-owner authority through INHERIT or SET ROLE. Preserve partial evidence; do not alter the runner/query or retry through a more privileged endpoint.
+
+## Latest verified code/test-head evidence — 2026-10-19
 
 All four automated CI workflows passed on exact HEAD `ed7f06d6d731967ab47f7ecf7af6d68b0dbeb34f`:
 - [W21 Local Launch Gate `39246765511`](https://github.com/abdalrhmanata-gif/nexo-w21-isolated-verification-20261015/actions/runs/39246765511) — **SUCCESS, 27/27 steps**; [evidence artifact `12184505245`](https://github.com/abdalrhmanata-gif/nexo-w21-isolated-verification-20261015/actions/runs/39246765511/artifacts/12184505245).
