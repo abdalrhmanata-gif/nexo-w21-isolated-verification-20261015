@@ -89,3 +89,16 @@ W21 evidence artifact `W21_EVIDENCE.txt` was downloaded and inspected. It report
 4. **Full recovery/operations/acceptance — OPEN.** Representative data-bearing restore, measured RPO/RTO, staffed operations exercise, detailed T01–T05 observations and accountable release authorization remain absent.
 
 Keep `hosted_write_authorized=false`; keep `TRUSTED_DISPATCH_ADAPTERS` empty/fail-closed; do not edit the hosted migration ledger, repair hosted grants/schema, merge protected PRs or deploy production.
+
+## Superseding live GitHub refresh — 2026-10-19 — PR #3 HEAD `bf22447fb998f4036a4f99304da9813ee50a3e01`
+
+A live GitHub refresh on 2026-10-19 confirmed:
+
+- Isolated PR #3 remains **OPEN / DRAFT / UNMERGED**, branch `codex/launch-readiness-gates-20261018`, HEAD `bf22447fb998f4036a4f99304da9813ee50a3e01`. Commit `bf22447` is documentation-only: it updates `docs/ZAVQERA_PRODUCTION_BACKUP_AND_RECOVERY.md` and `docs/ZAVQERA_PRODUCTION_OPERATIONS.md`; the application/test code and W21 workflow were unchanged.
+- On that exact HEAD, Web CI/build [run 39228429228](https://github.com/abdalrhmanata-gif/nexo-w21-isolated-verification-20261015/actions/runs/39228429228), Web Unit [run 39228429285](https://github.com/abdalrhmanata-gif/nexo-w21-isolated-verification-20261015/actions/runs/39228429285), and Flutter CI [run 39228429452](https://github.com/abdalrhmanata-gif/nexo-w21-isolated-verification-20261015/actions/runs/39228429452) are **SUCCESS**.
+- Latest W21 evidence remains [run 39227492355](https://github.com/abdalrhmanata-gif/nexo-w21-isolated-verification-20261015/actions/runs/39227492355), **27/27 steps**, on `f7eeb4a3be927e848307715845f4eb35d5b41382`. The later branch commits through `bf22447` are documentation-only; do **not** report a W21 run at `bf22447`. W21's synthetic disposable restore is not representative production recovery, managed-Supabase restore proof, measured RPO/RTO, or independent acceptance.
+- Isolated PR #2 remains **OPEN / DRAFT / UNMERGED**, HEAD `a3d68afb31a8c0ef373f7810e05a1286c30048dd`. Original product PR #39 remains **OPEN / DRAFT / UNMERGED**, HEAD `9d752a59f0683ea7149633138dc85bb33cf9a41b`. Independent review submissions currently return no reviews for PR #2, PR #3, or PR #39.
+- Independent-review invitation [Issue #4](https://github.com/abdalrhmanata-gif/nexo-w21-isolated-verification-20261015/issues/4) remains open. The latest visible update is the repository owner's invitation refreshed on 2026-10-19, not a reviewer response or review.
+
+This refresh changes no blocker disposition. Hosted Development security/schema drift remains **OPEN / HIGH**; historical migration provenance remains **OPEN / UNKNOWN**; independent review remains **OPEN**; and representative recovery/operations/user-acceptance remains **OPEN**. Keep public production **NO-GO**, `hosted_write_authorized=false`, and `TRUSTED_DISPATCH_ADAPTERS` empty/fail-closed. No hosted database writes, migration-ledger edits, production deployment, provider activation, secret/DNS/billing/auth configuration changes, or protected PR merges are authorized by this entry.
+
