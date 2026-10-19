@@ -115,3 +115,17 @@ The preceding documentation-only commit `b67698b6488e8d458f0c859eace0f32f7acf406
 W21 was **not** rerun on `425b1cc`. Its latest verified pass remains [run 39227492355](https://github.com/abdalrhmanata-gif/nexo-w21-isolated-verification-20261015/actions/runs/39227492355), 27/27, at `f7eeb4a3be927e848307715845f4eb35d5b41382`. Later commits through `425b1cc` changed only documentation/formatting, not application code, tests, or the W21 workflow.
 
 This is CI evidence only and does not close any of the four launch blockers. PR #3 stays **OPEN / DRAFT / UNMERGED**; hosted Development drift, historical migration provenance, independent review, and representative recovery/operations/product acceptance remain open. Keep public production **NO-GO**, `hosted_write_authorized=false`, and `TRUSTED_DISPATCH_ADAPTERS` empty/fail-closed.
+
+## Superseding exact-head W21 and recovery proof — 2026-10-19
+
+Exact tested code/test HEAD: `41c4a3cdf1f290ed1e958fd44873333b3910ac23`.
+
+- [W21 Local Launch Gate — run 39240788125](https://github.com/abdalrhmanata-gif/nexo-w21-isolated-verification-20261015/actions/runs/39240788125): **SUCCESS, 27/27 job steps**. Includes isolated executor/fake-egress boundary, PostgreSQL 17 PGTap, linked synthetic application backup/restore, Mission Authority, AI quota/workspace security, actual-ledger concurrency races, W72 fake-provider PostgreSQL integration, browser E2E, stack cleanup and post-cleanup verification.
+- [Web Unit — run 39240794770](https://github.com/abdalrhmanata-gif/nexo-w21-isolated-verification-20261015/actions/runs/39240794770): SUCCESS.
+- [Web CI — run 39240795362](https://github.com/abdalrhmanata-gif/nexo-w21-isolated-verification-20261015/actions/runs/39240795362): SUCCESS.
+- [Flutter CI — run 39240794970](https://github.com/abdalrhmanata-gif/nexo-w21-isolated-verification-20261015/actions/runs/39240794970): SUCCESS.
+- Browser E2E: **2/2 passed in 2.3 minutes**. [W21 evidence artifact](https://github.com/abdalrhmanata-gif/nexo-w21-isolated-verification-20261015/actions/runs/39240788125/artifacts/12182055859); [browser diagnostics artifact](https://github.com/abdalrhmanata-gif/nexo-w21-isolated-verification-20261015/actions/runs/39240788125/artifacts/12181298660).
+
+Restore assertions passed: `restore_smoke=PASS`; expected/source/restored signatures matched for the synthetic auth user/profile, workspace, owner membership, DRAFT mission and two ordered PENDING actions. Source and target each had 52 application/auth/migration relations; key rows matched. The restore's trigger signature and enabled auth-profile trigger matched. Fixture and sentinel removal, temporary restore database and dump deletion, and final stack cleanup all passed; no containers or volumes remained.
+
+**The recovery scope remains limited:** the `extensions` schema had 2 source relations and 0 restored, and auth identity rows remained 0 for the synthetic user. This is not production-data or full managed-Supabase recovery, extension parity, off-site retention, measured RPO/RTO or independent acceptance. The four launch blockers remain **OPEN**: hosted Development/history reconciliation, historical migration provenance, independent review, and representative recovery/operations/product acceptance. PR #3 remains OPEN/DRAFT/UNMERGED; public production remains **NO-GO**. Preserve `hosted_write_authorized=false` and keep `TRUSTED_DISPATCH_ADAPTERS` empty/fail-closed.
