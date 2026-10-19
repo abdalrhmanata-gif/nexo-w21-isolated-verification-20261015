@@ -160,3 +160,11 @@ Each row is pending independent review. `UNKNOWN` means the version/name metadat
 4. No W86 or other migration may be applied to hosted Development or Main/Production without a separate written authorization naming the exact target/change set/operator/window/recovery plan and confirmed restorable backup.
 
 `hosted_write_authorized=false`. `TRUSTED_DISPATCH_ADAPTERS` remains empty/fail-closed. This ledger generation performed no hosted write, migration, deployment, secret change, or PR merge.
+
+## Cross-repository anonymous AI RPC candidate update — 2026-10-19
+
+A separate forward-only candidate now exists in the original application repository: [PR #40 — route anonymous AI quota calls through server-only public wrappers](https://github.com/abdalrhmanata-gif/Nexo/pull/40), exact head `ce4f098d018741110f2f0d2c66d3f8188238041a`. Its isolated PostgreSQL 17 / local Supabase REST gateway workflow passed 28/28 pgTAP assertions, migration replay through and after W83, REST reserve/consume/release checks including repeated-settlement denial, and disposable-stack cleanup ([run 39306124967](https://github.com/abdalrhmanata-gif/Nexo/actions/runs/39306124967)); Web CI, Web Unit, and Flutter CI also passed on that exact head.
+
+**Provenance boundary:** this is a new candidate migration named `20261019193000_w83_anonymous_ai_rpc_public_invoker_wrappers`, not the missing historical hosted tuple `20261007105825_expose_anonymous_ai_guard_rpc` (ZMR-090). It does not recover that migration's original SQL bytes, prove what was deployed, or establish that the new wrappers are semantically identical to the missing historical migration. Therefore ZMR-090 remains `HOSTED_ONLY_SOURCE_UNKNOWN` / `PENDING`; no row classification, evidence digest, or authorization field is changed by this update.
+
+The W83 candidate remains Draft / unmerged and has not been applied to hosted Development or Production. Hosted effective ACL/schema settings and independent review remain outstanding. `hosted_write_authorized=false`; release remains **NO-GO**.
