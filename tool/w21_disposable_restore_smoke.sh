@@ -320,6 +320,7 @@ fixture_signature_query="SELECT concat(
   (SELECT count(*)::text FROM public.workspace_members WHERE workspace_id = '$FIXTURE_WORKSPACE_ID'::uuid AND user_id = '$FIXTURE_USER_ID'::uuid), '|',
   coalesce((SELECT role::text FROM public.workspace_members WHERE workspace_id = '$FIXTURE_WORKSPACE_ID'::uuid AND user_id = '$FIXTURE_USER_ID'::uuid), '<missing>'), '|',
   (SELECT count(*)::text FROM public.missions WHERE workspace_id = '$FIXTURE_WORKSPACE_ID'::uuid AND owner_id = '$FIXTURE_USER_ID'::uuid AND objective = '$FIXTURE_OBJECTIVE'), '|',
+  coalesce((SELECT objective FROM public.missions WHERE workspace_id = '$FIXTURE_WORKSPACE_ID'::uuid AND owner_id = '$FIXTURE_USER_ID'::uuid AND objective = '$FIXTURE_OBJECTIVE'), '<missing>'), '|',
   coalesce((SELECT status::text FROM public.missions WHERE workspace_id = '$FIXTURE_WORKSPACE_ID'::uuid AND owner_id = '$FIXTURE_USER_ID'::uuid AND objective = '$FIXTURE_OBJECTIVE'), '<missing>'), '|',
   coalesce((SELECT string_agg(a.position::text || ':' || a.title || ':' || a.status::text, ',' ORDER BY a.position)
             FROM public.mission_actions a JOIN public.missions m ON m.id = a.mission_id
