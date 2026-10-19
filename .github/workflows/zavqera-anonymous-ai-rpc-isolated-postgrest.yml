@@ -161,15 +161,95 @@ jobs:
             echo "::error::Corrected isolated RPC call did not succeed after test-only grants."
             exit 1
           fi
-          python3 - "$response_file" <<'PY'
+          reservation_id="$(python3 - "$response_file" <<'PY'
           import json, sys
           data = json.load(open(sys.argv[1], encoding="utf-8"))
           assert isinstance(data, list) and len(data) == 1, data
           assert data[0].get("allowed") is True, data
           assert data[0].get("reservation_id"), data
-          print("isolated_rpc_contract=PASS")
-          print("allowed=true; reservation_id returned; database is disposable")
+          print(data[0]["reservation_id"])
           PY
+          )"
+          echo "isolated_reservation=PASS"
+
+          consume_status="$(curl --silent --show-error -o "$response_file" -w '%{http_code}' \
+            -X POST 'http://127.0.0.1:3000/rpc/consume_anonymous_ai_generation' \
+            -H "apikey: $service_jwt" -H "Authorization: Bearer $service_jwt" \
+            -H 'Content-Profile: private' -H 'Content-Type: application/json' \
+            --data "{\"p_reservation_id\":\"$reservation_id\"}")"
+          if [ "$consume_status" != 200 ]; then
+            cat "$response_file"
+            echo "::error::Consume RPC failed after isolated service-role grants."
+            exit 1
+          fi
+          python3 - "$response_file" <<'PY'
+          import json, sys
+          assert json.load(open(sys.argv[1], encoding="utf-8")) is True
+          PY
+          consume_again_status="$(curl --silent --show-error -o "$response_file" -w '%{http_code}' \
+            -X POST 'http://127.0.0.1:3000/rpc/consume_anonymous_ai_generation' \
+            -H "apikey: $service_jwt" -H "Authorization: Bearer $service_jwt" \
+            -H 'Content-Profile: private' -H 'Content-Type: application/json' \
+            --data "{\"p_reservation_id\":\"$reservation_id\"}")"
+          if [ "$consume_again_status" != 200 ]; then
+            cat "$response_file"
+            echo "::error::Repeated consume request did not return the expected boolean contract."
+            exit 1
+          fi
+          python3 - "$response_file" <<'PY'
+          import json, sys
+          assert json.load(open(sys.argv[1], encoding="utf-8")) is False
+          PY
+          echo "isolated_consume_and_idempotency=PASS"
+
+          release_reserve_status="$(curl --silent --show-error -o "$response_file" -w '%{http_code}' \
+            -X POST 'http://127.0.0.1:3000/rpc/reserve_anonymous_ai_generation' \
+            -H "apikey: $service_jwt" -H "Authorization: Bearer $service_jwt" \
+            -H 'Content-Profile: private' -H 'Content-Type: application/json' \
+            --data '{"p_visitor_hash":"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc","p_ip_hash":"dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd","p_request_id":"10000000-0000-4000-8000-000000000002"}')"
+          if [ "$release_reserve_status" != 200 ]; then
+            cat "$response_file"
+            echo "::error::Second isolated reservation request failed."
+            exit 1
+          fi
+          release_id="$(python3 - "$response_file" <<'PY'
+          import json, sys
+          data = json.load(open(sys.argv[1], encoding="utf-8"))
+          assert isinstance(data, list) and len(data) == 1, data
+          assert data[0].get("allowed") is True, data
+          print(data[0]["reservation_id"])
+          PY
+          )"
+          release_status="$(curl --silent --show-error -o "$response_file" -w '%{http_code}' \
+            -X POST 'http://127.0.0.1:3000/rpc/release_anonymous_ai_generation' \
+            -H "apikey: $service_jwt" -H "Authorization: Bearer $service_jwt" \
+            -H 'Content-Profile: private' -H 'Content-Type: application/json' \
+            --data "{\"p_reservation_id\":\"$release_id\"}")"
+          if [ "$release_status" != 200 ]; then
+            cat "$response_file"
+            echo "::error::Release RPC failed after isolated service-role grants."
+            exit 1
+          fi
+          python3 - "$response_file" <<'PY'
+          import json, sys
+          assert json.load(open(sys.argv[1], encoding="utf-8")) is True
+          PY
+          release_again_status="$(curl --silent --show-error -o "$response_file" -w '%{http_code}' \
+            -X POST 'http://127.0.0.1:3000/rpc/release_anonymous_ai_generation' \
+            -H "apikey: $service_jwt" -H "Authorization: Bearer $service_jwt" \
+            -H 'Content-Profile: private' -H 'Content-Type: application/json' \
+            --data "{\"p_reservation_id\":\"$release_id\"}")"
+          if [ "$release_again_status" != 200 ]; then
+            cat "$response_file"
+            echo "::error::Repeated release request did not return the expected boolean contract."
+            exit 1
+          fi
+          python3 - "$response_file" <<'PY'
+          import json, sys
+          assert json.load(open(sys.argv[1], encoding="utf-8")) is False
+          PY
+          echo "isolated_release_and_idempotency=PASS"
+          echo "isolated_rpc_contract=PASS"
 
           echo "Scope: direct PostgREST contract test, not a Supabase API gateway emulation."
           echo "No hosted database, live quota RPC, secret, migration ledger, or deployment was touched."
