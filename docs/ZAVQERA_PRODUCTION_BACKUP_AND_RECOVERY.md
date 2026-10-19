@@ -2,7 +2,7 @@
 
 2026-10-01. **PLAN ONLY. Neither option selected or executed.**
 Development `mrwmmbytcymqgwvcoywd` currently has no provider project backups
-on the Free plan. No independent backup or successful restore was verified.
+on the Free plan. No independent or representative application backup/restore has been verified.
 Git and the schema-only E2E snapshot do not back up user data.
 Do not export real records under this documentation task.
 
@@ -140,3 +140,10 @@ does not mean old sessions remain valid; document safe sign-in/session handling.
 
 Before a restore/upgrade, review applicable extension/index/custom-operator
 changes in that notice. No upgrade or live compatibility scan was performed here.
+
+
+## Superseding isolated restore-smoke result — 2026-10-19
+
+[W21 run 39227492355](https://github.com/abdalrhmanata-gif/nexo-w21-isolated-verification-20261015/actions/runs/39227492355) passed 27/27 steps on exact head `f7eeb4a3be927e848307715845f4eb35d5b41382`. A custom-format allowlisted-schema dump (477,328 bytes, SHA-256 `4c239549a53c8e2e0056da3d8db7bf77c4c4506d8d0af468a901fec56c3f61f4`) was restored to a separate disposable PostgreSQL 17 database. The test matched 52 source/restore application/auth/migration relations, verified a synthetic sentinel row, and confirmed deletion of the source sentinel, restore database and dump file. The disposable stack ended with no remaining containers/volumes.
+
+This is a successful **synthetic CI logical-restore smoke**, not an independent/representative application backup, full managed Supabase recovery, extension-schema parity, or proof of real user data/storage/auth recovery. The `extensions` schema had 2 source relations and 0 restored; core business/auth tables were empty apart from the sentinel. No complete backup schedule, retained independent copy, measured RPO/RTO, or owner-approved restoration drill exists. The option selection, backup/recovery owners and independent reviewer remain unassigned; this evidence does not authorize hosted database changes or release.

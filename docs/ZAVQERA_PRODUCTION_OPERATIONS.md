@@ -20,7 +20,7 @@ report. Owner must assign this cadence; it is not unattended monitoring.
 |---|---|---|
 | 1. Deployment | Netlify site `unique-kringle-3ce321`: verify artifact state, source SHA, branch and target URL separately | Known-good branch artifact `6abe25c07d794f000812021c` / `a89d0a1`; old main artifact is not approved rollback |
 | 2. Public health | Anonymous GET `/`, `/auth/sign-in`, protected `/app` and mission routes using runbook | Branch: 200 public, 307 same-origin sign-in protected. Primary currently 404; do not classify that as a new branch regression |
-| 3. Authentication | Run the isolated [E2E checklist](ZAVQERA_E2E_OWNER_RUN_CHECKLIST.md) for signup/signin/signout, callback, refresh/return and cross-user checks | Browser E2E not executed. A hosted auth-only check requires an owner-approved account; no automated hosted fixture creation |
+| 3. Authentication | Run the isolated [E2E checklist](ZAVQERA_E2E_OWNER_RUN_CHECKLIST.md) for signup/signin/signout, callback, refresh/return and cross-user checks | Automated disposable browser E2E passed 2/2 on W21 run 39227492355 (head `f7eeb4a3be927e848307715845f4eb35d5b41382`). This is CI evidence only; a hosted auth-only check still requires an owner-approved account, and no hosted fixture was created. |
 | 4. Provider logs | Review Netlify Deploys/build and server/function logs plus approved Supabase Auth/Postgres Logs Explorer time window | Record UTC, deployment, status and sanitized request ID; never dump personal records, cookies or JWTs |
 | 5. Escalation | Notify assigned incident owner for repeated 5xx/auth failure, data integrity/ownership concern, failed backup or capacity pause | Security/data-loss concerns urgent: halt invitations/releases, preserve restricted evidence; changes require authorization |
 | 6. Rollback | Follow runbook: focused branch revert or owner-approved known-good artifact publish; recheck compatibility, capacity and URL | Procedure prepared, not rehearsed. Never force push, modify main, undo W21 guard or restore a database as routine code rollback |
@@ -52,3 +52,10 @@ relevant tests, confirm auth/data boundary when impacted, verify recovery/cleanu
 and record any remaining limitation. Only the owner may approve renewed intake.
 Reference [backup plan](ZAVQERA_PRODUCTION_BACKUP_AND_RECOVERY.md) and
 [domain plan](ZAVQERA_DOMAIN_LAUNCH_PLAN.md) for recovery and hostname changes.
+
+
+## Superseding current CI evidence — 2026-10-19
+
+[W21 run 39227492355](https://github.com/abdalrhmanata-gif/nexo-w21-isolated-verification-20261015/actions/runs/39227492355) passed 27/27 steps on `f7eeb4a3be927e848307715845f4eb35d5b41382`; [Web Unit 39227497784](https://github.com/abdalrhmanata-gif/nexo-w21-isolated-verification-20261015/actions/runs/39227497784), [Web CI 39227497878](https://github.com/abdalrhmanata-gif/nexo-w21-isolated-verification-20261015/actions/runs/39227497878), and [Flutter CI 39227497796](https://github.com/abdalrhmanata-gif/nexo-w21-isolated-verification-20261015/actions/runs/39227497796) also passed on the same head. Browser E2E passed 2/2, and disposable cleanup verified no remaining containers or volumes.
+
+**The operational gate is still blocked:** incident owner, backup contact/channel and coverage remain UNASSIGNED; rollback has not been rehearsed; hosted authentication/SMTP/OAuth and custom-domain redirects have not been validated. Passing disposable CI does not substitute for the owner-run operations/incident exercise or authorize production publish.
