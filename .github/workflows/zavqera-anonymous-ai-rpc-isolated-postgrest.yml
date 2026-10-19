@@ -1,0 +1,172 @@
+name: ZAVQERA Anonymous AI RPC — isolated PostgREST authorization contract
+
+on:
+  pull_request:
+    paths:
+      - .github/workflows/zavqera-anonymous-ai-rpc-isolated-postgrest.yml
+      - supabase/migrations/20261006120927_anonymous_ai_plan_guard.sql
+      - apps/web/lib/anonymous-ai-usage.ts
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: zavqera-anonymous-ai-rpc-isolated-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  isolated-postgrest-contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout exact source revision
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+
+      - name: Verify source RPC contract against disposable PostgreSQL 17 and PostgREST
+        shell: bash
+        run: |
+          set -euo pipefail
+          network="zavqera-anon-rpc-test"
+          pg="zavqera-anon-rpc-pg"
+          api="zavqera-anon-rpc-api"
+          jwt_secret="isolated-test-secret-do-not-reuse-0123456789abcdef"
+          cleanup() {
+            docker rm -f "$api" "$pg" >/dev/null 2>&1 || true
+            docker network rm "$network" >/dev/null 2>&1 || true
+          }
+          trap cleanup EXIT
+
+          docker network create "$network"
+          docker run -d --name "$pg" --network "$network" \
+            -e POSTGRES_USER=postgres -e POSTGRES_PASSWORD=postgres \
+            -e POSTGRES_DB=postgres postgres:17
+
+          for attempt in $(seq 1 60); do
+            if docker exec "$pg" pg_isready -U postgres -d postgres >/dev/null 2>&1; then
+              break
+            fi
+            if [ "$attempt" -eq 60 ]; then
+              echo "::error::Disposable PostgreSQL 17 did not become ready."
+              exit 1
+            fi
+            sleep 1
+          done
+
+          # Model the expected server-side role and pre-existing private schema usage.
+          # This is disposable test setup only; no hosted database is contacted.
+          docker exec -i "$pg" psql -v ON_ERROR_STOP=1 -U postgres -d postgres <<'SQL'
+          CREATE ROLE authenticator LOGIN PASSWORD 'authenticator_password' NOINHERIT;
+          CREATE ROLE anon NOLOGIN;
+          CREATE ROLE authenticated NOLOGIN;
+          CREATE ROLE service_role NOLOGIN BYPASSRLS;
+          GRANT anon, authenticated, service_role TO authenticator;
+          CREATE SCHEMA private;
+          GRANT USAGE ON SCHEMA private TO service_role;
+          SQL
+
+          psql_migration="$(cat supabase/migrations/20261006120927_anonymous_ai_plan_guard.sql)"
+          printf '%s\n' "$psql_migration" | docker exec -i "$pg" psql -v ON_ERROR_STOP=1 -U postgres -d postgres
+
+          docker run -d --name "$api" --network "$network" -p 127.0.0.1:3000:3000 \
+            -e PGRST_DB_URI='postgres://authenticator:authenticator_password@zavqera-anon-rpc-pg:5432/postgres' \
+            -e PGRST_DB_SCHEMAS='public,private' \
+            -e PGRST_DB_ANON_ROLE='anon' \
+            -e PGRST_DB_EXTRA_SEARCH_PATH='public,extensions' \
+            -e PGRST_JWT_SECRET="$jwt_secret" \
+            postgrest/postgrest:v12.2.3
+
+          for attempt in $(seq 1 60); do
+            if curl --silent --fail http://127.0.0.1:3000/ >/dev/null; then
+              break
+            fi
+            if [ "$attempt" -eq 60 ]; then
+              docker logs "$api"
+              echo "::error::Disposable PostgREST did not become ready."
+              exit 1
+            fi
+            sleep 1
+          done
+
+          service_jwt="$(python3 - "$jwt_secret" <<'PY'
+          import base64, hashlib, hmac, json, sys, time
+          secret = sys.argv[1].encode()
+          def enc(value):
+              raw = json.dumps(value, separators=(",", ":")).encode()
+              return base64.urlsafe_b64encode(raw).rstrip(b"=").decode()
+          header = enc({"alg": "HS256", "typ": "JWT"})
+          payload = enc({"role": "service_role", "aud": "authenticated", "exp": int(time.time()) + 1800})
+          unsigned = f"{header}.{payload}"
+          signature = base64.urlsafe_b64encode(hmac.new(secret, unsigned.encode(), hashlib.sha256).digest()).rstrip(b"=").decode()
+          print(f"{unsigned}.{signature}")
+          PY
+          )"
+
+          reserve_body='{"p_visitor_hash":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","p_ip_hash":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb","p_request_id":"10000000-0000-4000-8000-000000000001"}'
+          response_file="$RUNNER_TEMP/anon-rpc-response.json"
+
+          # Reproduce the current application call shape: apikey only, no Authorization,
+          # and no Content-Profile. It must not silently succeed as a privileged RPC.
+          app_status="$(curl --silent --show-error -o "$response_file" -w '%{http_code}' \
+            -X POST 'http://127.0.0.1:3000/rpc/reserve_anonymous_ai_generation' \
+            -H "apikey: $service_jwt" -H 'Content-Type: application/json' \
+            --data "$reserve_body")"
+          echo "current_app_header_shape_http_status=$app_status"
+          if [ "$app_status" -lt 400 ]; then
+            cat "$response_file"
+            echo "::error::The current application header/schema shape unexpectedly executed the private RPC."
+            exit 1
+          fi
+
+          # Explicit service-role JWT + private schema selection must still fail before
+          # an EXECUTE grant, because the checked-in migration revokes PUBLIC and does
+          # not grant EXECUTE to service_role.
+          corrected_status="$(curl --silent --show-error -o "$response_file" -w '%{http_code}' \
+            -X POST 'http://127.0.0.1:3000/rpc/reserve_anonymous_ai_generation' \
+            -H "apikey: $service_jwt" -H "Authorization: Bearer $service_jwt" \
+            -H 'Content-Profile: private' -H 'Content-Type: application/json' \
+            --data "$reserve_body")"
+          echo "service_role_private_schema_before_execute_grant_http_status=$corrected_status"
+          if [ "$corrected_status" -lt 400 ]; then
+            cat "$response_file"
+            echo "::error::The source migration unexpectedly grants service_role EXECUTE."
+            exit 1
+          fi
+
+          # Apply the candidate grants only to this disposable database, then reload
+          # PostgREST schema cache. This proves the isolated harness can execute the
+          # functions when both schema routing and role permissions are correct.
+          docker exec -i "$pg" psql -v ON_ERROR_STOP=1 -U postgres -d postgres <<'SQL'
+          GRANT EXECUTE ON FUNCTION private.reserve_anonymous_ai_generation(text, text, uuid) TO service_role;
+          GRANT EXECUTE ON FUNCTION private.consume_anonymous_ai_generation(uuid) TO service_role;
+          GRANT EXECUTE ON FUNCTION private.release_anonymous_ai_generation(uuid) TO service_role;
+          NOTIFY pgrst, 'reload schema';
+          SQL
+          sleep 2
+
+          success_status="$(curl --silent --show-error -o "$response_file" -w '%{http_code}' \
+            -X POST 'http://127.0.0.1:3000/rpc/reserve_anonymous_ai_generation' \
+            -H "apikey: $service_jwt" -H "Authorization: Bearer $service_jwt" \
+            -H 'Content-Profile: private' -H 'Content-Type: application/json' \
+            --data "$reserve_body")"
+          echo "service_role_private_schema_after_test_only_execute_grants_http_status=$success_status"
+          if [ "$success_status" -lt 200 ] || [ "$success_status" -ge 300 ]; then
+            cat "$response_file"
+            docker logs "$api"
+            echo "::error::Corrected isolated RPC call did not succeed after test-only grants."
+            exit 1
+          fi
+          python3 - "$response_file" <<'PY'
+          import json, sys
+          data = json.load(open(sys.argv[1], encoding="utf-8"))
+          assert isinstance(data, list) and len(data) == 1, data
+          assert data[0].get("allowed") is True, data
+          assert data[0].get("reservation_id"), data
+          print("isolated_rpc_contract=PASS")
+          print("allowed=true; reservation_id returned; database is disposable")
+          PY
+
+          echo "Scope: direct PostgREST contract test, not a Supabase API gateway emulation."
+          echo "No hosted database, live quota RPC, secret, migration ledger, or deployment was touched."
