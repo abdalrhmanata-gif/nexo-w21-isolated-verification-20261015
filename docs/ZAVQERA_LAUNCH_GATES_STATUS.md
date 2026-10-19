@@ -1319,3 +1319,16 @@ Exact-head CI is green, but public release is **NO-GO**:
 ### Closure rule
 
 Do not merge PR #1/#2/#3, run hosted migrations, modify the migration ledger, enable provider adapters, or deploy production until the exact historic SQL/deployment lineage is independently accepted, the database owner approves a reviewed forward-only remediation and recovery plan, all hosted before/after assertions pass under a separate explicit authorization, an independent security/database review is recorded, recovery/RPO/RTO and operations rehearsals pass, and product acceptance/release authorization are signed. Keep `hosted_write_authorized=false` and `TRUSTED_DISPATCH_ADAPTERS` empty/fail-closed until then.
+
+
+## Latest isolated PostgreSQL restore-smoke evidence — 2026-10-18
+
+At exact source/test HEAD `86b8b49ee3dd16371ca607089f49de8ba0778f9f`, [W21 run 39157505523](https://github.com/abdalrhmanata-gif/nexo-w21-isolated-verification-20261015/actions/runs/39157505523) completed **SUCCESS (27/27 steps)**. The W21 workflow also passed disposable PostgreSQL 17/pgTAP, Mission Authority/quota/workspace regressions, four concurrency checks, fake-provider gateway integration, browser E2E (2/2), and cleanup; evidence reports no remaining containers or volumes.
+
+The new logical backup/restore smoke passed using a custom-format dump (476,290 bytes; SHA-256 `c19fc303fa9b24eabb6985dfe522a12dbb0977afb7147919b5010d17c8db0afc`) kept entirely inside the CI-labeled disposable PostgreSQL container. It restored to a separate temporary database, verified **51 source vs 51 restored** relations across the application/auth/migration inventory, matched row counts for the checked core relations, and confirmed `restore_database_removed=true`, `dump_removed=true`, `restore_cleanup_verified=true`. The migration ledger count in this disposable test was 88. This is not the hosted Development schema/ledger or evidence of historical deployment provenance.
+
+**Scope limits:** the two source relations in schema `extensions` are explicitly reported separately (source 2, restore 0) and are not part of the strict application-relation parity assertion; extension-member parity is therefore not proven. Core data tables and auth users/identities were empty in this disposable smoke. It is not a representative production-data restore, full Supabase managed-schema restore, measured RPO/RTO exercise, or recovery acceptance.
+
+The other exact-head workflows also passed: [Web Unit](https://github.com/abdalrhmanata-gif/nexo-w21-isolated-verification-20261015/actions/runs/39157509792), [Web CI/build](https://github.com/abdalrhmanata-gif/nexo-w21-isolated-verification-20261015/actions/runs/39157509751), and [Flutter CI](https://github.com/abdalrhmanata-gif/nexo-w21-isolated-verification-20261015/actions/runs/39157509777).
+
+The four public-launch blockers remain open: hosted Development privilege/schema drift; unresolved historic migration source/provenance; no independent security/database review; and no full recovery/RPO/RTO, staffed operations exercise, detailed T01–T05 observations, or accountable release approval. Keep `hosted_write_authorized=false`, `TRUSTED_DISPATCH_ADAPTERS` empty/fail-closed, and public release **NO-GO**.

@@ -223,3 +223,8 @@ Each of T01, T02, T03, T04 and T05 is recorded only as:
 No quotes, timings, friction frequency, retention or conversion were invented.
 No repeated high-severity user friction was established by this launch audit,
 and no speculative product behavior change was made.
+
+
+## Current isolated recovery smoke — 39157505523
+
+The exact W21 source/test HEAD `86b8b49ee3dd16371ca607089f49de8ba0778f9f` passed [W21 run 39157505523](https://github.com/abdalrhmanata-gif/nexo-w21-isolated-verification-20261015/actions/runs/39157505523), 27/27 steps. Browser E2E was 2/2; the disposable logical restore smoke matched 51 application/auth/migration relations and checked core row counts, then verified removal of the temporary database and dump. It was an empty-data, allowlisted-schema smoke; extension relation parity was excluded (source 2, restored 0), and there is no production-data restore or RPO/RTO evidence. The four documented blockers remain open and public production remains **NO-GO**. See [the current blocker closure register](ZAVQERA_BLOCKER_CLOSURE_REGISTER_2026-10-18.md).
