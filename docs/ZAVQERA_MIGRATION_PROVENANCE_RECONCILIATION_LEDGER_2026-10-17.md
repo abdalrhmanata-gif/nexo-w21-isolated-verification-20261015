@@ -168,3 +168,15 @@ A separate forward-only candidate now exists in the original application reposit
 **Provenance boundary:** this is a new candidate migration named `20261019193000_w83_anonymous_ai_rpc_public_invoker_wrappers`, not the missing historical hosted tuple `20261007105825_expose_anonymous_ai_guard_rpc` (ZMR-090). It does not recover that migration's original SQL bytes, prove what was deployed, or establish that the new wrappers are semantically identical to the missing historical migration. Therefore ZMR-090 remains `HOSTED_ONLY_SOURCE_UNKNOWN` / `PENDING`; no row classification, evidence digest, or authorization field is changed by this update.
 
 The W83 candidate remains Draft / unmerged and has not been applied to hosted Development or Production. Hosted effective ACL/schema settings and independent review remain outstanding. `hosted_write_authorized=false`; release remains **NO-GO**.
+
+## W83 runtime header-contract regression hardening — 2026-10-19
+
+Original-repository PR [#40](https://github.com/abdalrhmanata-gif/Nexo/pull/40) now includes a runtime-tested server-key header helper. Current candidate head: `fcaf4b0b2b5f9bb09f2b3a47988e8f66bacb0201`.
+
+- Runtime tests exercise modern `sb_secret_...` keys (`apikey` only), legacy JWT keys (`apikey` plus `Authorization: Bearer`), and unsupported formats (fail closed).
+- A `.d.mts` declaration resolves the `.mjs` import under strict TypeScript with `allowJs=false`.
+- Exact-head Web CI [run 39308859627](https://github.com/abdalrhmanata-gif/Nexo/actions/runs/39308859627), Web Unit [run 39308859605](https://github.com/abdalrhmanata-gif/Nexo/actions/runs/39308859605), and Flutter CI [run 39308859494](https://github.com/abdalrhmanata-gif/Nexo/actions/runs/39308859494) all **SUCCESS**.
+- Exact-head disposable PostgreSQL 17 / Supabase REST / pgTAP [run 39308859609](https://github.com/abdalrhmanata-gif/Nexo/actions/runs/39308859609) **SUCCESS**: `w83_assertions_planned=28`, `w83_assertions_reported=28`, `w83_assertions_failed=0`; migration replay through W83 and after W83 exited 0; local REST reserve/consume/release and repeat-settlement denial passed; cleanup proof reports no remaining project containers or volumes.
+- Evidence artifact [12214867931](https://github.com/abdalrhmanata-gif/Nexo/actions/runs/39308859609/artifacts/12214867931), SHA-256 `9f70103d16d17c97201166cbc23238936924e17aeeca9757c23bee7edaa2a378`. The W83 migration and SQL pgTAP test were unchanged by the runtime-header-test hardening; evidence is from the PR merge ref carrying the same migration/test blobs.
+
+**Scope limit:** these checks validate the isolated candidate only. They do not verify the hosted Development key format, effective schema/ACL settings, deployed historical SQL, or any production behavior. The W83 candidate is not the missing historic tuple `20261007105825_expose_anonymous_ai_guard_rpc` (ZMR-090). ZMR-090 remains `HOSTED_SOURCE_UNKNOWN` / `PENDING`; no historical SQL bytes or trusted deployment record were recovered. PR #40 remains Draft/Open/Unmerged. `hosted_write_authorized=false`; release remains **NO-GO**.
