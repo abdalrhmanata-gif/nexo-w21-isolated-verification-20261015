@@ -229,72 +229,34 @@ docker exec --user postgres "$DB_CONTAINER" createdb \
 # empty default only in the disposable target so pg_restore can recreate it.
 docker exec --user postgres "$DB_CONTAINER" psql -Xv ON_ERROR_STOP=1 -U postgres -d "$RESTORE_DB" \
   -c "DROP SCHEMA public CASCADE"
-# Restore schema first. During data-only restore, disable user-defined triggers
-# on restored table objects only. Keep PostgreSQL's internal RI/FK triggers
-# enabled, so relational integrity remains enforced. Snapshot and restore each
-# user-trigger mode exactly; this avoids trigger side effects requiring app JWTs
-# or duplicate derived rows, without bypassing foreign-key checks.
+# Run pg_restore in PostgreSQL's canonical three phases on the disposable
+# target: tables/types/functions first, then every data row, then indexes,
+# foreign keys and user triggers. This lets data load in any TOC order while
+# all foreign-key constraints are added and validated after data import. No
+# internal or user trigger is manually disabled, and failures remain fatal.
 docker exec --user postgres "$DB_CONTAINER" pg_restore \
-  --schema-only --exit-on-error --no-owner --no-acl --dbname="$RESTORE_DB" "$DUMP_PATH"
-docker exec -i --user postgres "$DB_CONTAINER" psql -Xv ON_ERROR_STOP=1 -U postgres -d "$RESTORE_DB" <<'SQL'
-CREATE SCHEMA w21_restore_control;
-CREATE TABLE w21_restore_control.trigger_state AS
-SELECT n.nspname::text AS schema_name,
-       c.relname::text AS table_name,
-       t.tgname::text AS trigger_name,
-       t.tgenabled::text AS enabled_mode
+  --section=pre-data --exit-on-error --no-owner --no-acl --dbname="$RESTORE_DB" "$DUMP_PATH"
+docker exec --user postgres "$DB_CONTAINER" pg_restore \
+  --section=data --exit-on-error --no-owner --no-acl --dbname="$RESTORE_DB" "$DUMP_PATH"
+docker exec --user postgres "$DB_CONTAINER" pg_restore \
+  --section=post-data --exit-on-error --no-owner --no-acl --dbname="$RESTORE_DB" "$DUMP_PATH"
+
+trigger_signature_query="SELECT coalesce(string_agg(
+  n.nspname || '.' || c.relname || '.' || t.tgname || ':' || t.tgenabled,
+  ',' ORDER BY n.nspname, c.relname, t.tgname
+), '')
 FROM pg_catalog.pg_trigger t
 JOIN pg_catalog.pg_class c ON c.oid = t.tgrelid
 JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace
 WHERE NOT t.tgisinternal
   AND c.relkind IN ('r', 'p')
-  AND n.nspname IN ('public', 'private', 'auth', 'extensions', 'supabase_migrations');
-
-DO $w21$
-DECLARE r record;
-BEGIN
-  FOR r IN
-    SELECT schema_name, table_name, trigger_name
-    FROM w21_restore_control.trigger_state
-    WHERE enabled_mode <> 'D'
-  LOOP
-    EXECUTE format('ALTER TABLE %I.%I DISABLE TRIGGER %I',
-                   r.schema_name, r.table_name, r.trigger_name);
-  END LOOP;
-END
-$w21$;
-SQL
-docker exec --user postgres "$DB_CONTAINER" pg_restore \
-  --data-only --exit-on-error --no-owner --no-acl --dbname="$RESTORE_DB" "$DUMP_PATH"
-docker exec -i --user postgres "$DB_CONTAINER" psql -Xv ON_ERROR_STOP=1 -U postgres -d "$RESTORE_DB" <<'SQL'
-DO $w21$
-DECLARE r record;
-BEGIN
-  FOR r IN
-    SELECT schema_name, table_name, trigger_name, enabled_mode
-    FROM w21_restore_control.trigger_state
-  LOOP
-    CASE r.enabled_mode
-      WHEN 'O' THEN
-        EXECUTE format('ALTER TABLE %I.%I ENABLE TRIGGER %I',
-                       r.schema_name, r.table_name, r.trigger_name);
-      WHEN 'R' THEN
-        EXECUTE format('ALTER TABLE %I.%I ENABLE REPLICA TRIGGER %I',
-                       r.schema_name, r.table_name, r.trigger_name);
-      WHEN 'A' THEN
-        EXECUTE format('ALTER TABLE %I.%I ENABLE ALWAYS TRIGGER %I',
-                       r.schema_name, r.table_name, r.trigger_name);
-      WHEN 'D' THEN
-        NULL;
-      ELSE
-        RAISE EXCEPTION 'Unknown trigger mode % for %.%.%',
-          r.enabled_mode, r.schema_name, r.table_name, r.trigger_name;
-    END CASE;
-  END LOOP;
-END
-$w21$;
-DROP SCHEMA w21_restore_control CASCADE;
-SQL
+  AND n.nspname IN ('public', 'private', 'auth', 'supabase_migrations')"
+SOURCE_TRIGGER_SIGNATURE="$(docker exec --user postgres "$DB_CONTAINER" psql -XAt -U postgres -d postgres -c "$trigger_signature_query")"
+RESTORE_TRIGGER_SIGNATURE="$(docker exec --user postgres "$DB_CONTAINER" psql -XAt -U postgres -d "$RESTORE_DB" -c "$trigger_signature_query")"
+if [[ "$SOURCE_TRIGGER_SIGNATURE" != "$RESTORE_TRIGGER_SIGNATURE" ]]; then
+  echo "Restore smoke failed: non-internal application trigger definitions or enabled modes differ after post-data restore." >&2
+  exit 1
+fi
 RESTORE_TRIGGER_MODES_RESTORED="true"
 restore_profile_trigger_check="$(docker exec --user postgres "$DB_CONTAINER" psql -XAt -U postgres -d "$RESTORE_DB" \
   -c "SELECT EXISTS (SELECT 1 FROM pg_catalog.pg_trigger WHERE tgname = 'on_auth_user_created' AND tgrelid = 'auth.users'::regclass AND NOT tgisinternal AND tgenabled = 'O')")"
