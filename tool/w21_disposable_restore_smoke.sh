@@ -17,6 +17,11 @@ SOURCE_RELATIONS="unknown"
 RESTORE_RELATIONS="unknown"
 SOURCE_EXTENSION_RELATIONS="unknown"
 RESTORE_EXTENSION_RELATIONS="unknown"
+SOURCE_EXTENSION_SIGNATURE="unknown"
+RESTORE_EXTENSION_SIGNATURE="unknown"
+SOURCE_EXTENSION_INVENTORY="unknown"
+RESTORE_EXTENSION_INVENTORY="unknown"
+EXTENSION_PARITY="false"
 SENTINEL_ID="w21-restore-$GITHUB_RUN_ID"
 SENTINEL_PAYLOAD="zavqera-disposable-restore-smoke:$GITHUB_RUN_ID"
 SENTINEL_CREATED="false"
@@ -109,7 +114,7 @@ finish() {
   fi
 
   {
-    echo "restore_smoke=$([[ "$original_status" -eq 0 && "$RESTORE_OK" == "true" && "$SENTINEL_ROW_MATCHED" == "true" && "$FIXTURE_SEED_SUCCEEDED" == "true" && "$FIXTURE_ROW_MATCHED" == "true" && "$RESTORE_PROFILE_TRIGGER_ENABLED" == "true" && "$RESTORE_TRIGGER_MODES_RESTORED" == "true" && "$CLEANUP_VERIFIED" == "true" ]] && printf PASS || printf FAIL)"
+    echo "restore_smoke=$([[ "$original_status" -eq 0 && "$RESTORE_OK" == "true" && "$SENTINEL_ROW_MATCHED" == "true" && "$FIXTURE_SEED_SUCCEEDED" == "true" && "$FIXTURE_ROW_MATCHED" == "true" && "$RESTORE_PROFILE_TRIGGER_ENABLED" == "true" && "$RESTORE_TRIGGER_MODES_RESTORED" == "true" && "$EXTENSION_PARITY" == "true" && "$CLEANUP_VERIFIED" == "true" ]] && printf PASS || printf FAIL)"
     echo "project_id=$PROJECT_ID"
     echo "source_database=postgres"
     echo "restore_database=$RESTORE_DB"
@@ -119,7 +124,11 @@ finish() {
     echo "restored_app_relation_count=$RESTORE_RELATIONS"
     echo "source_extension_relation_count=$SOURCE_EXTENSION_RELATIONS"
     echo "restored_extension_relation_count=$RESTORE_EXTENSION_RELATIONS"
-    echo "extension_membership_note=extension-owned members may be recreated by CREATE EXTENSION and are not compared as application relations"
+    echo "source_extension_signature=$SOURCE_EXTENSION_SIGNATURE"
+    echo "restored_extension_signature=$RESTORE_EXTENSION_SIGNATURE"
+    echo "source_extension_inventory=$SOURCE_EXTENSION_INVENTORY"
+    echo "restored_extension_inventory=$RESTORE_EXTENSION_INVENTORY"
+    echo "extension_parity=$EXTENSION_PARITY"
     echo "sentinel_row_matched=$SENTINEL_ROW_MATCHED"
     echo "synthetic_fixture_seeded=$FIXTURE_SEED_SUCCEEDED"
     echo "synthetic_fixture_row_matched=$FIXTURE_ROW_MATCHED"
@@ -211,9 +220,25 @@ COMMIT;
 SQL
 FIXTURE_SEED_SUCCEEDED="true"
 
-# Create the archive only inside the explicitly labeled local test container.
+# Include extension definitions installed into the allowlisted extensions schema.
+# Explicit extension selection prevents schema filtering from silently omitting
+# extension-owned relations, which must be recreated by CREATE EXTENSION.
+DUMP_EXTENSION_ARGS=""
+source_extension_names="$(docker exec --user postgres "$DB_CONTAINER" psql -XAt -U postgres -d postgres -c "SELECT e.extname FROM pg_catalog.pg_extension e JOIN pg_catalog.pg_namespace n ON n.oid = e.extnamespace WHERE n.nspname = 'extensions' ORDER BY e.extname")"
+while IFS= read -r extension_name; do
+  [[ -n "$extension_name" ]] || continue
+  if [[ ! "$extension_name" =~ ^[A-Za-z0-9_.-]+$ ]]; then
+    echo "Refusing restore smoke: unexpected extension identifier cannot be passed safely to pg_dump." >&2
+    exit 2
+  fi
+  DUMP_EXTENSION_ARGS="$DUMP_EXTENSION_ARGS --extension=$extension_name"
+done <<< "$source_extension_names"
+
+# The unquoted option list is safe because extension names are validated above
+# to contain only letters, digits, underscore, dot and hyphen.
 docker exec --user postgres "$DB_CONTAINER" pg_dump \
   --format=custom --no-owner --no-acl \
+  $DUMP_EXTENSION_ARGS \
   --schema=public \
   --schema=private \
   --schema=auth \
@@ -271,13 +296,29 @@ RESTORE_PROFILE_TRIGGER_ENABLED="true"
 
 relation_query="SELECT count(*) FROM pg_catalog.pg_class c JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace WHERE n.nspname IN ('public','private','auth','supabase_migrations') AND c.relkind IN ('r','p','v','m','S','f')"
 extension_relation_query="SELECT count(*) FROM pg_catalog.pg_class c JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace WHERE n.nspname = 'extensions' AND c.relkind IN ('r','p','v','m','S','f')"
+extension_signature_query="SELECT coalesce(string_agg(c.relname || ':' || c.relkind::text, ',' ORDER BY c.relname), '') FROM pg_catalog.pg_class c JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace WHERE n.nspname = 'extensions' AND c.relkind IN ('r','p','v','m','S','f')"
+extension_inventory_query="SELECT coalesce(string_agg(e.extname || ':' || e.extversion || ':' || n.nspname, ',' ORDER BY e.extname), '') FROM pg_catalog.pg_extension e JOIN pg_catalog.pg_namespace n ON n.oid = e.extnamespace WHERE n.nspname = 'extensions'"
 SOURCE_RELATIONS="$(docker exec --user postgres "$DB_CONTAINER" psql -XAt -U postgres -d postgres -c "$relation_query")"
 RESTORE_RELATIONS="$(docker exec --user postgres "$DB_CONTAINER" psql -XAt -U postgres -d "$RESTORE_DB" -c "$relation_query")"
 SOURCE_EXTENSION_RELATIONS="$(docker exec --user postgres "$DB_CONTAINER" psql -XAt -U postgres -d postgres -c "$extension_relation_query")"
 RESTORE_EXTENSION_RELATIONS="$(docker exec --user postgres "$DB_CONTAINER" psql -XAt -U postgres -d "$RESTORE_DB" -c "$extension_relation_query")"
+SOURCE_EXTENSION_SIGNATURE="$(docker exec --user postgres "$DB_CONTAINER" psql -XAt -U postgres -d postgres -c "$extension_signature_query")"
+RESTORE_EXTENSION_SIGNATURE="$(docker exec --user postgres "$DB_CONTAINER" psql -XAt -U postgres -d "$RESTORE_DB" -c "$extension_signature_query")"
+SOURCE_EXTENSION_INVENTORY="$(docker exec --user postgres "$DB_CONTAINER" psql -XAt -U postgres -d postgres -c "$extension_inventory_query")"
+RESTORE_EXTENSION_INVENTORY="$(docker exec --user postgres "$DB_CONTAINER" psql -XAt -U postgres -d "$RESTORE_DB" -c "$extension_inventory_query")"
 [[ "$SOURCE_RELATIONS" =~ ^[0-9]+$ && "$RESTORE_RELATIONS" =~ ^[0-9]+$ ]]
 [[ "$SOURCE_EXTENSION_RELATIONS" =~ ^[0-9]+$ && "$RESTORE_EXTENSION_RELATIONS" =~ ^[0-9]+$ ]]
 [[ "$SOURCE_RELATIONS" == "$RESTORE_RELATIONS" ]]
+if [[ "$SOURCE_EXTENSION_SIGNATURE" != "$RESTORE_EXTENSION_SIGNATURE" || "$SOURCE_EXTENSION_INVENTORY" != "$RESTORE_EXTENSION_INVENTORY" ]]; then
+  echo "Restore smoke failed: extension-owned relation or extension inventory differs." >&2
+  printf 'source_extension_signature=%s\n' "$SOURCE_EXTENSION_SIGNATURE" >&2
+  printf 'restore_extension_signature=%s\n' "$RESTORE_EXTENSION_SIGNATURE" >&2
+  printf 'source_extension_inventory=%s\n' "$SOURCE_EXTENSION_INVENTORY" >&2
+  printf 'restore_extension_inventory=%s\n' "$RESTORE_EXTENSION_INVENTORY" >&2
+  exit 1
+fi
+EXTENSION_PARITY="true"
+[[ "$SOURCE_EXTENSION_RELATIONS" == "$RESTORE_EXTENSION_RELATIONS" ]]
 
 for relation in \
   public.profiles \
