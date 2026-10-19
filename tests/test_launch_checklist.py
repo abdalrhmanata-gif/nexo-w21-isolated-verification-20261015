@@ -260,6 +260,28 @@ class LaunchChecklistValidatorTests(unittest.TestCase):
         )
         self.assertTrue(any("explicitly disclaims required scope=HOSTED_READ_ONLY_CAPTURE" in error for error in validate_checklist(gate_d)))
 
+    def test_synthetic_ci_logical_restore_smoke_cannot_satisfy_application_backup_restore(self):
+        candidate = "e123ead90684b64a9809ad6d4ba7b8ddcb155155"
+        mutated = select_candidate(self.text, candidate)
+        gate_g = replace_gate_field(mutated, "G", "Status", "PASS")
+        gate_g = replace_gate_field(
+            gate_g,
+            "G",
+            "Evidence / exact source SHA",
+            f"candidate_sha={candidate}; tested_sha={candidate}; scope=application_backup_restore; owner_approval=PASS by Alice; independent_review=PASS by Bob; synthetic CI logical-restore smoke.",
+        )
+        gate_g = replace_gate_field(
+            gate_g,
+            "G",
+            "Accountable owner / independent reviewer",
+            "Alice (backup/recovery owner) / Bob (independent recovery reviewer).",
+        )
+        errors = validate_checklist(gate_g)
+        self.assertTrue(
+            any("explicitly disclaims required scope=APPLICATION_BACKUP_RESTORE" in error for error in errors),
+            errors,
+        )
+
     def test_scope_prefix_does_not_satisfy_a_different_scope(self):
         candidate = "e123ead90684b64a9809ad6d4ba7b8ddcb155155"
         mutated = select_candidate(self.text, candidate)

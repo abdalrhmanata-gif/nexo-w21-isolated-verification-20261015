@@ -43,7 +43,7 @@ SCOPE_LIMITATIONS = {
         re.IGNORECASE,
     ),
     "APPLICATION_BACKUP_RESTORE": re.compile(
-        r"\b(?:synthetic .*smoke test|not full application recovery|not application recovery|not a full application restore)\b",
+        r"\b(?:synthetic\s+.*\b(?:logical[- ]restore|backup[-/ ]restore|restore)\s+smoke(?:\s+test)?|disposable\s+.*\brestore\s+smoke(?:\s+test)?|not full application recovery|not application recovery|not a full application restore|not a representative (?:production-data )?(?:application )?(?:backup|restore|recovery))\b",
         re.IGNORECASE,
     ),
     "PROVIDER_CONTRACT_REVIEW": re.compile(
