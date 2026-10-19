@@ -242,7 +242,7 @@ docker exec --user postgres "$DB_CONTAINER" pg_restore \
   --section=post-data --exit-on-error --no-owner --no-acl --dbname="$RESTORE_DB" "$DUMP_PATH"
 
 trigger_signature_query="SELECT coalesce(string_agg(
-  n.nspname || '.' || c.relname || '.' || t.tgname || ':' || t.tgenabled,
+  n.nspname || '.' || c.relname || '.' || t.tgname || ':' || t.tgenabled::text,
   ',' ORDER BY n.nspname, c.relname, t.tgname
 ), '')
 FROM pg_catalog.pg_trigger t
