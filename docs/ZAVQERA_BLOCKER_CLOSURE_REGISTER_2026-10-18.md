@@ -101,3 +101,17 @@ A live GitHub refresh on 2026-10-19 confirmed:
 - Independent-review invitation [Issue #4](https://github.com/abdalrhmanata-gif/nexo-w21-isolated-verification-20261015/issues/4) remains open. The latest visible update is the repository owner's invitation refreshed on 2026-10-19, not a reviewer response or review.
 
 This refresh changes no blocker disposition. Hosted Development security/schema drift remains **OPEN / HIGH**; historical migration provenance remains **OPEN / UNKNOWN**; independent review remains **OPEN**; and representative recovery/operations/user-acceptance remains **OPEN**. Keep public production **NO-GO**, `hosted_write_authorized=false`, and `TRUSTED_DISPATCH_ADAPTERS` empty/fail-closed. No hosted database writes, migration-ledger edits, production deployment, provider activation, secret/DNS/billing/auth configuration changes, or protected PR merges are authorized by this entry.
+
+## Superseding exact corrected-head CI — 2026-10-19 — `425b1cc8269d1e5d7d964d3180016fa13278997e`
+
+The corrected closure-register revision passed all three GitHub PR workflows on exact source HEAD `425b1cc8269d1e5d7d964d3180016fa13278997e`:
+
+- [Web CI/build — run 39231017247](https://github.com/abdalrhmanata-gif/nexo-w21-isolated-verification-20261015/actions/runs/39231017247): SUCCESS.
+- [Web Unit — run 39231017012](https://github.com/abdalrhmanata-gif/nexo-w21-isolated-verification-20261015/actions/runs/39231017012): SUCCESS.
+- [Flutter CI — run 39231017180](https://github.com/abdalrhmanata-gif/nexo-w21-isolated-verification-20261015/actions/runs/39231017180): SUCCESS; the launch-checklist and workflow-classification regression group reported 37/37 tests passing.
+
+The preceding documentation-only commit `b67698b6488e8d458f0c859eace0f32f7acf406f` failed Flutter CI only because the diff checker found a blank line at EOF after the same 37 regression tests had passed. That trailing blank line was removed; the corrected-head workflow above passed.
+
+W21 was **not** rerun on `425b1cc`. Its latest verified pass remains [run 39227492355](https://github.com/abdalrhmanata-gif/nexo-w21-isolated-verification-20261015/actions/runs/39227492355), 27/27, at `f7eeb4a3be927e848307715845f4eb35d5b41382`. Later commits through `425b1cc` changed only documentation/formatting, not application code, tests, or the W21 workflow.
+
+This is CI evidence only and does not close any of the four launch blockers. PR #3 stays **OPEN / DRAFT / UNMERGED**; hosted Development drift, historical migration provenance, independent review, and representative recovery/operations/product acceptance remain open. Keep public production **NO-GO**, `hosted_write_authorized=false`, and `TRUSTED_DISPATCH_ADAPTERS` empty/fail-closed.
