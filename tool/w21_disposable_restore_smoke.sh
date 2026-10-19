@@ -35,6 +35,7 @@ SOURCE_FIXTURE_SIGNATURE="not-created"
 RESTORE_FIXTURE_SIGNATURE="not-created"
 FIXTURE_EXPECTED_SIGNATURE=""
 RESTORE_PROFILE_TRIGGER_ENABLED="false"
+RESTORE_TRIGGER_MODES_RESTORED="false"
 SOURCE_SENTINEL_REMOVED="false"
 RESTORE_OK="false"
 RESTORE_DB_REMOVED="false"
@@ -108,7 +109,7 @@ finish() {
   fi
 
   {
-    echo "restore_smoke=$([[ "$original_status" -eq 0 && "$RESTORE_OK" == "true" && "$SENTINEL_ROW_MATCHED" == "true" && "$FIXTURE_SEED_SUCCEEDED" == "true" && "$FIXTURE_ROW_MATCHED" == "true" && "$RESTORE_PROFILE_TRIGGER_ENABLED" == "true" && "$CLEANUP_VERIFIED" == "true" ]] && printf PASS || printf FAIL)"
+    echo "restore_smoke=$([[ "$original_status" -eq 0 && "$RESTORE_OK" == "true" && "$SENTINEL_ROW_MATCHED" == "true" && "$FIXTURE_SEED_SUCCEEDED" == "true" && "$FIXTURE_ROW_MATCHED" == "true" && "$RESTORE_PROFILE_TRIGGER_ENABLED" == "true" && "$RESTORE_TRIGGER_MODES_RESTORED" == "true" && "$CLEANUP_VERIFIED" == "true" ]] && printf PASS || printf FAIL)"
     echo "project_id=$PROJECT_ID"
     echo "source_database=postgres"
     echo "restore_database=$RESTORE_DB"
@@ -124,6 +125,7 @@ finish() {
     echo "synthetic_fixture_row_matched=$FIXTURE_ROW_MATCHED"
     echo "synthetic_fixture_removed=$FIXTURE_REMOVED"
     echo "restore_auth_profile_trigger_enabled=$RESTORE_PROFILE_TRIGGER_ENABLED"
+    echo "restore_user_trigger_modes_restored=$RESTORE_TRIGGER_MODES_RESTORED"
     echo "source_sentinel_removed=$SOURCE_SENTINEL_REMOVED"
     echo "restore_database_removed=$RESTORE_DB_REMOVED"
     echo "dump_removed=$DUMP_REMOVED"
@@ -227,18 +229,73 @@ docker exec --user postgres "$DB_CONTAINER" createdb \
 # empty default only in the disposable target so pg_restore can recreate it.
 docker exec --user postgres "$DB_CONTAINER" psql -Xv ON_ERROR_STOP=1 -U postgres -d "$RESTORE_DB" \
   -c "DROP SCHEMA public CASCADE"
-# Restore schema first. The auth profile trigger auto-creates public.profiles when
-# auth.users rows load, but the dump already contains those profile rows. Drop
-# only this application trigger in the disposable target during data import;
-# leave all FK/system constraint triggers enabled, then recreate and verify it.
+# Restore schema first. During data-only restore, disable user-defined triggers
+# on restored table objects only. Keep PostgreSQL's internal RI/FK triggers
+# enabled, so relational integrity remains enforced. Snapshot and restore each
+# user-trigger mode exactly; this avoids trigger side effects requiring app JWTs
+# or duplicate derived rows, without bypassing foreign-key checks.
 docker exec --user postgres "$DB_CONTAINER" pg_restore \
   --schema-only --exit-on-error --no-owner --no-acl --dbname="$RESTORE_DB" "$DUMP_PATH"
-docker exec --user postgres "$DB_CONTAINER" psql -Xv ON_ERROR_STOP=1 -U postgres -d "$RESTORE_DB" \
-  -c "DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users"
+docker exec -i --user postgres "$DB_CONTAINER" psql -Xv ON_ERROR_STOP=1 -U postgres -d "$RESTORE_DB" <<'SQL'
+CREATE SCHEMA w21_restore_control;
+CREATE TABLE w21_restore_control.trigger_state AS
+SELECT n.nspname::text AS schema_name,
+       c.relname::text AS table_name,
+       t.tgname::text AS trigger_name,
+       t.tgenabled::text AS enabled_mode
+FROM pg_catalog.pg_trigger t
+JOIN pg_catalog.pg_class c ON c.oid = t.tgrelid
+JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace
+WHERE NOT t.tgisinternal
+  AND c.relkind IN ('r', 'p')
+  AND n.nspname IN ('public', 'private', 'auth', 'extensions', 'supabase_migrations');
+
+DO $w21$
+DECLARE r record;
+BEGIN
+  FOR r IN
+    SELECT schema_name, table_name, trigger_name
+    FROM w21_restore_control.trigger_state
+    WHERE enabled_mode <> 'D'
+  LOOP
+    EXECUTE format('ALTER TABLE %I.%I DISABLE TRIGGER %I',
+                   r.schema_name, r.table_name, r.trigger_name);
+  END LOOP;
+END
+$w21$;
+SQL
 docker exec --user postgres "$DB_CONTAINER" pg_restore \
   --data-only --exit-on-error --no-owner --no-acl --dbname="$RESTORE_DB" "$DUMP_PATH"
-docker exec --user postgres "$DB_CONTAINER" psql -Xv ON_ERROR_STOP=1 -U postgres -d "$RESTORE_DB" \
-  -c "CREATE TRIGGER on_auth_user_created AFTER INSERT ON auth.users FOR EACH ROW EXECUTE FUNCTION private.handle_new_user_profile()"
+docker exec -i --user postgres "$DB_CONTAINER" psql -Xv ON_ERROR_STOP=1 -U postgres -d "$RESTORE_DB" <<'SQL'
+DO $w21$
+DECLARE r record;
+BEGIN
+  FOR r IN
+    SELECT schema_name, table_name, trigger_name, enabled_mode
+    FROM w21_restore_control.trigger_state
+  LOOP
+    CASE r.enabled_mode
+      WHEN 'O' THEN
+        EXECUTE format('ALTER TABLE %I.%I ENABLE TRIGGER %I',
+                       r.schema_name, r.table_name, r.trigger_name);
+      WHEN 'R' THEN
+        EXECUTE format('ALTER TABLE %I.%I ENABLE REPLICA TRIGGER %I',
+                       r.schema_name, r.table_name, r.trigger_name);
+      WHEN 'A' THEN
+        EXECUTE format('ALTER TABLE %I.%I ENABLE ALWAYS TRIGGER %I',
+                       r.schema_name, r.table_name, r.trigger_name);
+      WHEN 'D' THEN
+        NULL;
+      ELSE
+        RAISE EXCEPTION 'Unknown trigger mode % for %.%.%',
+          r.enabled_mode, r.schema_name, r.table_name, r.trigger_name;
+    END CASE;
+  END LOOP;
+END
+$w21$;
+DROP SCHEMA w21_restore_control CASCADE;
+SQL
+RESTORE_TRIGGER_MODES_RESTORED="true"
 restore_profile_trigger_check="$(docker exec --user postgres "$DB_CONTAINER" psql -XAt -U postgres -d "$RESTORE_DB" \
   -c "SELECT EXISTS (SELECT 1 FROM pg_catalog.pg_trigger WHERE tgname = 'on_auth_user_created' AND tgrelid = 'auth.users'::regclass AND NOT tgisinternal AND tgenabled = 'O')")"
 if [[ "$restore_profile_trigger_check" != "t" ]]; then
