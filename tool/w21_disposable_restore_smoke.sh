@@ -123,6 +123,9 @@ finish() {
     echo "sentinel_row_matched=$SENTINEL_ROW_MATCHED"
     echo "synthetic_fixture_seeded=$FIXTURE_SEED_SUCCEEDED"
     echo "synthetic_fixture_row_matched=$FIXTURE_ROW_MATCHED"
+    echo "synthetic_fixture_expected_signature=$FIXTURE_EXPECTED_SIGNATURE"
+    echo "synthetic_fixture_source_signature=$SOURCE_FIXTURE_SIGNATURE"
+    echo "synthetic_fixture_restore_signature=$RESTORE_FIXTURE_SIGNATURE"
     echo "synthetic_fixture_removed=$FIXTURE_REMOVED"
     echo "restore_auth_profile_trigger_enabled=$RESTORE_PROFILE_TRIGGER_ENABLED"
     echo "restore_user_trigger_modes_restored=$RESTORE_TRIGGER_MODES_RESTORED"
@@ -325,7 +328,10 @@ fixture_signature_query="SELECT concat(
 SOURCE_FIXTURE_SIGNATURE="$(docker exec --user postgres "$DB_CONTAINER" psql -XAt -U postgres -d postgres -c "$fixture_signature_query")"
 RESTORE_FIXTURE_SIGNATURE="$(docker exec --user postgres "$DB_CONTAINER" psql -XAt -U postgres -d "$RESTORE_DB" -c "$fixture_signature_query")"
 if [[ "$SOURCE_FIXTURE_SIGNATURE" != "$FIXTURE_EXPECTED_SIGNATURE" || "$RESTORE_FIXTURE_SIGNATURE" != "$FIXTURE_EXPECTED_SIGNATURE" || "$SOURCE_FIXTURE_SIGNATURE" != "$RESTORE_FIXTURE_SIGNATURE" ]]; then
-  echo "Synthetic application fixture mismatch: source/restored signatures differ from the exact expected relationship fingerprint." >&2
+  echo "Synthetic application fixture mismatch." >&2
+  printf 'expected_fixture_signature=%s\n' "$FIXTURE_EXPECTED_SIGNATURE" >&2
+  printf 'source_fixture_signature=%s\n' "$SOURCE_FIXTURE_SIGNATURE" >&2
+  printf 'restore_fixture_signature=%s\n' "$RESTORE_FIXTURE_SIGNATURE" >&2
   exit 1
 fi
 FIXTURE_ROW_MATCHED="true"
