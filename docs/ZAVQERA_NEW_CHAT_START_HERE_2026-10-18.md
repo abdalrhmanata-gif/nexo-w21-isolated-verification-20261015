@@ -145,3 +145,12 @@ If the next assistant encounters conflicting historical statuses, follow this or
 2) this 2026-10-18 handoff addendum;
 3) full 2026-10-17 checkpoint’s newest verified dated addenda;
 4) older reports (retained for history, not current state).
+
+## 10. Continuity addendum — 2026-10-19 (after W83 candidate verification)
+
+- Latest migration-provenance documentation follow-up: commit [6b7e31e27909b299ab7b9de2712bef0126b7b347](https://github.com/abdalrhmanata-gif/nexo-w21-isolated-verification-20261015/commit/6b7e31e27909b299ab7b9de2712bef0126b7b347), which appends a provenance-boundary note to `docs/ZAVQERA_MIGRATION_PROVENANCE_RECONCILIATION_LEDGER_2026-10-17.md`.
+- The note records original-repository PR #40's forward-only W83 anonymous AI RPC wrappers candidate and exact-head isolated evidence: [W83 PG17/REST/pgTAP run 39306124967](https://github.com/abdalrhmanata-gif/Nexo/actions/runs/39306124967) PASS (28/28 pgTAP; migration replay before/after; REST reserve/consume/release and repeat-settlement denial; cleanup), with Web CI, Web Unit and Flutter CI also PASS on W83 head `ce4f098d018741110f2f0d2c66d3f8188238041a`.
+- **Do not conflate candidate code with historic provenance:** the W83 migration `20261019193000_w83_anonymous_ai_rpc_public_invoker_wrappers` is not the missing hosted migration `20261007105825_expose_anonymous_ai_guard_rpc` (ZMR-090). ZMR-090 remains `HOSTED_ONLY_SOURCE_UNKNOWN` / `PENDING`; no historical SQL bytes or trusted deployment record have been recovered.
+- PR #2 received a provenance update comment: [comment 6275060928](https://github.com/abdalrhmanata-gif/nexo-w21-isolated-verification-20261015/pull/2#issuecomment-6275060928).
+- Exact PR #2 head before this continuity-only append was `6b7e31e27909b299ab7b9de2712bef0126b7b347`. The workflow lookup returned no PR-triggered workflow runs for that commit; do not claim CI passed for the docs follow-up. Recheck the new head's workflow status next time.
+- All guardrails unchanged: `hosted_write_authorized=false`; no hosted DB/migration/ledger/deployment/secret changes; no PR merges; `TRUSTED_DISPATCH_ADAPTERS` empty/fail-closed; release **NO-GO**. The next meaningful provenance step still requires a new evidence source outside accessible GitHub branch/path history (owner-controlled clone/reflog, deployment workspace/artifact/log, migration bundle, release archive, or trusted backup).
