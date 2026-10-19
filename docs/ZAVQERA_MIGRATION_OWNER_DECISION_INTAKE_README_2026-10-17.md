@@ -68,3 +68,15 @@ python tools/validate_zavqera_migration_owner_intake.py
 ```
 
 The validator cross-checks all 95 IDs and immutable baseline fields against the source ledger and enforces the 46/22/21/6 metadata and classification counts. OPEN rows may be assigned to a reviewer while remaining pending. Reviewed dispositions are accepted only when their required evidence and reviewer rationale are present; `EXACT_SOURCE_BYTES_VERIFIED`, `NAME_VERSION_CONFLICT_RESOLVED`, and `HOSTED_ONLY_SOURCE_RECOVERED` require actual source/deployment evidence and equal valid 64-character SQL SHA-256 digests. `SOURCE_ONLY_REVIEWED` must not imply that ledger absence proves non-deployment. The validator rejects incomplete or contradictory evidence, altered baseline tuples, duplicate/missing rows, invalid dispositions, or any attempt to authorize a hosted write. It makes no network requests or database connections. This gate protects intake integrity; it does not establish source facts that have not been supplied or substitute for an independent owner review.
+
+
+## Management API token: least-privilege prerequisite
+
+Before running `tools/run_zavqera_readonly_effect_audit.ps1`, create a **scoped** Supabase Personal Access Token for the single Development project only, with exactly these read permissions:
+
+- **Project Settings — Read**: needed to verify the project name, region and status before any SQL is sent.
+- **Database — Read**: needed for the Management API's explicit `/database/query/read-only` endpoint.
+
+Do not grant any write permissions, organization-wide scope, secrets/billing access, or unrelated project access. Supabase documents scoped PATs as public alpha and rolling out gradually. If the token-creation screen does not offer scoped permissions, **stop**; do not substitute a classic token, because classic PATs carry the account's full access across current and future projects. See the official [Supabase Personal Access Tokens documentation](https://supabase.com/docs/guides/platform/personal-access-tokens).
+
+The wrapper requests the token through hidden SecureString input, checks the project identity and the effective database role/transaction read-only state, and the audit script pins all 13 SELECT statements by SHA-256. These checks reduce risk but do not make a broad token safe; least-privilege token scope is a prerequisite. Never paste the token into chat, a ticket, an issue, a log, or a repository. If the capture is blocked, preserve the partial evidence and stop; do not loosen the role gate or modify the SQL pack.
