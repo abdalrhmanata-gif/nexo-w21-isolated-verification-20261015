@@ -1,6 +1,9 @@
 name: ZAVQERA Anonymous AI RPC — isolated PostgREST authorization contract
 
 on:
+  push:
+    branches:
+      - codex/anonymous-ai-rpc-postgrest-isolated-20261019
   pull_request:
     paths:
       - .github/workflows/zavqera-anonymous-ai-rpc-isolated-postgrest.yml
