@@ -17,6 +17,11 @@ SOURCE_RELATIONS="unknown"
 RESTORE_RELATIONS="unknown"
 SOURCE_EXTENSION_RELATIONS="unknown"
 RESTORE_EXTENSION_RELATIONS="unknown"
+SENTINEL_ID="w21-restore-$GITHUB_RUN_ID"
+SENTINEL_PAYLOAD="zavqera-disposable-restore-smoke:$GITHUB_RUN_ID"
+SENTINEL_CREATED="false"
+SENTINEL_ROW_MATCHED="false"
+SOURCE_SENTINEL_REMOVED="false"
 RESTORE_OK="false"
 RESTORE_DB_REMOVED="false"
 DUMP_REMOVED="false"
@@ -37,6 +42,19 @@ finish() {
     docker exec --user postgres "$DB_CONTAINER" rm -f "$DUMP_PATH" >/dev/null 2>&1
     local rm_status=$?
 
+    local sentinel_drop_status=0
+    local remaining_sentinel="not-created"
+    if [[ "$SENTINEL_CREATED" == "true" ]]; then
+      docker exec --user postgres "$DB_CONTAINER" psql -Xv ON_ERROR_STOP=1 -U postgres -d postgres \
+        -c "DROP TABLE IF EXISTS public.w21_restore_smoke_sentinel" >/dev/null 2>&1
+      sentinel_drop_status=$?
+      remaining_sentinel="$(docker exec --user postgres "$DB_CONTAINER" psql -XAt -U postgres -d postgres \
+        -c "SELECT to_regclass('public.w21_restore_smoke_sentinel') IS NOT NULL" 2>/dev/null)"
+      if [[ "$sentinel_drop_status" -eq 0 && "$remaining_sentinel" == "f" ]]; then
+        SOURCE_SENTINEL_REMOVED="true"
+      fi
+    fi
+
     local remaining_db="unknown"
     remaining_db="$(docker exec --user postgres "$DB_CONTAINER" psql -XAt -U postgres -d postgres \
       -c "SELECT EXISTS (SELECT 1 FROM pg_database WHERE datname = '$RESTORE_DB')" 2>/dev/null)"
@@ -46,12 +64,12 @@ finish() {
 
     if [[ "$drop_status" -eq 0 && "$remaining_db" == "f" ]]; then RESTORE_DB_REMOVED="true"; fi
     if [[ "$rm_status" -eq 0 && "$remaining_dump" == "absent" ]]; then DUMP_REMOVED="true"; fi
-    if [[ "$RESTORE_DB_REMOVED" == "true" && "$DUMP_REMOVED" == "true" ]]; then CLEANUP_VERIFIED="true"; fi
+    if [[ "$SENTINEL_CREATED" == "true" && "$SOURCE_SENTINEL_REMOVED" == "true" && "$RESTORE_DB_REMOVED" == "true" && "$DUMP_REMOVED" == "true" ]]; then CLEANUP_VERIFIED="true"; fi
     [[ "$CLEANUP_VERIFIED" == "true" ]] || cleanup_status=1
   fi
 
   {
-    echo "restore_smoke=$([[ "$original_status" -eq 0 && "$RESTORE_OK" == "true" && "$CLEANUP_VERIFIED" == "true" ]] && printf PASS || printf FAIL)"
+    echo "restore_smoke=$([[ "$original_status" -eq 0 && "$RESTORE_OK" == "true" && "$SENTINEL_ROW_MATCHED" == "true" && "$CLEANUP_VERIFIED" == "true" ]] && printf PASS || printf FAIL)"
     echo "project_id=$PROJECT_ID"
     echo "source_database=postgres"
     echo "restore_database=$RESTORE_DB"
@@ -62,6 +80,8 @@ finish() {
     echo "source_extension_relation_count=$SOURCE_EXTENSION_RELATIONS"
     echo "restored_extension_relation_count=$RESTORE_EXTENSION_RELATIONS"
     echo "extension_membership_note=extension-owned members may be recreated by CREATE EXTENSION and are not compared as application relations"
+    echo "sentinel_row_matched=$SENTINEL_ROW_MATCHED"
+    echo "source_sentinel_removed=$SOURCE_SENTINEL_REMOVED"
     echo "restore_database_removed=$RESTORE_DB_REMOVED"
     echo "dump_removed=$DUMP_REMOVED"
     echo "restore_cleanup_verified=$CLEANUP_VERIFIED"
@@ -103,6 +123,18 @@ fi
 
 docker exec --user postgres "$DB_CONTAINER" pg_isready -U postgres -d postgres >/dev/null
 
+# Create one synthetic payload in the disposable source database to prove that
+# a non-empty application-schema row survives dump/restore. Never use user data.
+sentinel_exists="$(docker exec --user postgres "$DB_CONTAINER" psql -XAt -U postgres -d postgres \
+  -c "SELECT to_regclass('public.w21_restore_smoke_sentinel') IS NOT NULL")"
+if [[ "$sentinel_exists" != "f" ]]; then
+  echo "Refusing restore smoke: synthetic sentinel table already exists in source." >&2
+  exit 2
+fi
+SENTINEL_CREATED="true"
+docker exec --user postgres "$DB_CONTAINER" psql -Xv ON_ERROR_STOP=1 -U postgres -d postgres \
+  -c "CREATE TABLE public.w21_restore_smoke_sentinel (id text PRIMARY KEY, payload text NOT NULL); INSERT INTO public.w21_restore_smoke_sentinel (id, payload) VALUES ('$SENTINEL_ID', '$SENTINEL_PAYLOAD')"
+
 # Create the archive only inside the explicitly labeled local test container.
 docker exec --user postgres "$DB_CONTAINER" pg_dump \
   --format=custom --no-owner --no-acl \
@@ -143,6 +175,7 @@ for relation in \
   public.missions \
   public.mission_actions \
   public.agent_executions \
+  public.w21_restore_smoke_sentinel \
   auth.users \
   auth.identities \
   supabase_migrations.schema_migrations
@@ -155,6 +188,18 @@ do
   fi
   printf 'restore_count_%s=%s\n' "$(printf '%s' "$relation" | tr '.' '_')" "$restored_rows"
 done
+
+source_sentinel="$(docker exec --user postgres "$DB_CONTAINER" psql -XAt -U postgres -d postgres \
+  -c "SELECT id || '|' || payload FROM public.w21_restore_smoke_sentinel WHERE id = '$SENTINEL_ID'")"
+restored_sentinel="$(docker exec --user postgres "$DB_CONTAINER" psql -XAt -U postgres -d "$RESTORE_DB" \
+  -c "SELECT id || '|' || payload FROM public.w21_restore_smoke_sentinel WHERE id = '$SENTINEL_ID'")"
+expected_sentinel="$SENTINEL_ID|$SENTINEL_PAYLOAD"
+if [[ "$source_sentinel" != "$expected_sentinel" || "$restored_sentinel" != "$expected_sentinel" ]]; then
+  echo "Synthetic sentinel mismatch: source='$source_sentinel' restored='$restored_sentinel'" >&2
+  exit 1
+fi
+SENTINEL_ROW_MATCHED="true"
+echo "sentinel_row_matched=true"
 
 RESTORE_OK="true"
 echo "Disposable logical backup/restore smoke passed; dump contents are not exported."
