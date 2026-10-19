@@ -1332,3 +1332,17 @@ The new logical backup/restore smoke passed using a custom-format dump (476,290 
 The other exact-head workflows also passed: [Web Unit](https://github.com/abdalrhmanata-gif/nexo-w21-isolated-verification-20261015/actions/runs/39157509792), [Web CI/build](https://github.com/abdalrhmanata-gif/nexo-w21-isolated-verification-20261015/actions/runs/39157509751), and [Flutter CI](https://github.com/abdalrhmanata-gif/nexo-w21-isolated-verification-20261015/actions/runs/39157509777).
 
 The four public-launch blockers remain open: hosted Development privilege/schema drift; unresolved historic migration source/provenance; no independent security/database review; and no full recovery/RPO/RTO, staffed operations exercise, detailed T01–T05 observations, or accountable release approval. Keep `hosted_write_authorized=false`, `TRUSTED_DISPATCH_ADAPTERS` empty/fail-closed, and public release **NO-GO**.
+
+
+## Superseding seeded restore-smoke evidence — 2026-10-19
+
+At exact code/test HEAD `6cd8bf6044c2a6f2ac173f19b9d8fb78f2af7f2f`, [W21 run 39222501670](https://github.com/abdalrhmanata-gif/nexo-w21-isolated-verification-20261015/actions/runs/39222501670) completed **SUCCESS, 27/27 steps**.
+
+- Disposable PostgreSQL 17 replay and pgTAP succeeded; Mission Authority and quota/workspace suites succeeded; four concurrency proofs and W72 fake-provider integration succeeded.
+- Browser E2E: **2 passed (2.6 minutes)**. Cleanup evidence states `remaining_containers=none`, `remaining_volumes=none`, `cleanup_verified=true`.
+- A custom-format allowlisted-schema dump (477,328 bytes; SHA-256 `4c6e134de68aac8b769aad1147da5a7c086e19327c70b19d34e3e965adac5b3b`) was restored to a separate temporary database. It proved `source_app_relation_count=52` and `restored_app_relation_count=52`, and the exact synthetic row matched (`sentinel_row_matched=true`). It also checked core relation row counts: `public.w21_restore_smoke_sentinel=1`; the app business tables and auth users/identities were empty; `supabase_migrations.schema_migrations=88`.
+- The temporary database, dump file and source sentinel were removed and verified: `restore_database_removed=true`, `dump_removed=true`, `source_sentinel_removed=true`, `restore_cleanup_verified=true`.
+- Schema `extensions` remains outside strict relation parity: source has 2 relations there and restore has 0. Extension-member/managed-schema parity is **not proven**. This is a disposable, synthetic-data logical restore smoke—not a complete Supabase backup/restore, representative production data recovery, measured RPO/RTO, or recovery acceptance.
+- All other exact-head workflows succeeded: [Web Unit 39222509610](https://github.com/abdalrhmanata-gif/nexo-w21-isolated-verification-20261015/actions/runs/39222509610) (**374 tests; 373 pass, 0 fail, 1 skipped**), [Web CI 39222509604](https://github.com/abdalrhmanata-gif/nexo-w21-isolated-verification-20261015/actions/runs/39222509604), and [Flutter CI 39222509681](https://github.com/abdalrhmanata-gif/nexo-w21-isolated-verification-20261015/actions/runs/39222509681).
+
+This reduces uncertainty for the isolated restore path but does not resolve the four public-release blockers: hosted Development DB/security drift; historical migration provenance; missing independent security/database approval; and full data-bearing recovery/RPO/RTO, staffed operations exercise, detailed T01–T05 observations and accountable release approval. Preserve `hosted_write_authorized=false`, keep `TRUSTED_DISPATCH_ADAPTERS` empty/fail-closed, and keep public production **NO-GO**.
