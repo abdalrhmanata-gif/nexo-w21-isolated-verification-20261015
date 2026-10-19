@@ -21,6 +21,19 @@ SENTINEL_ID="w21-restore-$GITHUB_RUN_ID"
 SENTINEL_PAYLOAD="zavqera-disposable-restore-smoke:$GITHUB_RUN_ID"
 SENTINEL_CREATED="false"
 SENTINEL_ROW_MATCHED="false"
+FIXTURE_CLEANUP_REQUIRED="false"
+FIXTURE_SEED_SUCCEEDED="false"
+FIXTURE_ROW_MATCHED="false"
+FIXTURE_REMOVED="false"
+FIXTURE_USER_ID=""
+FIXTURE_WORKSPACE_ID=""
+FIXTURE_OBJECTIVE="w21-restore-objective-$GITHUB_RUN_ID"
+FIXTURE_WORKSPACE_NAME="w21-restore-workspace-$GITHUB_RUN_ID"
+FIXTURE_ACTION_ONE="w21-restore-action-one"
+FIXTURE_ACTION_TWO="w21-restore-action-two"
+SOURCE_FIXTURE_SIGNATURE="not-created"
+RESTORE_FIXTURE_SIGNATURE="not-created"
+FIXTURE_EXPECTED_SIGNATURE=""
 SOURCE_SENTINEL_REMOVED="false"
 RESTORE_OK="false"
 RESTORE_DB_REMOVED="false"
@@ -55,6 +68,27 @@ finish() {
       fi
     fi
 
+    local fixture_delete_status=0
+    local remaining_fixture="not-created"
+    if [[ "$FIXTURE_CLEANUP_REQUIRED" == "true" ]]; then
+      docker exec --user postgres "$DB_CONTAINER" psql -Xv ON_ERROR_STOP=1 -U postgres -d postgres \
+        -c "DELETE FROM public.mission_actions WHERE mission_id IN (SELECT id FROM public.missions WHERE workspace_id = '$FIXTURE_WORKSPACE_ID'::uuid AND owner_id = '$FIXTURE_USER_ID'::uuid);
+            DELETE FROM public.missions WHERE workspace_id = '$FIXTURE_WORKSPACE_ID'::uuid AND owner_id = '$FIXTURE_USER_ID'::uuid AND objective = '$FIXTURE_OBJECTIVE';
+            DELETE FROM public.workspace_members WHERE workspace_id = '$FIXTURE_WORKSPACE_ID'::uuid AND user_id = '$FIXTURE_USER_ID'::uuid;
+            DELETE FROM public.workspaces WHERE id = '$FIXTURE_WORKSPACE_ID'::uuid AND owner_id = '$FIXTURE_USER_ID'::uuid;
+            DELETE FROM auth.users WHERE id = '$FIXTURE_USER_ID'::uuid" >/dev/null 2>&1
+      fixture_delete_status=$?
+      remaining_fixture="$(docker exec --user postgres "$DB_CONTAINER" psql -XAt -U postgres -d postgres \
+        -c "SELECT (EXISTS (SELECT 1 FROM auth.users WHERE id = '$FIXTURE_USER_ID'::uuid)
+                 OR EXISTS (SELECT 1 FROM public.profiles WHERE id = '$FIXTURE_USER_ID'::uuid)
+                 OR EXISTS (SELECT 1 FROM public.workspaces WHERE id = '$FIXTURE_WORKSPACE_ID'::uuid)
+                 OR EXISTS (SELECT 1 FROM public.workspace_members WHERE workspace_id = '$FIXTURE_WORKSPACE_ID'::uuid)
+                 OR EXISTS (SELECT 1 FROM public.missions WHERE workspace_id = '$FIXTURE_WORKSPACE_ID'::uuid AND owner_id = '$FIXTURE_USER_ID'::uuid AND objective = '$FIXTURE_OBJECTIVE'))" 2>/dev/null)"
+      if [[ "$fixture_delete_status" -eq 0 && "$remaining_fixture" == "f" ]]; then
+        FIXTURE_REMOVED="true"
+      fi
+    fi
+
     local remaining_db="unknown"
     remaining_db="$(docker exec --user postgres "$DB_CONTAINER" psql -XAt -U postgres -d postgres \
       -c "SELECT EXISTS (SELECT 1 FROM pg_database WHERE datname = '$RESTORE_DB')" 2>/dev/null)"
@@ -64,12 +98,16 @@ finish() {
 
     if [[ "$drop_status" -eq 0 && "$remaining_db" == "f" ]]; then RESTORE_DB_REMOVED="true"; fi
     if [[ "$rm_status" -eq 0 && "$remaining_dump" == "absent" ]]; then DUMP_REMOVED="true"; fi
-    if [[ "$SENTINEL_CREATED" == "true" && "$SOURCE_SENTINEL_REMOVED" == "true" && "$RESTORE_DB_REMOVED" == "true" && "$DUMP_REMOVED" == "true" ]]; then CLEANUP_VERIFIED="true"; fi
+    if [[ "$SENTINEL_CREATED" == "true" && "$SOURCE_SENTINEL_REMOVED" == "true" && "$RESTORE_DB_REMOVED" == "true" && "$DUMP_REMOVED" == "true" ]]; then
+      if [[ "$FIXTURE_CLEANUP_REQUIRED" != "true" || "$FIXTURE_REMOVED" == "true" ]]; then
+        CLEANUP_VERIFIED="true"
+      fi
+    fi
     [[ "$CLEANUP_VERIFIED" == "true" ]] || cleanup_status=1
   fi
 
   {
-    echo "restore_smoke=$([[ "$original_status" -eq 0 && "$RESTORE_OK" == "true" && "$SENTINEL_ROW_MATCHED" == "true" && "$CLEANUP_VERIFIED" == "true" ]] && printf PASS || printf FAIL)"
+    echo "restore_smoke=$([[ "$original_status" -eq 0 && "$RESTORE_OK" == "true" && "$SENTINEL_ROW_MATCHED" == "true" && "$FIXTURE_SEED_SUCCEEDED" == "true" && "$FIXTURE_ROW_MATCHED" == "true" && "$CLEANUP_VERIFIED" == "true" ]] && printf PASS || printf FAIL)"
     echo "project_id=$PROJECT_ID"
     echo "source_database=postgres"
     echo "restore_database=$RESTORE_DB"
@@ -81,6 +119,9 @@ finish() {
     echo "restored_extension_relation_count=$RESTORE_EXTENSION_RELATIONS"
     echo "extension_membership_note=extension-owned members may be recreated by CREATE EXTENSION and are not compared as application relations"
     echo "sentinel_row_matched=$SENTINEL_ROW_MATCHED"
+    echo "synthetic_fixture_seeded=$FIXTURE_SEED_SUCCEEDED"
+    echo "synthetic_fixture_row_matched=$FIXTURE_ROW_MATCHED"
+    echo "synthetic_fixture_removed=$FIXTURE_REMOVED"
     echo "source_sentinel_removed=$SOURCE_SENTINEL_REMOVED"
     echo "restore_database_removed=$RESTORE_DB_REMOVED"
     echo "dump_removed=$DUMP_REMOVED"
@@ -123,8 +164,9 @@ fi
 
 docker exec --user postgres "$DB_CONTAINER" pg_isready -U postgres -d postgres >/dev/null
 
-# Create one synthetic payload in the disposable source database to prove that
-# a non-empty application-schema row survives dump/restore. Never use user data.
+# Create a linked, non-secret synthetic user/workspace/mission/action fixture in
+# this disposable source database. This tests application relationships on
+# restore; it is not production data and must be removed in the EXIT trap.
 sentinel_exists="$(docker exec --user postgres "$DB_CONTAINER" psql -XAt -U postgres -d postgres \
   -c "SELECT to_regclass('public.w21_restore_smoke_sentinel') IS NOT NULL")"
 if [[ "$sentinel_exists" != "f" ]]; then
@@ -134,6 +176,33 @@ fi
 SENTINEL_CREATED="true"
 docker exec --user postgres "$DB_CONTAINER" psql -Xv ON_ERROR_STOP=1 -U postgres -d postgres \
   -c "CREATE TABLE public.w21_restore_smoke_sentinel (id text PRIMARY KEY, payload text NOT NULL); INSERT INTO public.w21_restore_smoke_sentinel (id, payload) VALUES ('$SENTINEL_ID', '$SENTINEL_PAYLOAD')"
+
+FIXTURE_USER_ID="$(docker exec --user postgres "$DB_CONTAINER" psql -XAt -U postgres -d postgres -c "SELECT gen_random_uuid()::text")"
+FIXTURE_WORKSPACE_ID="$(docker exec --user postgres "$DB_CONTAINER" psql -XAt -U postgres -d postgres -c "SELECT gen_random_uuid()::text")"
+UUID_RE='^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$'
+if [[ ! "$FIXTURE_USER_ID" =~ $UUID_RE || ! "$FIXTURE_WORKSPACE_ID" =~ $UUID_RE ]]; then
+  echo "Refusing restore smoke: synthetic fixture IDs were not valid UUIDs." >&2
+  exit 2
+fi
+FIXTURE_EXPECTED_SIGNATURE="1|1|1|$FIXTURE_WORKSPACE_NAME|1|owner|1|$FIXTURE_OBJECTIVE|DRAFT|0:$FIXTURE_ACTION_ONE:PENDING,1:$FIXTURE_ACTION_TWO:PENDING"
+FIXTURE_CLEANUP_REQUIRED="true"
+docker exec -i --user postgres "$DB_CONTAINER" psql -Xv ON_ERROR_STOP=1 -U postgres -d postgres <<SQL
+BEGIN;
+SELECT pg_catalog.set_config('request.jwt.claim.sub', '$FIXTURE_USER_ID', true);
+SELECT pg_catalog.set_config('request.jwt.claims', jsonb_build_object('sub', '$FIXTURE_USER_ID', 'role', 'authenticated')::text, true);
+INSERT INTO auth.users (id) VALUES ('$FIXTURE_USER_ID');
+INSERT INTO public.workspaces (id, owner_id, name)
+VALUES ('$FIXTURE_WORKSPACE_ID'::uuid, '$FIXTURE_USER_ID'::uuid, '$FIXTURE_WORKSPACE_NAME');
+INSERT INTO public.workspace_members (workspace_id, user_id, role)
+VALUES ('$FIXTURE_WORKSPACE_ID'::uuid, '$FIXTURE_USER_ID'::uuid, 'owner');
+SELECT id FROM public.create_mission_with_actions(
+  '$FIXTURE_WORKSPACE_ID'::uuid,
+  '$FIXTURE_OBJECTIVE',
+  '["$FIXTURE_ACTION_ONE", "$FIXTURE_ACTION_TWO"]'::jsonb
+);
+COMMIT;
+SQL
+FIXTURE_SEED_SUCCEEDED="true"
 
 # Create the archive only inside the explicitly labeled local test container.
 docker exec --user postgres "$DB_CONTAINER" pg_dump \
@@ -156,8 +225,14 @@ docker exec --user postgres "$DB_CONTAINER" createdb \
 # empty default only in the disposable target so pg_restore can recreate it.
 docker exec --user postgres "$DB_CONTAINER" psql -Xv ON_ERROR_STOP=1 -U postgres -d "$RESTORE_DB" \
   -c "DROP SCHEMA public CASCADE"
+# Restore schema first, then data with triggers temporarily disabled on this
+# disposable target. This prevents the auth.users profile trigger from creating
+# a duplicate profile while the backed-up public.profiles rows are loaded.
 docker exec --user postgres "$DB_CONTAINER" pg_restore \
-  --exit-on-error --no-owner --no-acl --dbname="$RESTORE_DB" "$DUMP_PATH"
+  --schema-only --exit-on-error --no-owner --no-acl --dbname="$RESTORE_DB" "$DUMP_PATH"
+docker exec --user postgres "$DB_CONTAINER" pg_restore \
+  --data-only --exit-on-error --no-owner --no-acl --disable-triggers --superuser=postgres \
+  --dbname="$RESTORE_DB" "$DUMP_PATH"
 
 relation_query="SELECT count(*) FROM pg_catalog.pg_class c JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace WHERE n.nspname IN ('public','private','auth','supabase_migrations') AND c.relkind IN ('r','p','v','m','S','f')"
 extension_relation_query="SELECT count(*) FROM pg_catalog.pg_class c JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace WHERE n.nspname = 'extensions' AND c.relkind IN ('r','p','v','m','S','f')"
@@ -174,6 +249,7 @@ for relation in \
   public.workspaces \
   public.missions \
   public.mission_actions \
+  public.workspace_members \
   public.agent_executions \
   public.w21_restore_smoke_sentinel \
   auth.users \
@@ -200,6 +276,28 @@ if [[ "$source_sentinel" != "$expected_sentinel" || "$restored_sentinel" != "$ex
 fi
 SENTINEL_ROW_MATCHED="true"
 echo "sentinel_row_matched=true"
+
+fixture_signature_query="SELECT concat(
+  (SELECT count(*)::text FROM auth.users WHERE id = '$FIXTURE_USER_ID'::uuid), '|',
+  (SELECT count(*)::text FROM public.profiles WHERE id = '$FIXTURE_USER_ID'::uuid), '|',
+  (SELECT count(*)::text FROM public.workspaces WHERE id = '$FIXTURE_WORKSPACE_ID'::uuid AND owner_id = '$FIXTURE_USER_ID'::uuid), '|',
+  coalesce((SELECT name FROM public.workspaces WHERE id = '$FIXTURE_WORKSPACE_ID'::uuid), '<missing>'), '|',
+  (SELECT count(*)::text FROM public.workspace_members WHERE workspace_id = '$FIXTURE_WORKSPACE_ID'::uuid AND user_id = '$FIXTURE_USER_ID'::uuid), '|',
+  coalesce((SELECT role::text FROM public.workspace_members WHERE workspace_id = '$FIXTURE_WORKSPACE_ID'::uuid AND user_id = '$FIXTURE_USER_ID'::uuid), '<missing>'), '|',
+  (SELECT count(*)::text FROM public.missions WHERE workspace_id = '$FIXTURE_WORKSPACE_ID'::uuid AND owner_id = '$FIXTURE_USER_ID'::uuid AND objective = '$FIXTURE_OBJECTIVE'), '|',
+  coalesce((SELECT status::text FROM public.missions WHERE workspace_id = '$FIXTURE_WORKSPACE_ID'::uuid AND owner_id = '$FIXTURE_USER_ID'::uuid AND objective = '$FIXTURE_OBJECTIVE'), '<missing>'), '|',
+  coalesce((SELECT string_agg(a.position::text || ':' || a.title || ':' || a.status::text, ',' ORDER BY a.position)
+            FROM public.mission_actions a JOIN public.missions m ON m.id = a.mission_id
+            WHERE m.workspace_id = '$FIXTURE_WORKSPACE_ID'::uuid AND m.owner_id = '$FIXTURE_USER_ID'::uuid AND m.objective = '$FIXTURE_OBJECTIVE'), '<missing>')
+)"
+SOURCE_FIXTURE_SIGNATURE="$(docker exec --user postgres "$DB_CONTAINER" psql -XAt -U postgres -d postgres -c "$fixture_signature_query")"
+RESTORE_FIXTURE_SIGNATURE="$(docker exec --user postgres "$DB_CONTAINER" psql -XAt -U postgres -d "$RESTORE_DB" -c "$fixture_signature_query")"
+if [[ "$SOURCE_FIXTURE_SIGNATURE" != "$FIXTURE_EXPECTED_SIGNATURE" || "$RESTORE_FIXTURE_SIGNATURE" != "$FIXTURE_EXPECTED_SIGNATURE" || "$SOURCE_FIXTURE_SIGNATURE" != "$RESTORE_FIXTURE_SIGNATURE" ]]; then
+  echo "Synthetic application fixture mismatch: source/restored signatures differ from the exact expected relationship fingerprint." >&2
+  exit 1
+fi
+FIXTURE_ROW_MATCHED="true"
+echo "synthetic_fixture_row_matched=true"
 
 RESTORE_OK="true"
 echo "Disposable logical backup/restore smoke passed; dump contents are not exported."
