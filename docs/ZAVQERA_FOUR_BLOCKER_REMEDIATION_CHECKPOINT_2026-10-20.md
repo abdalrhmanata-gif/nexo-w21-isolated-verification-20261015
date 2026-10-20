@@ -4,6 +4,16 @@
 **Purpose:** preserve current release evidence and the exact external dependencies still required.
 **Status:** evidence checkpoint only; not an independent review, production approval, or authorization to change hosted systems.
 
+## Latest checkpoint CI — 2026-10-20
+
+After removing trailing whitespace from this evidence document, exact-head checks for commit `890b3dbce6ff8a006669a43a800ee3def5f3d9ed` completed successfully:
+
+- [Flutter CI run 39466214709](https://github.com/abdalrhmanata-gif/nexo-w21-isolated-verification-20261015/actions/runs/39466214709) — SUCCESS
+- [Web Unit run 39466214771](https://github.com/abdalrhmanata-gif/nexo-w21-isolated-verification-20261015/actions/runs/39466214771) — SUCCESS
+- [Web CI run 39466214687](https://github.com/abdalrhmanata-gif/nexo-w21-isolated-verification-20261015/actions/runs/39466214687) — SUCCESS
+
+These are audit-repository/checkpoint validation results only; they do not establish application production readiness or close any external launch blocker. The prior whitespace-only failure on commit `ea9e957cd0f1c354f1b616b1aa7fdc65dc7e7735` is corrected in the new commit.
+
 ## Decision
 
 **Public launch: NO-GO.** Keep `candidate_sha=NONE`, `hosted_write_authorized=false`, and `TRUSTED_DISPATCH_ADAPTERS` empty/fail-closed. No hosted database writes, migration/ACL changes, Auth setting changes, paid provider calls, billing activation, production deployment, or protected merge were performed.
