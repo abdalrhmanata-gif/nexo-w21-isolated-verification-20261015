@@ -22,6 +22,7 @@ function parseOrigin(value, { allowPath = false } = {}) {
  * same-origin request, or for safe methods without cross-origin metadata.
  */
 export function isSameOriginRequest({ method, origin, secFetchSite, requestOrigin, siteUrl }) {
+  const fetchSite = String(secFetchSite || "").trim().toLowerCase();
   const allowedOrigins = new Set([
     parseOrigin(requestOrigin),
     parseOrigin(siteUrl, { allowPath: true }),
@@ -29,7 +30,11 @@ export function isSameOriginRequest({ method, origin, secFetchSite, requestOrigi
 
   if (origin !== null && origin !== undefined) {
     const parsedOrigin = parseOrigin(origin);
-    return parsedOrigin !== null && allowedOrigins.has(parsedOrigin);
+    if (parsedOrigin === null) return false;
+    // Some deployment adapters report a canonical URL that differs from the
+    // browser-visible request origin. Fetch Metadata is browser-controlled;
+    // honor its same-origin signal when the Origin itself is valid.
+    return allowedOrigins.has(parsedOrigin) || fetchSite === "same-origin";
   }
 
   // Fetch Metadata also protects safe-verb API endpoints that can still cause
@@ -37,7 +42,6 @@ export function isSameOriginRequest({ method, origin, secFetchSite, requestOrigi
   // Same-site requests may still come from a different, potentially hostile,
   // sibling origin, so only same-origin or user-initiated navigation is
   // allowed when Origin is absent.
-  const fetchSite = String(secFetchSite || "").trim().toLowerCase();
   if (fetchSite === "cross-site" || fetchSite === "same-site") return false;
   if (fetchSite === "same-origin") return true;
 

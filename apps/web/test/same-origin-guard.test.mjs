@@ -32,6 +32,21 @@ test("accepts the exact request origin and canonical default ports", () => {
   assert.equal(isSameOriginRequest({ ...sameOrigin, origin: "https://app.example.com:443" }), true);
 });
 
+test("accepts browser same-origin metadata when an adapter reports a different canonical origin", () => {
+  assert.equal(isSameOriginRequest({
+    ...sameOrigin,
+    origin: "https://app.example.com",
+    requestOrigin: "http://internal-proxy:3000",
+    secFetchSite: "same-origin",
+  }), true);
+  assert.equal(isSameOriginRequest({
+    ...sameOrigin,
+    origin: "https://attacker.example",
+    requestOrigin: "http://internal-proxy:3000",
+    secFetchSite: "cross-site",
+  }), false);
+});
+
 test("accepts an explicitly configured site origin for preview runtimes", () => {
   assert.equal(isSameOriginRequest({
     method: "POST",
