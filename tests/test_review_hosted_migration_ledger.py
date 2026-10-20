@@ -1,6 +1,9 @@
 import importlib.util
+from itertools import product
 import json
 from pathlib import Path
+import shutil
+import subprocess
 import tempfile
 import unittest
 
@@ -26,12 +29,15 @@ class HostedLedgerReviewTests(unittest.TestCase):
         (self.repo / "supabase" / "migrations" / "20261013100000_w80_example.sql").write_text("select 1;\n")
         (self.repo / "supabase" / "migrations" / "20261015100000_w83_example.sql").write_text("select 2;\n")
         save(self.evidence / "summary.json", {
-            "status": "CAPTURED_FOR_MANUAL_REVIEW", "queries_completed": 12,
-            "query_pack_sha256": review.PACK_SHA256, "access_token_saved": False
+            "status": "CAPTURED_FOR_MANUAL_REVIEW", "queries_completed": 13,
+            "query_pack_sha256": review.PACK_SHA256,
+            "acl_provenance_query_sha256": review.ACL_PROVENANCE_SHA256,
+            "access_token_saved": False
         })
         save(self.evidence / "run_metadata.json", {
             "observed_at_utc": "2026-10-15T18:00:00+00:00",
-            "project_ref": review.PROJECT_REF, "token_saved": False
+            "project_ref": review.PROJECT_REF, "token_saved": False,
+            "acl_provenance_query_sha256": review.ACL_PROVENANCE_SHA256
         })
         save(self.evidence / "project_identity.json", {
             "id": review.PROJECT_REF, "name": review.PROJECT_NAME, "region": review.PROJECT_REGION
@@ -53,7 +59,8 @@ class HostedLedgerReviewTests(unittest.TestCase):
                     "relation_name": "agent_executions", "owner_role": "postgres",
                     "row_level_security_enabled": True, "row_level_security_forced": False,
                     "grantee": role, "privilege_type": privilege,
-                    "effective_privilege": role == "postgres", "is_grantable": None, "grantor": None
+                    "effective_privilege": role == "postgres" or (role == "service_role" and privilege == "UPDATE"),
+                    "is_grantable": None, "grantor": None
                 })
         rows.append({
             "evidence_kind": "STORED_ACL", "schema_name": "public", "relation_name": "agent_executions",
@@ -62,6 +69,39 @@ class HostedLedgerReviewTests(unittest.TestCase):
             "is_grantable": False, "grantor": "postgres"
         })
         save(self.evidence / "query_12.json", {"response": rows})
+        provenance = {
+            "probe_name": "w86_acl_provenance_v1",
+            "current_user": "supabase_read_only_user",
+            "session_user": "supabase_read_only_user",
+            "transaction_read_only": "on",
+            "relation": {"exists": True, "schema_name": "public", "relation_name": "agent_executions",
+                         "owner_role": "postgres", "row_level_security_enabled": True,
+                         "row_level_security_forced": False, "stored_acl_is_null": False},
+            "service_role_effective_privileges": {
+                "SELECT": False, "INSERT": False, "UPDATE": True, "DELETE": False,
+                "TRUNCATE": False, "REFERENCES": False, "TRIGGER": False, "MAINTAIN": False
+            },
+            "service_role_membership_paths": [
+                {"role_name": "service_role", "depth": 0, "member_of_role": None, "all_edges_inherit": True, "all_edges_set_role": True, "edge_inherit_option": None, "edge_set_option": None, "reachable_via_membership_options": True},
+                {"role_name": "w86_acl_probe_parent", "depth": 1, "member_of_role": "service_role", "all_edges_inherit": True, "all_edges_set_role": True, "edge_inherit_option": True, "edge_set_option": True, "reachable_via_membership_options": True}
+            ],
+            "table_acl_entries": [
+                {"grantee": "service_role", "privilege_type": "UPDATE",
+                 "is_grantable": False, "grantor": "postgres"}
+            ],
+            "column_acl_entries": [],
+            "service_role_inherited_table_acl_entries": [
+                {"grantee_role": "w86_acl_probe_parent", "membership_depth": 1,
+                 "all_membership_edges_inherit": True, "all_membership_edges_set_role": True, "member_of_role": "service_role", "edge_inherit_option": True, "edge_set_option": True, "reachable_via_membership_options": True, "privilege_type": "UPDATE",
+                 "is_grantable": False, "grantor": "postgres"}
+            ],
+            "service_role_inherited_column_acl_entries": [
+                {"column_name": "id", "grantee_role": "w86_acl_probe_parent", "membership_depth": 1,
+                 "all_membership_edges_inherit": True, "all_membership_edges_set_role": True, "member_of_role": "service_role", "edge_inherit_option": True, "edge_set_option": True, "reachable_via_membership_options": True, "privilege_type": "SELECT",
+                 "is_grantable": False, "grantor": "postgres"}
+            ]
+        }
+        save(self.evidence / "query_13.json", {"response": [{"w86_acl_provenance": provenance}]})
 
     def tearDown(self):
         self.tmp.cleanup()
@@ -76,8 +116,570 @@ class HostedLedgerReviewTests(unittest.TestCase):
         self.assertEqual(len(result["same_name_different_version"]), 1)
         self.assertIn("hosted_only", result["hosted_names_absent_from_source"])
         self.assertEqual(result["effective_table_privilege_rows"], 32)
-        self.assertEqual(len(result["effective_nonowner_write_grants"]), 0)
+        self.assertEqual(len(result["effective_nonowner_write_grants"]), 1)
         self.assertEqual(len(result["stored_nonowner_write_acl_rows"]), 1)
+        self.assertEqual(result["service_role_inherited_table_acl_rows"], 1)
+        self.assertEqual(result["service_role_inherited_column_acl_rows"], 1)
+        self.assertEqual(result["w86_candidate_parent_acl_gate"], "BLOCKED_PARENT_ROLE_ACL")
+        self.assertIs(result["hosted_write_authorized"], False)
+        self.assertEqual(
+            result["hosted_write_authorization_status"],
+            "NOT_AUTHORIZED_BY_OFFLINE_REVIEWER",
+        )
+        self.assertIn("w86_acl_probe_parent", result["service_role_inherited_table_acl_entries"][0]["grantee_role"])
+        self.assertIsNone(result["source_checkout_head_sha"])
+        self.assertIsNone(result["source_migrations_worktree_clean"])
+        self.assertRegex(result["source_migration_manifest_sha256"], r"^[0-9a-f]{64}$")
+
+    def test_rejects_query12_stored_acl_projection_mismatch(self):
+        original = json.loads((self.evidence / "query_12.json").read_text(encoding="utf-8"))
+        stored_row = next(row for row in original["response"] if row.get("evidence_kind") == "STORED_ACL")
+        cases = (
+            ("grantor mismatch", lambda payload: next(
+                row for row in payload["response"] if row.get("evidence_kind") == "STORED_ACL"
+            ).update(grantor="different_grantor")),
+            ("duplicate stored row", lambda payload: payload["response"].append(dict(stored_row))),
+        )
+        for label, mutate in cases:
+            with self.subTest(label=label):
+                payload = json.loads(json.dumps(original))
+                mutate(payload)
+                save(self.evidence / "query_12.json", payload)
+                with self.assertRaisesRegex(review.EvidenceError, "query 12 stored table ACL and query 13 table ACL projections disagree"):
+                    review.reconcile(self.evidence, self.repo)
+
+    def test_rejects_query12_privilege_mismatch_against_query13(self):
+        payload = json.loads((self.evidence / "query_12.json").read_text(encoding="utf-8"))
+        service_update = next(
+            row for row in payload["response"]
+            if row.get("evidence_kind") == "EFFECTIVE_PRIVILEGE"
+            and row.get("grantee") == "service_role"
+            and row.get("privilege_type") == "UPDATE"
+        )
+        service_update["effective_privilege"] = False
+        save(self.evidence / "query_12.json", payload)
+        with self.assertRaisesRegex(review.EvidenceError, "query 12 and query 13 service_role effective privilege maps disagree"):
+            review.reconcile(self.evidence, self.repo)
+
+    def test_mixed_set_prefix_then_inherit_suffix_blocks_parent_acl(self):
+        payload = json.loads((self.evidence / "query_13.json").read_text(encoding="utf-8"))
+        provenance = payload["response"][0]["w86_acl_provenance"]
+        provenance["service_role_membership_paths"] = [
+            {"role_name": "service_role", "depth": 0, "member_of_role": None,
+             "all_edges_inherit": True, "all_edges_set_role": True,
+             "edge_inherit_option": None, "edge_set_option": None,
+             "reachable_via_membership_options": True},
+            {"role_name": "w86_acl_probe_intermediate", "depth": 1,
+             "member_of_role": "service_role", "all_edges_inherit": False,
+             "all_edges_set_role": True, "edge_inherit_option": False,
+             "edge_set_option": True, "reachable_via_membership_options": True},
+            {"role_name": "w86_acl_probe_parent", "depth": 2,
+             "member_of_role": "w86_acl_probe_intermediate", "all_edges_inherit": False,
+             "all_edges_set_role": False, "edge_inherit_option": True,
+             "edge_set_option": False, "reachable_via_membership_options": True},
+        ]
+        provenance["service_role_inherited_table_acl_entries"] = [{
+            "grantee_role": "w86_acl_probe_parent", "membership_depth": 2,
+            "all_membership_edges_inherit": False, "all_membership_edges_set_role": False,
+            "member_of_role": "w86_acl_probe_intermediate", "edge_inherit_option": True,
+            "edge_set_option": False, "reachable_via_membership_options": True,
+            "privilege_type": "UPDATE", "is_grantable": False, "grantor": "postgres",
+        }]
+        provenance["service_role_inherited_column_acl_entries"] = [{
+            "column_name": "id", "grantee_role": "w86_acl_probe_parent", "membership_depth": 2,
+            "all_membership_edges_inherit": False, "all_membership_edges_set_role": False,
+            "member_of_role": "w86_acl_probe_intermediate", "edge_inherit_option": True,
+            "edge_set_option": False, "reachable_via_membership_options": True,
+            "privilege_type": "SELECT", "is_grantable": False, "grantor": "postgres",
+        }]
+        save(self.evidence / "query_13.json", payload)
+        result = review.reconcile(self.evidence, self.repo)
+        self.assertEqual(result["service_role_inherited_table_acl_rows"], 1)
+        self.assertEqual(result["service_role_inherited_column_acl_rows"], 1)
+        self.assertEqual(result["w86_candidate_parent_acl_gate"], "BLOCKED_PARENT_ROLE_ACL")
+        self.assertIs(result["hosted_write_authorized"], False)
+
+    def test_rejects_query12_owner_mismatch_against_query13(self):
+        payload = json.loads((self.evidence / "query_12.json").read_text(encoding="utf-8"))
+        row = next(
+            row for row in payload["response"]
+            if row.get("evidence_kind") == "EFFECTIVE_PRIVILEGE"
+            and row.get("grantee") == "service_role"
+            and row.get("privilege_type") == "UPDATE"
+        )
+        row["owner_role"] = "service_role"
+        row["effective_privilege"] = True
+        save(self.evidence / "query_12.json", payload)
+        with self.assertRaisesRegex(review.EvidenceError, "query 12 and query 13 relation identity/RLS metadata disagree"):
+            review.reconcile(self.evidence, self.repo)
+
+    def test_rejects_duplicate_query12_effective_privilege(self):
+        payload = json.loads((self.evidence / "query_12.json").read_text(encoding="utf-8"))
+        effective = next(row for row in payload["response"] if row.get("evidence_kind") == "EFFECTIVE_PRIVILEGE")
+        payload["response"].append(dict(effective))
+        save(self.evidence / "query_12.json", payload)
+        with self.assertRaisesRegex(review.EvidenceError, "effective table ACL matrix incomplete, duplicated or unexpected"):
+            review.reconcile(self.evidence, self.repo)
+
+    def test_rejects_non_boolean_query12_effective_privilege(self):
+        payload = json.loads((self.evidence / "query_12.json").read_text(encoding="utf-8"))
+        effective = next(row for row in payload["response"] if row.get("evidence_kind") == "EFFECTIVE_PRIVILEGE")
+        effective["effective_privilege"] = "false"
+        save(self.evidence / "query_12.json", payload)
+        with self.assertRaisesRegex(review.EvidenceError, "malformed boolean or privilege-source fields"):
+            review.reconcile(self.evidence, self.repo)
+
+    def test_rejects_non_boolean_effective_privilege_summary(self):
+        payload = json.loads((self.evidence / "query_13.json").read_text(encoding="utf-8"))
+        provenance = payload["response"][0]["w86_acl_provenance"]
+        provenance["service_role_effective_privileges"]["UPDATE"] = "false"
+        save(self.evidence / "query_13.json", payload)
+        with self.assertRaises(review.EvidenceError):
+            review.reconcile(self.evidence, self.repo)
+
+    def test_rejects_inherited_acl_entry_without_matching_membership_path(self):
+        payload = json.loads((self.evidence / "query_13.json").read_text(encoding="utf-8"))
+        provenance = payload["response"][0]["w86_acl_provenance"]
+        provenance["service_role_inherited_table_acl_entries"][0]["membership_depth"] = 2
+        save(self.evidence / "query_13.json", payload)
+        with self.assertRaisesRegex(review.EvidenceError, "does not match a reachable membership path"):
+            review.reconcile(self.evidence, self.repo)
+
+    def test_set_role_only_parent_acl_path_is_reported(self):
+        payload = json.loads((self.evidence / "query_13.json").read_text(encoding="utf-8"))
+        provenance = payload["response"][0]["w86_acl_provenance"]
+        provenance["service_role_effective_privileges"]["UPDATE"] = False
+        acl_payload = json.loads((self.evidence / "query_12.json").read_text(encoding="utf-8"))
+        service_update = next(
+            row for row in acl_payload["response"]
+            if row.get("evidence_kind") == "EFFECTIVE_PRIVILEGE"
+            and row.get("grantee") == "service_role"
+            and row.get("privilege_type") == "UPDATE"
+        )
+        service_update["effective_privilege"] = False
+        save(self.evidence / "query_12.json", acl_payload)
+        provenance["service_role_membership_paths"][1]["all_edges_inherit"] = False
+        provenance["service_role_membership_paths"][1]["all_edges_set_role"] = True
+        provenance["service_role_membership_paths"][1]["edge_inherit_option"] = False
+        provenance["service_role_membership_paths"][1]["edge_set_option"] = True
+        provenance["service_role_membership_paths"][1]["reachable_via_membership_options"] = True
+        provenance["service_role_inherited_table_acl_entries"][0]["all_membership_edges_inherit"] = False
+        provenance["service_role_inherited_table_acl_entries"][0]["all_membership_edges_set_role"] = True
+        provenance["service_role_inherited_table_acl_entries"][0]["edge_inherit_option"] = False
+        provenance["service_role_inherited_table_acl_entries"][0]["edge_set_option"] = True
+        provenance["service_role_inherited_table_acl_entries"][0]["reachable_via_membership_options"] = True
+        provenance["service_role_inherited_column_acl_entries"][0]["all_membership_edges_inherit"] = False
+        provenance["service_role_inherited_column_acl_entries"][0]["all_membership_edges_set_role"] = True
+        provenance["service_role_inherited_column_acl_entries"][0]["edge_inherit_option"] = False
+        provenance["service_role_inherited_column_acl_entries"][0]["edge_set_option"] = True
+        provenance["service_role_inherited_column_acl_entries"][0]["reachable_via_membership_options"] = True
+        save(self.evidence / "query_13.json", payload)
+
+        result = review.reconcile(self.evidence, self.repo)
+        self.assertEqual(result["service_role_set_role_path_count"], 1)
+        self.assertEqual(result["service_role_inherited_table_acl_rows"], 1)
+        self.assertEqual(result["service_role_inherited_column_acl_rows"], 1)
+        self.assertEqual(result["w86_candidate_parent_acl_gate"], "BLOCKED_PARENT_ROLE_ACL")
+        self.assertIs(result["hosted_write_authorized"], False)
+        self.assertEqual(
+            result["service_role_parent_role_acl_path_semantics"],
+            "entries reachable through INHERIT or SET ROLE",
+        )
+
+    def test_rejects_parent_acl_row_without_set_role_path_evidence(self):
+        payload = json.loads((self.evidence / "query_13.json").read_text(encoding="utf-8"))
+        provenance = payload["response"][0]["w86_acl_provenance"]
+        del provenance["service_role_inherited_table_acl_entries"][0]["all_membership_edges_set_role"]
+        save(self.evidence / "query_13.json", payload)
+        with self.assertRaises(review.EvidenceError):
+            review.reconcile(self.evidence, self.repo)
+
+    def test_rejects_missing_relation_owner_identity(self):
+        payload = json.loads((self.evidence / "query_13.json").read_text(encoding="utf-8"))
+        provenance = payload["response"][0]["w86_acl_provenance"]
+        provenance["relation"].pop("owner_role")
+        save(self.evidence / "query_13.json", payload)
+        with self.assertRaises(review.EvidenceError):
+            review.reconcile(self.evidence, self.repo)
+
+    def test_rejects_missing_root_service_role_membership_path(self):
+        payload = json.loads((self.evidence / "query_13.json").read_text(encoding="utf-8"))
+        provenance = payload["response"][0]["w86_acl_provenance"]
+        provenance["service_role_membership_paths"] = [
+            item for item in provenance["service_role_membership_paths"]
+            if item.get("depth") != 0
+        ]
+        save(self.evidence / "query_13.json", payload)
+        with self.assertRaises(review.EvidenceError):
+            review.reconcile(self.evidence, self.repo)
+
+    def test_membership_reachability_matches_role_option_paths_exhaustively(self):
+        edge_options = ((False, False), (False, True), (True, False), (True, True))
+        for length in range(1, 5):
+            for edges in product(edge_options, repeat=length):
+                paths = [{
+                    "role_name": "service_role", "depth": 0, "member_of_role": None,
+                    "all_edges_inherit": True, "all_edges_set_role": True,
+                    "edge_inherit_option": None, "edge_set_option": None,
+                    "reachable_via_membership_options": True,
+                }]
+                all_inherit = True
+                all_set_role = True
+                prefix = []
+                parent_name = "service_role"
+                for depth, (edge_inherit, edge_set_role) in enumerate(edges, start=1):
+                    prefix.append((edge_inherit, edge_set_role))
+                    all_inherit = all_inherit and edge_inherit
+                    all_set_role = all_set_role and edge_set_role
+                    expected_reachable = any(
+                        all(edge[1] for edge in prefix[:split])
+                        and all(edge[0] for edge in prefix[split:])
+                        for split in range(len(prefix) + 1)
+                    )
+                    role_name = f"role_{depth}"
+                    paths.append({
+                        "role_name": role_name, "depth": depth, "member_of_role": parent_name,
+                        "all_edges_inherit": all_inherit, "all_edges_set_role": all_set_role,
+                        "edge_inherit_option": edge_inherit, "edge_set_option": edge_set_role,
+                        "reachable_via_membership_options": expected_reachable,
+                    })
+                    parent_name = role_name
+                self.assertTrue(review.membership_paths_form_valid_chain(paths), msg=f"valid edge sequence rejected: {edges}")
+                corrupted = [dict(item) for item in paths]
+                corrupted[-1]["reachable_via_membership_options"] = not corrupted[-1]["reachable_via_membership_options"]
+                self.assertFalse(review.membership_paths_form_valid_chain(corrupted), msg=f"corrupt edge sequence accepted: {edges}")
+
+    def test_membership_reachability_allows_set_role_then_inherit(self):
+        paths = [
+            {
+                "role_name": "service_role", "depth": 0, "member_of_role": None,
+                "all_edges_inherit": True, "all_edges_set_role": True,
+                "edge_inherit_option": None, "edge_set_option": None,
+                "reachable_via_membership_options": True,
+            },
+            {
+                "role_name": "set_only_parent", "depth": 1, "member_of_role": "service_role",
+                "all_edges_inherit": False, "all_edges_set_role": True,
+                "edge_inherit_option": False, "edge_set_option": True,
+                "reachable_via_membership_options": True,
+            },
+            {
+                "role_name": "inherit_only_grandparent", "depth": 2, "member_of_role": "set_only_parent",
+                "all_edges_inherit": False, "all_edges_set_role": False,
+                "edge_inherit_option": True, "edge_set_option": False,
+                "reachable_via_membership_options": True,
+            },
+        ]
+        # PostgreSQL allows SET ROLE to the intermediate member, then that role
+        # inherits privileges from its parent. Cumulative all-edge flags can both
+        # be false even while the complete path is reachable.
+        self.assertTrue(review.membership_paths_form_valid_chain(paths))
+        paths[2]["reachable_via_membership_options"] = False
+        self.assertFalse(review.membership_paths_form_valid_chain(paths))
+
+    def test_rejects_disconnected_or_impossible_membership_paths(self):
+        original = json.loads((self.evidence / "query_13.json").read_text(encoding="utf-8"))
+        mutations = (
+            ("disconnected parent", lambda paths: paths[1].update(member_of_role="unobserved_parent")),
+            ("root claims parent", lambda paths: paths[0].update(member_of_role="fabricated_parent")),
+            ("non-string parent", lambda paths: paths[1].update(member_of_role=17)),
+            ("missing parent field", lambda paths: paths[1].pop("member_of_role")),
+            ("flags re-enabled after false edge", lambda paths: (
+                paths[1].update(all_edges_inherit=False, edge_inherit_option=False),
+                paths.append({
+                    "role_name": "nested_role", "depth": 2,
+                    "member_of_role": "w86_acl_probe_parent",
+                    "all_edges_inherit": True, "all_edges_set_role": True, "edge_inherit_option": True, "edge_set_option": True, "reachable_via_membership_options": True,
+                }),
+            )),
+        )
+        for label, mutate in mutations:
+            with self.subTest(label=label):
+                payload = json.loads(json.dumps(original))
+                paths = payload["response"][0]["w86_acl_provenance"]["service_role_membership_paths"]
+                mutate(paths)
+                save(self.evidence / "query_13.json", payload)
+                with self.assertRaisesRegex(review.EvidenceError, "role/read-only/shape checks"):
+                    review.reconcile(self.evidence, self.repo)
+
+    def test_duplicate_projected_membership_rows_are_tolerated_but_never_authorize_writes(self):
+        payload = json.loads((self.evidence / "query_13.json").read_text(encoding="utf-8"))
+        provenance = payload["response"][0]["w86_acl_provenance"]
+        provenance["service_role_membership_paths"].append(dict(provenance["service_role_membership_paths"][1]))
+        save(self.evidence / "query_13.json", payload)
+        result = review.reconcile(self.evidence, self.repo)
+        self.assertEqual(result["w86_candidate_parent_acl_gate"], "BLOCKED_PARENT_ROLE_ACL")
+        self.assertEqual(result["service_role_inherited_table_acl_rows"], 1)
+        self.assertIs(result["hosted_write_authorized"], False)
+
+    def test_rejects_malformed_query13_acl_entry_fields(self):
+        cases = (
+            ("direct table grantor", "table_acl_entries", {"grantee": "PUBLIC", "privilege_type": "SELECT", "is_grantable": False, "grantor": "postgres"}, "grantor", 17),
+            ("direct column name", "column_acl_entries", {"column_name": "id", "grantee": "PUBLIC", "privilege_type": "SELECT", "is_grantable": False, "grantor": "postgres"}, "column_name", ""),
+            ("inherited table privilege", "service_role_inherited_table_acl_entries", None, "privilege_type", "UNKNOWN"),
+            ("inherited column grantability", "service_role_inherited_column_acl_entries", None, "is_grantable", "false"),
+        )
+        original = json.loads((self.evidence / "query_13.json").read_text(encoding="utf-8"))
+        for label, key, row, field, value in cases:
+            with self.subTest(label=label):
+                payload = json.loads(json.dumps(original))
+                provenance = payload["response"][0]["w86_acl_provenance"]
+                if row is not None:
+                    provenance[key].append(row)
+                    target = provenance[key][-1]
+                else:
+                    target = provenance[key][0]
+                target[field] = value
+                save(self.evidence / "query_13.json", payload)
+                with self.assertRaisesRegex(review.EvidenceError, "role/read-only/shape checks"):
+                    review.reconcile(self.evidence, self.repo)
+
+    def test_rejects_membership_path_without_valid_depth(self):
+        payload = json.loads((self.evidence / "query_13.json").read_text(encoding="utf-8"))
+        provenance = payload["response"][0]["w86_acl_provenance"]
+        provenance["service_role_membership_paths"][1].pop("depth")
+        save(self.evidence / "query_13.json", payload)
+        with self.assertRaises(review.EvidenceError):
+            review.reconcile(self.evidence, self.repo)
+    def test_relation_owner_set_role_path_blocks_even_without_acl_entries(self):
+        payload = json.loads((self.evidence / "query_13.json").read_text(encoding="utf-8"))
+        provenance = payload["response"][0]["w86_acl_provenance"]
+        provenance["relation"]["owner_role"] = "w86_acl_probe_parent"
+        acl_payload = json.loads((self.evidence / "query_12.json").read_text(encoding="utf-8"))
+        for acl_row in acl_payload["response"]:
+            acl_row["owner_role"] = provenance["relation"]["owner_role"]
+        save(self.evidence / "query_12.json", acl_payload)
+        provenance["service_role_membership_paths"] = [
+            {"role_name": "service_role", "depth": 0, "member_of_role": None,
+             "all_edges_inherit": True, "all_edges_set_role": True, "edge_inherit_option": None, "edge_set_option": None, "reachable_via_membership_options": True},
+            {"role_name": "w86_acl_probe_parent", "depth": 1, "member_of_role": "service_role",
+             "all_edges_inherit": False, "all_edges_set_role": True, "edge_inherit_option": False, "edge_set_option": True, "reachable_via_membership_options": True},
+        ]
+        provenance["service_role_inherited_table_acl_entries"] = []
+        provenance["service_role_inherited_column_acl_entries"] = []
+        save(self.evidence / "query_13.json", payload)
+
+        result = review.reconcile(self.evidence, self.repo)
+        self.assertEqual(result["relation_owner_role"], "w86_acl_probe_parent")
+        self.assertEqual(result["service_role_relation_owner_path_count"], 1)
+        self.assertEqual(result["w86_candidate_parent_acl_gate"], "BLOCKED_RELATION_OWNER_PATH")
+        self.assertIs(result["hosted_write_authorized"], False)
+        self.assertTrue(any("can set role to the owner" in item.lower() for item in result["hosted_write_blockers"]))
+
+    def test_relation_owner_inherit_path_blocks_even_without_set_role(self):
+        payload = json.loads((self.evidence / "query_13.json").read_text(encoding="utf-8"))
+        provenance = payload["response"][0]["w86_acl_provenance"]
+        provenance["relation"]["owner_role"] = "w86_acl_probe_parent"
+        acl_payload = json.loads((self.evidence / "query_12.json").read_text(encoding="utf-8"))
+        for acl_row in acl_payload["response"]:
+            acl_row["owner_role"] = provenance["relation"]["owner_role"]
+        save(self.evidence / "query_12.json", acl_payload)
+        provenance["service_role_membership_paths"] = [
+            {"role_name": "service_role", "depth": 0, "member_of_role": None,
+             "all_edges_inherit": True, "all_edges_set_role": True, "edge_inherit_option": None, "edge_set_option": None, "reachable_via_membership_options": True},
+            {"role_name": "w86_acl_probe_parent", "depth": 1, "member_of_role": "service_role",
+             "all_edges_inherit": True, "all_edges_set_role": False, "edge_inherit_option": True, "edge_set_option": False, "reachable_via_membership_options": True},
+        ]
+        provenance["service_role_inherited_table_acl_entries"] = []
+        provenance["service_role_inherited_column_acl_entries"] = []
+        provenance["service_role_effective_privileges"] = {
+            privilege: True for privilege in review.PRIVILEGES
+        }
+        for acl_row in acl_payload["response"]:
+            if acl_row.get("evidence_kind") == "EFFECTIVE_PRIVILEGE" and acl_row.get("grantee") == "service_role":
+                acl_row["effective_privilege"] = True
+        save(self.evidence / "query_12.json", acl_payload)
+        save(self.evidence / "query_13.json", payload)
+
+        result = review.reconcile(self.evidence, self.repo)
+        self.assertEqual(result["relation_owner_role"], "w86_acl_probe_parent")
+        self.assertEqual(result["service_role_relation_owner_path_count"], 1)
+        self.assertEqual(result["w86_candidate_parent_acl_gate"], "BLOCKED_RELATION_OWNER_PATH")
+        self.assertIs(result["hosted_write_authorized"], False)
+        self.assertTrue(any("inherits owner authority" in item.lower() for item in result["hosted_write_blockers"]))
+    def test_service_role_as_relation_owner_blocks_at_root_path(self):
+        payload = json.loads((self.evidence / "query_13.json").read_text(encoding="utf-8"))
+        provenance = payload["response"][0]["w86_acl_provenance"]
+        provenance["relation"]["owner_role"] = "service_role"
+        acl_payload = json.loads((self.evidence / "query_12.json").read_text(encoding="utf-8"))
+        for acl_row in acl_payload["response"]:
+            acl_row["owner_role"] = provenance["relation"]["owner_role"]
+        save(self.evidence / "query_12.json", acl_payload)
+        provenance["service_role_membership_paths"] = [
+            {"role_name": "service_role", "depth": 0, "member_of_role": None,
+             "all_edges_inherit": True, "all_edges_set_role": True, "edge_inherit_option": None, "edge_set_option": None, "reachable_via_membership_options": True},
+        ]
+        provenance["service_role_inherited_table_acl_entries"] = []
+        provenance["service_role_inherited_column_acl_entries"] = []
+        provenance["service_role_effective_privileges"] = {
+            privilege: True for privilege in review.PRIVILEGES
+        }
+        for acl_row in acl_payload["response"]:
+            if acl_row.get("evidence_kind") == "EFFECTIVE_PRIVILEGE" and acl_row.get("grantee") == "service_role":
+                acl_row["effective_privilege"] = True
+        save(self.evidence / "query_12.json", acl_payload)
+        save(self.evidence / "query_13.json", payload)
+
+        result = review.reconcile(self.evidence, self.repo)
+        self.assertEqual(result["relation_owner_role"], "service_role")
+        self.assertEqual(result["service_role_relation_owner_path_count"], 1)
+        self.assertEqual(result["w86_candidate_parent_acl_gate"], "BLOCKED_RELATION_OWNER_PATH")
+        self.assertIs(result["hosted_write_authorized"], False)
+    def test_authenticated_parent_path_blocks_future_select_grant(self):
+        payload = json.loads((self.evidence / "query_13.json").read_text(encoding="utf-8"))
+        provenance = payload["response"][0]["w86_acl_provenance"]
+        provenance["service_role_membership_paths"] = [
+            {"role_name": "service_role", "depth": 0, "member_of_role": None,
+             "all_edges_inherit": True, "all_edges_set_role": True, "edge_inherit_option": None, "edge_set_option": None, "reachable_via_membership_options": True},
+            {"role_name": "authenticated", "depth": 1, "member_of_role": "service_role",
+             "all_edges_inherit": False, "all_edges_set_role": True, "edge_inherit_option": False, "edge_set_option": True, "reachable_via_membership_options": True},
+        ]
+        provenance["service_role_inherited_table_acl_entries"] = []
+        provenance["service_role_inherited_column_acl_entries"] = []
+        save(self.evidence / "query_13.json", payload)
+
+        result = review.reconcile(self.evidence, self.repo)
+        self.assertEqual(result["service_role_authenticated_parent_path_count"], 1)
+        self.assertEqual(result["w86_candidate_parent_acl_gate"], "BLOCKED_AUTHENTICATED_ROLE_PATH")
+        self.assertIs(result["hosted_write_authorized"], False)
+        self.assertTrue(any(
+            "w86 grants select to authenticated" in item.lower()
+            for item in result["hosted_write_blockers"]
+        ))
+        self.assertEqual(result["service_role_inherited_table_acl_rows"], 0)
+        self.assertEqual(result["service_role_inherited_column_acl_rows"], 0)
+
+    def test_mixed_set_prefix_then_inherit_suffix_blocks_authenticated_role(self):
+        payload = json.loads((self.evidence / "query_13.json").read_text(encoding="utf-8"))
+        provenance = payload["response"][0]["w86_acl_provenance"]
+        provenance["service_role_membership_paths"] = [
+            {"role_name": "service_role", "depth": 0, "member_of_role": None,
+             "all_edges_inherit": True, "all_edges_set_role": True,
+             "edge_inherit_option": None, "edge_set_option": None,
+             "reachable_via_membership_options": True},
+            {"role_name": "w86_acl_probe_intermediate", "depth": 1,
+             "member_of_role": "service_role", "all_edges_inherit": False,
+             "all_edges_set_role": True, "edge_inherit_option": False,
+             "edge_set_option": True, "reachable_via_membership_options": True},
+            {"role_name": "authenticated", "depth": 2,
+             "member_of_role": "w86_acl_probe_intermediate", "all_edges_inherit": False,
+             "all_edges_set_role": False, "edge_inherit_option": True,
+             "edge_set_option": False, "reachable_via_membership_options": True},
+        ]
+        provenance["service_role_inherited_table_acl_entries"] = []
+        provenance["service_role_inherited_column_acl_entries"] = []
+        save(self.evidence / "query_13.json", payload)
+        result = review.reconcile(self.evidence, self.repo)
+        self.assertEqual(result["service_role_authenticated_parent_path_count"], 1)
+        self.assertEqual(result["w86_candidate_parent_acl_gate"], "BLOCKED_AUTHENTICATED_ROLE_PATH")
+        self.assertEqual(result["service_role_inherited_table_acl_rows"], 0)
+        self.assertIs(result["hosted_write_authorized"], False)
+
+    def test_no_parent_acl_observed_still_never_authorizes_hosted_write(self):
+        payload = json.loads((self.evidence / "query_13.json").read_text(encoding="utf-8"))
+        provenance = payload["response"][0]["w86_acl_provenance"]
+        provenance["service_role_effective_privileges"]["UPDATE"] = True
+        provenance["service_role_membership_paths"] = [
+            item for item in provenance["service_role_membership_paths"]
+            if item.get("depth") == 0
+        ]
+        provenance["service_role_inherited_table_acl_entries"] = []
+        provenance["service_role_inherited_column_acl_entries"] = []
+        save(self.evidence / "query_13.json", payload)
+
+        result = review.reconcile(self.evidence, self.repo)
+        self.assertEqual(result["w86_candidate_parent_acl_gate"], "NO_PARENT_ROLE_ACL_OBSERVED")
+        self.assertIs(result["hosted_write_authorized"], False)
+        self.assertEqual(
+            result["hosted_write_authorization_status"],
+            "NOT_AUTHORIZED_BY_OFFLINE_REVIEWER",
+        )
+        self.assertTrue(any("historical migration sql provenance" in item.lower()
+                            for item in result["hosted_write_blockers"]))
+        rendered = review.render_markdown(result)
+        self.assertIn("NO_PARENT_ROLE_ACL_OBSERVED", rendered)
+        self.assertIn("hosted writes remain unauthorized", rendered.lower())
+
+    def test_source_migration_manifest_is_deterministic_and_content_sensitive(self):
+        first = review.reconcile(self.evidence, self.repo)
+        second = review.reconcile(self.evidence, self.repo)
+        self.assertEqual(
+            first["source_migration_manifest_sha256"],
+            second["source_migration_manifest_sha256"],
+        )
+        migration = self.repo / "supabase" / "migrations" / "20261013100000_w80_example.sql"
+        migration.write_text("select 999;\n", encoding="utf-8")
+        changed = review.reconcile(self.evidence, self.repo)
+        self.assertNotEqual(
+            first["source_migration_manifest_sha256"],
+            changed["source_migration_manifest_sha256"],
+        )
+
+    def test_git_checkout_head_and_dirty_migration_tree_are_reported(self):
+        if shutil.which("git") is None:
+            self.skipTest("git is unavailable")
+
+        def git(*args):
+            return subprocess.run(
+                ["git", *args], cwd=self.repo, check=True, capture_output=True,
+                text=True, encoding="utf-8", timeout=10,
+            )
+
+        git("init", "-q")
+        git("config", "user.name", "ZAVQERA offline test")
+        git("config", "user.email", "zavqera-test@example.invalid")
+        git("add", "supabase/migrations")
+        git("commit", "-qm", "test-only migration fixture")
+        clean = review.reconcile(self.evidence, self.repo)
+        self.assertRegex(clean["source_checkout_head_sha"], r"^[0-9a-f]{40,64}$")
+        self.assertIs(clean["source_migrations_worktree_clean"], True)
+        migration = self.repo / "supabase" / "migrations" / "20261013100000_w80_example.sql"
+        migration.write_text("select 88;\n", encoding="utf-8")
+        dirty = review.reconcile(self.evidence, self.repo)
+        self.assertEqual(dirty["source_checkout_head_sha"], clean["source_checkout_head_sha"])
+        self.assertIs(dirty["source_migrations_worktree_clean"], False)
+        self.assertNotEqual(
+            dirty["source_migration_manifest_sha256"],
+            clean["source_migration_manifest_sha256"],
+        )
+
+    def test_ignored_untracked_migration_file_is_not_reported_clean(self):
+        if shutil.which("git") is None:
+            self.skipTest("git is unavailable")
+
+        def git(*args):
+            return subprocess.run(
+                ["git", *args], cwd=self.repo, check=True, capture_output=True,
+                text=True, encoding="utf-8", timeout=10,
+            )
+
+        ignore_rule = self.repo / ".gitignore"
+        ignore_rule.write_text(
+            "/supabase/migrations/20261017123456_ignored_probe.sql\n",
+            encoding="utf-8",
+        )
+        git("init", "-q")
+        git("config", "user.name", "ZAVQERA offline test")
+        git("config", "user.email", "zavqera-test@example.invalid")
+        git("add", ".gitignore", "supabase/migrations")
+        git("commit", "-qm", "test-only migration fixture and ignore rule")
+        clean = review.reconcile(self.evidence, self.repo)
+        self.assertIs(clean["source_migrations_worktree_clean"], True)
+
+        ignored_migration = self.repo / "supabase" / "migrations" / "20261017123456_ignored_probe.sql"
+        ignored_migration.write_text("select 77;\n", encoding="utf-8")
+        git("check-ignore", "-q", "supabase/migrations/20261017123456_ignored_probe.sql")
+
+        result = review.reconcile(self.evidence, self.repo)
+        self.assertIs(
+            result["source_migrations_worktree_clean"],
+            False,
+            "ignored SQL files are included in the migration manifest and must not be reported as Git-clean",
+        )
+        self.assertNotEqual(
+            result["source_migration_manifest_sha256"],
+            clean["source_migration_manifest_sha256"],
+        )
 
     def test_effective_service_role_write_is_reported(self):
         payload = json.loads((self.evidence / "query_12.json").read_text())
@@ -109,17 +711,122 @@ class HostedLedgerReviewTests(unittest.TestCase):
         with self.assertRaises(review.EvidenceError):
             review.reconcile(self.evidence, self.repo)
 
+    def test_rejects_wrong_read_only_identity_in_provenance(self):
+        payload = json.loads((self.evidence / "query_13.json").read_text())
+        payload["response"][0]["w86_acl_provenance"]["current_user"] = "postgres"
+        save(self.evidence / "query_13.json", payload)
+        with self.assertRaises(review.EvidenceError):
+            review.reconcile(self.evidence, self.repo)
+
     def test_rejects_empty_ledger(self):
         save(self.evidence / "query_11.json", {"response": []})
         with self.assertRaises(review.EvidenceError):
             review.reconcile(self.evidence, self.repo)
 
+    def test_runbook_documents_owner_authority_in_both_membership_modes(self):
+        runbook_path = Path(__file__).resolve().parents[1] / "docs" / "ZAVQERA_HOSTED_MIGRATION_EFFECT_AUDIT_RUNBOOK_2026-10-15.md"
+        runbook = runbook_path.read_text(encoding="utf-8")
+        self.assertIn("REVIEW REQUIRED / NO-GO", runbook)
+        self.assertIn("obtain owner authority through either `INHERIT` or `SET ROLE`", runbook)
+        self.assertIn("any path from `service_role` to the table owner with either `INHERIT` or `SET ROLE` enabled", runbook)
+        self.assertIn("no fresh hosted 13-query capture has been recorded", runbook)
+        self.assertIn("There is no hosted-write authorization in this workflow.", runbook)
+        self.assertIn("Historical 12-query offline comparison — obsolete, not a current procedure", runbook)
+        historical = runbook.split("## Historical 12-query offline comparison — obsolete, not a current procedure", 1)[1]
+        historical = historical.split("## Verified isolated SQL smoke", 1)[0]
+        self.assertNotIn("$auditDir =", historical)
+        self.assertIn("the current reviewer requires `query_13.json`", historical)
+        self.assertIn("Current authoritative capture procedure — 13 queries", runbook)
     def test_report_is_no_go(self):
         result = review.reconcile(self.evidence, self.repo)
         rendered = review.render_markdown(result)
         self.assertIn("REVIEW REQUIRED / RELEASE NO-GO", rendered)
         self.assertIn("Same-name/different-version", rendered)
-        self.assertIn("not a full authorization proof", rendered)
+        self.assertIn("Source checkout HEAD", rendered)
+        self.assertIn("Source migration manifest SHA-256", rendered)
+        self.assertIn("service_role inherited table ACL rows: **1**", rendered)
+        self.assertIn("W86 parent-role ACL gate: **BLOCKED_PARENT_ROLE_ACL**", rendered)
+        self.assertIn("Hosted write authorized: **False**", rendered)
+        self.assertIn("inherited ACL row is a blocker", rendered)
+        self.assertIn("not complete proof of reachability", rendered)
+
+
+    def test_persisted_migration_provenance_ledger_is_consistent(self):
+        ledger_path = (
+            Path(__file__).resolve().parents[1]
+            / "docs"
+            / "ZAVQERA_MIGRATION_PROVENANCE_RECONCILIATION_LEDGER_2026-10-17.md"
+        )
+        ledger = ledger_path.read_text(encoding="utf-8")
+        rows = [
+            [cell.strip() for cell in line.strip().strip("|").split("|")]
+            for line in ledger.splitlines()
+            if line.startswith("| ZMR-")
+        ]
+
+        self.assertEqual(len(rows), 95)
+        self.assertEqual([row[0] for row in rows], [f"ZMR-{i:03d}" for i in range(1, 96)])
+        self.assertTrue(all(len(row) == 9 for row in rows))
+        self.assertTrue(all(row[8] == "PENDING" for row in rows))
+        self.assertFalse(any(row[6] == "EXACT_SOURCE_BYTES_VERIFIED" for row in rows))
+
+        expected = {
+            "EXACT_VERSION_NAME_TUPLE": ("UNKNOWN", 46),
+            "SAME_NAME_DIFFERENT_VERSION": ("NAME_VERSION_CONFLICT", 22),
+            "SOURCE_TUPLE_ABSENT_FROM_HOSTED_LEDGER": ("SOURCE_NOT_IN_LEDGER", 21),
+            "HOSTED_TUPLE_ABSENT_FROM_SOURCE": ("HOSTED_ONLY_SOURCE_UNKNOWN", 6),
+        }
+        for relation, (classification, expected_count) in expected.items():
+            matching = [row for row in rows if row[5] == relation]
+            self.assertEqual(len(matching), expected_count, relation)
+            self.assertTrue(all(row[6] == classification for row in matching), relation)
+
+        exact = [row for row in rows if row[5] == "EXACT_VERSION_NAME_TUPLE"]
+        self.assertTrue(all((row[1], row[2]) == (row[3], row[4]) for row in exact))
+        conflicts = [row for row in rows if row[5] == "SAME_NAME_DIFFERENT_VERSION"]
+        self.assertTrue(all(row[2] == row[4] and row[1] != row[3] for row in conflicts))
+        source_only = [row for row in rows if row[5] == "SOURCE_TUPLE_ABSENT_FROM_HOSTED_LEDGER"]
+        self.assertTrue(all(row[3] == "—" and row[4] == "—" for row in source_only))
+        hosted_only = [row for row in rows if row[5] == "HOSTED_TUPLE_ABSENT_FROM_SOURCE"]
+        self.assertTrue(all(row[1] == "—" and row[2] == "—" for row in hosted_only))
+
+
+    def test_captured_source_manifest_is_reproducible_across_line_endings(self):
+        import hashlib
+
+        root = Path(__file__).resolve().parents[1]
+        migration_dir = root / "supabase" / "migrations"
+        sql_files = sorted(migration_dir.glob("*.sql"), key=lambda path: path.name)
+        self.assertEqual(len(sql_files), 89)
+
+        def digest_manifest(crlf_checkout):
+            rows = []
+            for path in sql_files:
+                raw = path.read_bytes()
+                if crlf_checkout:
+                    raw = raw.replace(b"\r\n", b"\n").replace(b"\r", b"\n").replace(b"\n", b"\r\n")
+                rows.append(f"{path.name}\t{hashlib.sha256(raw).hexdigest()}\n")
+            return hashlib.sha256("".join(rows).encode("utf-8")).hexdigest()
+
+        lf_digest = digest_manifest(crlf_checkout=False)
+        crlf_digest = digest_manifest(crlf_checkout=True)
+        captured_digest = "0d05ab7285edc975084ddbc595d1af7d2dd0752cc27e94d8fe0549170419be38"
+        self.assertNotEqual(lf_digest, captured_digest)
+        self.assertEqual(crlf_digest, captured_digest)
+
+    def test_lf_normalized_manifest_is_stable_across_line_endings(self):
+        migration = self.repo / "supabase" / "migrations" / "20261013100000_w80_example.sql"
+        lf_result = review.reconcile(self.evidence, self.repo)
+        lf_raw_digest = lf_result["source_migration_manifest_sha256"]
+        normalized_digest = lf_result["source_migration_manifest_lf_normalized_sha256"]
+
+        migration.write_bytes(b"select 1;\r\n")
+        crlf_result = review.reconcile(self.evidence, self.repo)
+        self.assertNotEqual(lf_raw_digest, crlf_result["source_migration_manifest_sha256"])
+        self.assertEqual(
+            normalized_digest,
+            crlf_result["source_migration_manifest_lf_normalized_sha256"],
+        )
 
 
 if __name__ == "__main__":

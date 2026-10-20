@@ -1,0 +1,289 @@
+{
+  "schema_version": 1,
+  "generated_at_utc": "2026-10-18",
+  "scan_method": "GitHub recursive git tree snapshots at every branch tip returned by GitHub API for the two repositories; exact filename matching; no mutations.",
+  "repositories": [
+    {
+      "name": "abdalrhmanata-gif/Nexo",
+      "branch_tip_count": 23
+    },
+    {
+      "name": "abdalrhmanata-gif/nexo-w21-isolated-verification-20261015",
+      "branch_tip_count": 4
+    }
+  ],
+  "summary": {
+    "branch_tips_scanned": 27,
+    "tree_responses_untruncated": true,
+    "candidate_filenames_checked": 28,
+    "hosted_filename_hits": 0,
+    "audited_source_head": "fbbcb080904acd88aad83a082803f627859026e2",
+    "source_migration_files_at_audited_head": 89,
+    "source_ledger_names_found": 89,
+    "hosted_rows": 74,
+    "version_name_exact_path_count": 46,
+    "version_conflict_paths_absent_from_branch_tip_snapshots": 22,
+    "hosted_only_paths_absent_from_branch_tip_snapshots": 6
+  },
+  "branch_tips": [
+    {
+      "repository": "original",
+      "branch": "abdalrhmanata-gif-import-nexo-v1-9",
+      "head": "9219518b853a4125721b4292067840a685c7e74a",
+      "tree_entries": 97,
+      "truncated": false,
+      "hosted_candidate_filename_hits": []
+    },
+    {
+      "repository": "original",
+      "branch": "abdalrhmanata-gif-netlify-alternative-deployment",
+      "head": "bc7dd99ad49a580392b8b64fd165cc2802be9c59",
+      "tree_entries": 199,
+      "truncated": false,
+      "hosted_candidate_filename_hits": []
+    },
+    {
+      "repository": "original",
+      "branch": "agent-origin-main-clean-2df7",
+      "head": "1de719f9cd1f4b15f22efc7e880c9374056a8c79",
+      "tree_entries": 196,
+      "truncated": false,
+      "hosted_candidate_filename_hits": []
+    },
+    {
+      "repository": "original",
+      "branch": "codex/egress-gateway-auth-staging-20261015",
+      "head": "b184b91540c80be8a07b455bddaeca9080fad4f0",
+      "tree_entries": 504,
+      "truncated": false,
+      "hosted_candidate_filename_hits": []
+    },
+    {
+      "repository": "original",
+      "branch": "codex/mission-action-runtime-seam-test-20261014",
+      "head": "9d752a59f0683ea7149633138dc85bb33cf9a41b",
+      "tree_entries": 507,
+      "truncated": false,
+      "hosted_candidate_filename_hits": []
+    },
+    {
+      "repository": "original",
+      "branch": "codex/w66-w82-dev-audit-refresh-20261014",
+      "head": "5aea5611bbb975b971a9c7f7947d4c47b1cb438b",
+      "tree_entries": 490,
+      "truncated": false,
+      "hosted_candidate_filename_hits": []
+    },
+    {
+      "repository": "original",
+      "branch": "codex/w80-pgtap-verification-20261014",
+      "head": "0c56de7c84d41c43f77d86e84dea67f2d88f6ec7",
+      "tree_entries": 493,
+      "truncated": false,
+      "hosted_candidate_filename_hits": []
+    },
+    {
+      "repository": "original",
+      "branch": "codex/w80-sql-privilege-fix-20261014",
+      "head": "2e7dcccf9679ecc78f2b522064a4b121135645c4",
+      "tree_entries": 491,
+      "truncated": false,
+      "hosted_candidate_filename_hits": []
+    },
+    {
+      "repository": "original",
+      "branch": "codex/w80-sql-review-base-20261014",
+      "head": "5e2094fd27c7de60496729956af562651de93137",
+      "tree_entries": 490,
+      "truncated": false,
+      "hosted_candidate_filename_hits": []
+    },
+    {
+      "repository": "original",
+      "branch": "codex/w80-workflow-enablement-20261014",
+      "head": "81ef820d160bfef04edbbab181fc562de203f7fa",
+      "tree_entries": 106,
+      "truncated": false,
+      "hosted_candidate_filename_hits": []
+    },
+    {
+      "repository": "original",
+      "branch": "codex/zavqera-windows-path-guards",
+      "head": "5c1d093d6b2c33c41e5446d10f2c5ed8256be996",
+      "tree_entries": 479,
+      "truncated": false,
+      "hosted_candidate_filename_hits": []
+    },
+    {
+      "repository": "original",
+      "branch": "followthrough-action-loop",
+      "head": "0e1daf921e72d248962d68d9cf29af26591ca166",
+      "tree_entries": 103,
+      "truncated": false,
+      "hosted_candidate_filename_hits": []
+    },
+    {
+      "repository": "original",
+      "branch": "main",
+      "head": "f64a87addb25a7455c6acde446b81bb3427d43cc",
+      "tree_entries": 105,
+      "truncated": false,
+      "hosted_candidate_filename_hits": []
+    },
+    {
+      "repository": "original",
+      "branch": "zavqera/ai-planner-integration",
+      "head": "1b02272a7281b2e9ebf9020cd21a8ac9de3e577e",
+      "tree_entries": 508,
+      "truncated": false,
+      "hosted_candidate_filename_hits": []
+    },
+    {
+      "repository": "original",
+      "branch": "zavqera/alternative-web-deployment",
+      "head": "46dc6029f084fb000ba511478d6e8aec3eb532b3",
+      "tree_entries": 258,
+      "truncated": false,
+      "hosted_candidate_filename_hits": []
+    },
+    {
+      "repository": "original",
+      "branch": "zavqera/controlled-adapter-ci-validation",
+      "head": "96a6803b69dbe62e886bfe04fc4fee5c818e9565",
+      "tree_entries": 250,
+      "truncated": false,
+      "hosted_candidate_filename_hits": []
+    },
+    {
+      "repository": "original",
+      "branch": "zavqera/first-user-validation-execution-kit",
+      "head": "9402265722126333bdb684e5bd4fc0e4aff9a001",
+      "tree_entries": 195,
+      "truncated": false,
+      "hosted_candidate_filename_hits": []
+    },
+    {
+      "repository": "original",
+      "branch": "zavqera/integrate-origin-main-clean",
+      "head": "bb095b716c29d4c13e83d5c817bf2676d127d61a",
+      "tree_entries": 196,
+      "truncated": false,
+      "hosted_candidate_filename_hits": []
+    },
+    {
+      "repository": "original",
+      "branch": "zavqera/netlify-preview-candidate",
+      "head": "1c4e4b37f7378443ec1faaea169b1279469ceaa7",
+      "tree_entries": 318,
+      "truncated": false,
+      "hosted_candidate_filename_hits": []
+    },
+    {
+      "repository": "original",
+      "branch": "zavqera/next-phase-first-user-validation",
+      "head": "ff567e524c8358148922c8780674c16e2be67020",
+      "tree_entries": 194,
+      "truncated": false,
+      "hosted_candidate_filename_hits": []
+    },
+    {
+      "repository": "original",
+      "branch": "zavqera/openai-responses-integration",
+      "head": "45d335e4c8a7a6b9627795e51fcb73fdde453f43",
+      "tree_entries": 113,
+      "truncated": false,
+      "hosted_candidate_filename_hits": []
+    },
+    {
+      "repository": "original",
+      "branch": "zavqera/public-preview-deployment",
+      "head": "6f66b3b3c317fa7787753a8668c84ab8a076b959",
+      "tree_entries": 198,
+      "truncated": false,
+      "hosted_candidate_filename_hits": []
+    },
+    {
+      "repository": "original",
+      "branch": "zavqera/web-technical-validation-ci",
+      "head": "c61536c08014712877cefb9cfe8a4fdfc7bd7de1",
+      "tree_entries": 196,
+      "truncated": false,
+      "hosted_candidate_filename_hits": []
+    },
+    {
+      "repository": "isolated",
+      "branch": "codex/migration-ledger-provenance-20261015",
+      "head": "5f90815d1b5d0ff798e5ff82ce038133677e9e98",
+      "tree_entries": 549,
+      "truncated": false,
+      "hosted_candidate_filename_hits": []
+    },
+    {
+      "repository": "isolated",
+      "branch": "codex/mission-action-runtime-seam-test-20261014",
+      "head": "ec16dc5de69805cadccd1653984802768b22f3f5",
+      "tree_entries": 509,
+      "truncated": false,
+      "hosted_candidate_filename_hits": []
+    },
+    {
+      "repository": "isolated",
+      "branch": "codex/w80-forward-correction-20261015",
+      "head": "b0068d7f677c56fb45f9752b3679497159eabd93",
+      "tree_entries": 530,
+      "truncated": false,
+      "hosted_candidate_filename_hits": []
+    },
+    {
+      "repository": "isolated",
+      "branch": "codex/w86-agent-executions-acl-correction-20261015",
+      "head": "0dc44842f9eaa25d0f34628b1c5c3de0741b41cf",
+      "tree_entries": 536,
+      "truncated": false,
+      "hosted_candidate_filename_hits": []
+    }
+  ],
+  "hosted_version_conflict_filenames": [
+    "20260921180138_w4_table_privilege_hardening.sql",
+    "20261004083051_w30_reconstruct_missing_w5_history_tables.sql",
+    "20260924172730_w7_authoritative_action_mutation.sql",
+    "20260924173730_w8_lifecycle_integrity_provenance.sql",
+    "20260924174933_w9_verification_outcome_lifecycle.sql",
+    "20260924175412_w9_1_completed_outcome_guard.sql",
+    "20260924180025_w10_deletion_integrity_read_boundary.sql",
+    "20260926060416_w16_audit_history_table_hardening.sql",
+    "20261004074420_w30_server_only_quota_rls_deny_policy.sql",
+    "20261005080648_w36_enable_pro_plan_identity.sql",
+    "20261008142204_w41_seed_bounded_research_agent.sql",
+    "20261008145424_w42_workspace_rpc_authorization_parity.sql",
+    "20261008145525_w43_bounded_agent_execution_runtime.sql",
+    "20261008155642_w44_invitation_lifecycle.sql",
+    "20261008160824_w45_workspace_member_management.sql",
+    "20261008161055_w46_workspace_activity_audit.sql",
+    "20261008161617_w46_activity_security_hardening.sql",
+    "20261009092613_w47_atomic_workspace_bootstrap.sql",
+    "20261009093725_w48_seed_research_agent_for_new_workspaces.sql",
+    "20261009171718_w49_agent_execution_recovery.sql",
+    "20261009171722_w50_expired_execution_lease_fence.sql",
+    "20261009185119_w51_member_rpc_wrapper_permissions.sql"
+  ],
+  "hosted_only_filenames": [
+    "20261007105825_expose_anonymous_ai_guard_rpc.sql",
+    "20261005053351_w35_plan_ai_allowances_5_50_300.sql",
+    "20261008150359_w44_workspace_invitations_and_activity.sql",
+    "20261008161103_w46_invitation_activity_bindings.sql",
+    "20260921180227_w4_harden_profile_trigger_search_path.sql",
+    "20260924171437_w6_authoritative_mission_mutation_and_concurrency.sql"
+  ],
+  "important_limit": "This is a snapshot of the 27 branch tips visible on 2026-10-18. It is not exhaustive Git object/history/fork/deleted-branch or deployment-artifact evidence. Absence from tips does not prove a migration was not executed.",
+  "w4_source_commit": {
+    "repo": "abdalrhmanata-gif/nexo-w21-isolated-verification-20261015",
+    "commit": "772f011624c199adc021a61d039a4cf13e9a3740",
+    "date_utc": "2026-09-25T21:11:21Z",
+    "message": "merge: stage ZAVQERA integration without historical artifact",
+    "source_file": "supabase/migrations/20260921180052_w4_table_privilege_hardening.sql",
+    "source_file_status": "added",
+    "meaning": "Shows when the source-side copy appeared in this repo history; does not establish the SQL bytes deployed under hosted version 20260921180138."
+  },
+  "disposition": "NO-GO; hosted_write_authorized=false; owner review and historical source/deployment provenance remain blocking."
+}

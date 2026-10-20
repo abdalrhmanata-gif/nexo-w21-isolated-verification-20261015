@@ -6,6 +6,7 @@ on:
     branches:
       - codex/mission-action-runtime-seam-test-20261014
       - codex/w80-forward-correction-20261015
+      - codex/migration-ledger-provenance-20261015
     paths:
       - .github/workflows/zavqera-w80-isolated-pgtap.yml
       - supabase/tests/w44_workspace_invitations.sql
@@ -17,7 +18,9 @@ on:
       - tools/supabase_readonly_catalog_audit.py
       - tests/test_supabase_readonly_catalog_audit.py
       - supabase/tests/hosted_readonly_migration_effect_audit_queries.sql
+      - supabase/tests/hosted_readonly_w86_acl_provenance_query.sql
       - tools/supabase_readonly_migration_effect_audit.py
+      - tools/run_zavqera_readonly_effect_audit.ps1
       - tests/test_supabase_readonly_migration_effect_audit.py
       - tools/review_hosted_migration_ledger.py
       - tests/test_review_hosted_migration_ledger.py
@@ -388,7 +391,8 @@ jobs:
           query_pack_status=0
           for specification in \
             "catalog hosted_readonly_catalog_audit_queries.sql" \
-            "migration_effect hosted_readonly_migration_effect_audit_queries.sql"; do
+            "migration_effect hosted_readonly_migration_effect_audit_queries.sql" \
+            "w86_acl_provenance hosted_readonly_w86_acl_provenance_query.sql"; do
             read -r label filename <<< "${specification}"
             query_pack="${GITHUB_WORKSPACE}/supabase/tests/${filename}"
             label_upper="$(printf '%s' "$label" | tr '[:lower:]' '[:upper:]')"
@@ -503,3 +507,4 @@ jobs:
             ${{ runner.temp }}/W85_SUPABASE_ADMIN_AUDIT_PGTAP_OUTPUT.txt
             ${{ runner.temp }}/W85_READONLY_CATALOG_QUERY_PACK.txt
             ${{ runner.temp }}/MIGRATION_EFFECT_READONLY_QUERY_PACK.txt
+            ${{ runner.temp }}/W86_ACL_PROVENANCE_READONLY_QUERY_PACK.txt

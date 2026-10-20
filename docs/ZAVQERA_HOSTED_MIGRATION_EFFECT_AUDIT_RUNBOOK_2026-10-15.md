@@ -1,65 +1,38 @@
 # ZAVQERA — Supplemental Hosted Migration-Effect Audit Runbook (2026-10-15)
 
-**Status: the original 10-query version was executed; updated 12-query version is prepared but not yet executed against hosted Development.** Captured evidence identified catalog/history mismatches. Queries 11–12 now add the hosted migration ledger version/name pairs and the W66 table ACL inventory. This remains read-only and cannot approve a rollout.
+**Current status — 2026-10-16: REVIEW REQUIRED / NO-GO.** The supplied hosted evidence archive is an older 12-query capture and has no `query_13.json`. This branch contains the pinned 12-query base pack plus a separate, SHA-256-pinned SELECT-only ACL-provenance query 13 and the secure Windows capture wrapper. The isolated tests pass, but **no fresh hosted 13-query capture has been recorded**. The old capture must not be treated as evidence about inherited `INHERIT` / `SET ROLE` paths. The W86 candidate and offline reviewer were also strengthened to block the case where `service_role` is the table owner or can obtain owner authority through either `INHERIT` or `SET ROLE`, even when ordinary owner ACL rows are absent. Query 13 already returns the table owner and membership paths needed for that review. This runbook performs read-only metadata collection only; it never authorizes hosted changes or release.
 
 ## Repository and safety scope
 
 - Repository: `abdalrhmanata-gif/nexo-w21-isolated-verification-20261015`
-- Branch: `codex/w80-forward-correction-20261015`
+- Audit branch: `codex/migration-ledger-provenance-20261015` (older instructions on the W80 branch are superseded).
 - Project: `ZAVQERA Development`, ref `mrwmmbytcymqgwvcoywd`, region `eu-west-1`
 - Pack: `supabase/tests/hosted_readonly_migration_effect_audit_queries.sql`
 - Runner: `tools/supabase_readonly_migration_effect_audit.py`
 - Tests: `tests/test_supabase_readonly_migration_effect_audit.py`
-- Pack SHA-256 (LF-normalized, updated 12-query version): `a7aba3461786dbb5854f71dc4f87b7e0498d12509add535ab3df4a7ec231a284`
-- All 12 fixed statements must begin with SELECT. The runner pins the digest, verifies the project identity before SQL and checks effective role/transaction guard before query 2.
+- Base pack SHA-256 (12 SELECT statements): `a7aba3461786dbb5854f71dc4f87b7e0498d12509add535ab3df4a7ec231a284`
+- Query 13 SHA-256 (role-path ACL provenance): `806c1fbc1842860387dea71cdcefc6d02edf8e4f23ad1aa07ece96c1a1a8312b`
+- The current runner executes 13 fixed SELECT statements. It pins both hashes, validates the target project before SQL, and requires the effective session to be `supabase_read_only_user` in a read-only transaction before accepting evidence.
 - Only `POST /v1/projects/{ref}/database/query/read-only` is allowed for SQL. The normal SQL endpoint is never used.
 - The observed read-only role has `rolbypassrls=true`; the pack is limited to catalog/ledger metadata. Do not add application-row queries.
 - Never set the query target to Main/Production; never send a PAT through ChatGPT, GitHub, a file, command-line argument, or shell history.
 
-## Windows PowerShell procedure
+## Current Windows PowerShell procedure — use only this procedure
 
-Run from the existing checkout in the PowerShell window. First pull the new docs/pack/runner/tests/workflow updates:
+The earlier inline-token procedure in the historical version of this runbook is superseded. Use the secure wrapper below; do not run the capture by manually placing the token in an environment variable, command argument, script, or chat.
 
-```powershell
-git pull --ff-only origin codex/w80-forward-correction-20261015
-```
-
-Then run local self-test and isolated unit tests (no hosted network requests):
+From the isolated repository root:
 
 ```powershell
-py -3 tools/supabase_readonly_migration_effect_audit.py --self-test
-if ($LASTEXITCODE -ne 0) { throw "Self-test failed; do not connect." }
-
-py -3 -m unittest discover -s tests -p "test_supabase_readonly_migration_effect_audit.py" -v
-if ($LASTEXITCODE -ne 0) { throw "Unit tests failed; do not connect." }
+git fetch origin codex/migration-ledger-provenance-20261015
+git switch codex/migration-ledger-provenance-20261015
+git pull --ff-only origin codex/migration-ledger-provenance-20261015
+powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\run_zavqera_readonly_effect_audit.ps1
 ```
 
-Only continue after both commands pass. Confirm your PAT is a **Scoped Personal Access Token** with scope limited to this one Development project and only these permissions:
-- Project Settings — Read
-- Database — Read (`database_read`)
+The wrapper runs the self-test before prompting, collects the scoped Development-only token using hidden SecureString input, executes the pinned 13-query read-only endpoint, clears its temporary token state, and runs the offline reviewer without inheriting the token. It creates a ZIP for evidence. Upload **only the ZIP**; never paste or upload a token.
 
-If the token previously pasted into ChatGPT was not already revoked, revoke it first. A revoked token cannot be reused.
-
-Set the project ref, receive the token through a hidden prompt, and run the supplemental audit. Paste one line at a time or paste this complete block; do not include token text anywhere in it.
-
-```powershell
-$env:SUPABASE_PROJECT_REF = "mrwmmbytcymqgwvcoywd"
-$secure = Read-Host "Scoped Development PAT (hidden)" -AsSecureString
-$env:SUPABASE_ACCESS_TOKEN = [System.Net.NetworkCredential]::new("", $secure).Password
-$secure.Dispose()
-$env:ZAVQERA_AUDIT_CONFIRMATION = "DEVELOPMENT_ONLY_READ_ONLY"
-
-try {
-    py -3 tools/supabase_readonly_migration_effect_audit.py
-    $auditExitCode = $LASTEXITCODE
-    Write-Host "EFFECT_AUDIT_EXIT_CODE=$auditExitCode"
-}
-finally {
-    Remove-Item Env:SUPABASE_ACCESS_TOKEN, Env:SUPABASE_PROJECT_REF, Env:ZAVQERA_AUDIT_CONFIRMATION -ErrorAction SilentlyContinue
-}
-```
-
-The secure prompt normally displays masking characters rather than the token. Do not echo the token or test it with other commands. After the script exits, the environment variables are removed. Revoke the PAT after the work is complete if it was created for this audit only.
+If the token or local checkout is unavailable, stop. Do not substitute the normal Supabase SQL endpoint, make up query 13, or infer role-path results from the old capture. There is no hosted-write authorization in this workflow.
 
 ## Expected output and interpretation
 
@@ -84,26 +57,22 @@ The secure prompt normally displays masking characters rather than the token. Do
 10. Built-in and explicit function-default ACLs for `postgres` and `supabase_admin`.
 11. Migration ledger `version,name` pairs only; SQL bodies are not returned.
 12. Effective and expanded stored ACL rows for `public.agent_executions` (W66).
+13. Relation owner identity, reachable role-membership paths and inherited table/column ACL provenance for `service_role`; covers `INHERIT`, `SET ROLE`, the `authenticated` future-grant target, and reachable table-owner authority.
 
 ## After collection
 
-Next, run the updated pack after CI/local PostgreSQL 17 syntax validation, then manually match ledger tuples to source files and classify the W66 effective/stored ACLs. Do not assume the ledger row count until the new capture is reviewed. A database/platform owner must independently review all unexpected privilege paths, function owners/modes, search paths, relation ACLs and default ACL policy.
+After a fresh 13-query capture, manually match ledger tuples to source files and classify the W66 effective/stored ACLs; also review `relation.owner_role`, any path from `service_role` to `authenticated`, and any path from `service_role` to the table owner with either `INHERIT` or `SET ROLE` enabled. A table-owner path or inherited ACL blocks W86 as-is. Existing isolated PostgreSQL 17/CI success validates the code pack only; it is not a substitute for hosted Development evidence. Do not assume the ledger row count until the new capture is reviewed. A database/platform owner must independently review all unexpected privilege paths, function owners/modes, search paths, relation ACLs and default ACL policy.
 
 No hosted remediation is authorized by this runbook. Do not run `supabase db push`, `migration repair`, manually edit `supabase_migrations.schema_migrations`, replay migrations against hosted Development, or change Supabase Main/Production. Any future hosted migration requires a separate reviewed plan and explicit owner authorization.
 
 **Release remains NO-GO.** Keep PR #39 open/Draft/unmerged, Issue #23 open, and `TRUSTED_DISPATCH_ADAPTERS` empty/fail-closed.
 
 
-## Offline comparison after the updated 12-query capture
+## Historical 12-query offline comparison — obsolete, not a current procedure
 
-After the updated audit completes and the evidence folder contains query_11.json and query_12.json, run this from the repository root in PowerShell:
+This section records the original 12-query workflow for context only. Do **not** run the old command below against a current evidence folder: the current reviewer requires `query_13.json` and will reject an archive containing only query 11/12.
 
-```powershell
-$auditDir = "C:\Users\oem\nexo-w21-isolated-verification-20261015\zavqera-readonly-effect-audit-output\<new-UTC-folder>"
-py -3 tools/review_hosted_migration_ledger.py --evidence-dir $auditDir
-```
-
-This offline comparator verifies the project/query-pack evidence identity, compares every hosted ledger (version,name) tuple to checked-in migration filenames, records same-name/different-version candidates and inspects the captured W66 ACL matrix. It writes ledger_acl_review.json and ledger_acl_review.md inside that evidence folder. Its status is always REVIEW REQUIRED / NO-GO; it cannot certify historical SQL equality and it never connects to Supabase.
+For a new capture, use **Current authoritative capture procedure — 13 queries** near the end of this runbook. The secure wrapper invokes the offline reviewer against the newly created 13-query evidence folder automatically. The reviewer is offline-only, always reports REVIEW REQUIRED / NO-GO, and cannot authorize hosted writes.
 
 
 ## Verified isolated SQL smoke — 2026-10-15
@@ -118,3 +87,181 @@ This is syntax/catalog compatibility evidence on a disposable database only. It 
 The user has now run the updated pack against Development and supplied evidence. ZIP SHA-256: `fff6f88aca42c73dc691ead099e969f3cfc911fea5504ce1291b6e04ae0320f6`; capture UTC `2026-10-15T18:45:25.121761+00:00`; query-pack SHA-256 `a7aba3461786dbb5854f71dc4f87b7e0498d12509add535ab3df4a7ec231a284`.
 
 Queries 11/12 provide 74 hosted ledger tuples and direct W66 relation ACL evidence. The key finding is that `service_role` has all eight queried effective/stored privileges on `public.agent_executions`, including direct INSERT/UPDATE/DELETE/TRUNCATE, contrary to the checked-in W66 `REVOKE ALL`. Full review and counts are in `docs/ZAVQERA_HOSTED_12_QUERY_AUDIT_REVIEW_2026-10-15.md`. The tool status remains `CAPTURED_FOR_MANUAL_REVIEW`, not a release pass. Do not run hosted repair SQL or migrations.
+
+
+## Updated Development capture — 13 queries, including inherited ACL provenance (2026-10-16)
+
+The previous 12-query capture remains valid evidence for the 2026-10-15 observation, but it does not include role-membership inheritance paths. A fresh capture is required before any W86 hosted repair proposal.
+
+The guarded runner now pins two files independently:
+- Base 12-query pack SHA-256: a7aba3461786dbb5854f71dc4f87b7e0498d12509add535ab3df4a7ec231a284
+- Query 13, supabase/tests/hosted_readonly_w86_acl_provenance_query.sql, SHA-256: 806c1fbc1842860387dea71cdcefc6d02edf8e4f23ad1aa07ece96c1a1a8312b
+
+Use the secure wrapper in the **Current authoritative capture procedure — 13 queries** section below; it performs the no-network self-test before prompting. For a manual self-test without any token or network, run `py -3 tools/supabase_readonly_migration_effect_audit.py --self-test` from the audit repository root.
+
+Expected self-test output: SELF_TEST=PASS; queries=13; base_sha256=a7aba3461786dbb5854f71dc4f87b7e0498d12509add535ab3df4a7ec231a284; acl_provenance_sha256=806c1fbc1842860387dea71cdcefc6d02edf8e4f23ad1aa07ece96c1a1a8312b; no network requests.
+
+Then run the current secure PowerShell wrapper below using the verified Development project ref and scoped read-only Management API token locally. Do not recreate the older inline-token instructions. The runner verifies both SQL hashes, validates project identity and the read-only role before proceeding, sends only Management API database/query/read-only requests, saves query outputs 01–13, and never saves or prints the token. Do not paste a token into chat. Inspect the evidence ZIP for secrets before uploading it.
+
+After capture, run the offline reviewer against the new evidence folder with: py -3 tools/review_hosted_migration_ledger.py --evidence-dir <new-evidence-folder>
+
+The reviewer now requires query_13.json and the exact ACL provenance query hash. Review service_role_inherited_table_acl_rows, service_role_inherited_column_acl_rows, and the role-path entries in ledger_acl_review.json/.md. Any inherited ACL entry blocks the current W86 candidate; do not apply W86 as-is if one is present. The report remains REVIEW REQUIRED / NO-GO regardless of zero inherited rows.
+
+## Verified local runner and query smoke — 2026-10-16
+
+The 13-query runner, offline reviewer, and ACL provenance SQL passed W80 isolated PostgreSQL 17 validation on run 38858063330, source SHA f4d7fed423739db0d39ba576ca455c5d4a182169. Evidence artifact 12027554468, ZIP SHA-256 8147e0b3624b27bdd6dc83f566b665a8942a1b3aac3e3dd785de1a3fc45a483d; cleanup was verified. Flutter CI passed on the same SHA in run 38858068979. This is local/disposable validation only; a new hosted capture is still outstanding.
+
+
+## Recommended Windows PowerShell helper
+
+From the isolated audit repository root, run: `.\tools\run_zavqera_readonly_effect_audit.ps1`.
+
+The helper first runs the no-network self-test, then prompts for the scoped token using hidden SecureString input, runs the pinned 13-query read-only capture, invokes the offline reviewer against the same checkout, and zips the evidence. It removes the token from the process environment and clears the temporary BSTR in a finally block. It performs no migrations or hosted writes. If the capture stops at a gate, it preserves partial evidence and reports the blocked stage; do not weaken the gate or change the SQL to make it pass.
+
+
+## Secure PowerShell wrapper validation — 2026-10-16
+
+The PowerShell helper is now covered by a static regression test. It requests the scoped token through hidden SecureString input, clears the token environment variable and temporary BSTR immediately after the read-only capture, then launches the offline reviewer without inheriting the token. It also zips successful evidence and preserves partial evidence if a read-only gate stops the capture.
+
+Latest exact-SHA validation: W80 isolated PostgreSQL 17 run 38858755502 — SUCCESS on c6fae906f9f57efe11ec7f010afb48b66ac850dc. The run reported 8 catalog-runner tests, 12 migration-effect runner/wrapper tests, and 10 offline-reviewer tests passing; self-test reported 13 queries with both pinned hashes and no network requests; the 13th query passed local PostgreSQL 17 smoke; full migration replay and cleanup verification passed. Artifact 12028448084, ZIP SHA-256 c7388aaa1d1ef85c9c70951db1c3c33cc46da376c2c7e0b1ebcd1e33aafd38f3. Flutter CI also passed on the same SHA: run 38858755489.
+
+This is local/disposable evidence only. The next required action is a fresh 13-query capture against the verified read-only Development session; do not paste the token into chat or apply any hosted repair.
+
+
+## Current authoritative capture procedure — 13 queries (supersedes earlier 12-query steps)
+
+The older instructions above describe the 12-query runner. For the next capture, use this section and the secure wrapper only.
+
+### 1. Update the isolated audit checkout
+
+From the root of the **isolated verification repository** (not the original `Nexo` repo), run:
+
+```powershell
+git fetch origin codex/migration-ledger-provenance-20261015
+git switch codex/migration-ledger-provenance-20261015
+git pull --ff-only origin codex/migration-ledger-provenance-20261015
+```
+
+Do not merge this branch into the original application repository. It remains an isolated audit/review branch.
+
+### 2. Run the local tests first — no hosted requests
+
+```powershell
+py -3 tools/supabase_readonly_migration_effect_audit.py --self-test
+if ($LASTEXITCODE -ne 0) { throw "Self-test failed; do not connect." }
+
+py -3 -m unittest discover -s tests -p "test_supabase_readonly_migration_effect_audit.py" -v
+if ($LASTEXITCODE -ne 0) { throw "Runner tests failed; do not connect." }
+
+py -3 -m unittest discover -s tests -p "test_review_hosted_migration_ledger.py" -v
+if ($LASTEXITCODE -ne 0) { throw "Offline reviewer tests failed; do not connect." }
+```
+
+The self-test must identify **13 SELECT-only queries** and these pinned SHA-256 values:
+- Base query pack (queries 1–12): `a7aba3461786dbb5854f71dc4f87b7e0498d12509add535ab3df4a7ec231a284`
+- Query 13 inherited-ACL provenance: `806c1fbc1842860387dea71cdcefc6d02edf8e4f23ad1aa07ece96c1a1a8312b`
+
+If any command fails, stop. Do not edit the query pack, bypass a gate, or use the unrestricted SQL endpoint.
+
+### 3. Run the secure wrapper
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\\tools\\run_zavqera_readonly_effect_audit.ps1
+```
+
+The wrapper re-runs the pinned self-test before prompting for the token. Enter only a scoped Management API PAT for **ZAVQERA Development** using the hidden prompt. The token is not an argument, is not printed, and is removed from the process environment immediately after capture; the temporary BSTR is zeroed. Never paste the token into ChatGPT, a GitHub issue/PR, a file, or shell history. Do not target Main/Production.
+
+The wrapper runs the capture and then the offline ledger reviewer, zips the evidence directory, and prints the ZIP path. A blocked/failed capture still means stop and review the captured stage; never retry by relaxing the role gate or changing SQL.
+
+### 4. Upload only the generated evidence ZIP
+
+Upload the resulting `zavqera-readonly-effect-audit-output-<timestamp>.zip` to the project conversation. Do not upload the source checkout, shell history, credentials, config files, or unrelated files. Do not rename a prior 12-query ZIP to make it appear current.
+
+The ZIP must contain `query_13.json` and metadata identifying both query-pack hashes. The offline reviewer must report its normal **REVIEW REQUIRED / NO-GO** status until all migration-history and ACL findings are resolved.
+
+### 5. Mandatory W86 interpretation
+
+- If query 13 reports any parent-role table/column ACL path reachable by `INHERIT` or `SET ROLE`, **W86 must not be applied as-is**. Preserve the evidence and request an owner-reviewed least-privilege decision for that role path.
+- If query 13 reports no parent-role ACL reachable via `INHERIT` or `SET ROLE`, that only removes this specific blocker. Direct/stored grants, owner/grantor context, historical migration provenance, and all previously recorded schema/function mismatches still require review.
+- The capture is read-only evidence, not permission to apply a migration. Do not perform hosted DDL, ACL changes, migration repair, deployment, or secret changes.
+
+No hosted change is authorized by this procedure. Keep release **NO-GO** and the provider dispatch registry empty/fail-closed.
+
+## Query 13 direct-vs-parent ACL scope correction — 2026-10-16
+
+The pinned ACL provenance query was corrected so `service_role_inherited_table_acl_entries` and `service_role_inherited_column_acl_entries` contain only reachable parent roles (`depth > 0`) with an all-`INHERIT` or all-`SET ROLE` path. Each inherited table/column ACL record now carries both `all_membership_edges_inherit` and `all_membership_edges_set_role`, so the reviewer can distinguish the two reachability modes per grant. Direct `service_role` ACLs remain separately reported by the effective privilege map, `table_acl_entries`, and `column_acl_entries`; they must not be mislabeled as inherited grants.
+
+- Query 13 SHA-256: `f9f56944ddd04dd135329ff930cf5259e215eb89f30784b75e03a93f221ff38e`.
+- Offline reviewer and self-test pin this hash, and a regression test asserts that depth-zero direct ACLs are excluded from parent-role result arrays.
+- The previously uploaded hosted evidence ZIP contains 12 queries and is not evidence for this corrected 13-query probe. No fresh hosted capture is recorded here. No hosted write is authorized; historical migration provenance and independent owner approval remain required.
+
+## Latest exact-SHA audit runner proof — 2026-10-16
+
+**Validated code/test SHA:** `438dc482863468798bfe1a108fcb1d9b7e836ac2`. Subsequent changes on this audit branch are documentation/PR metadata only.
+
+- Query 13 SHA-256: `f9f56944ddd04dd135329ff930cf5259e215eb89f30784b75e03a93f221ff38e`. The 12-query base pack remains `a7aba3461786dbb5854f71dc4f87b7e0498d12509add535ab3df4a7ec231a284`.
+- Parent-role ACL arrays include only `membership_depth > 0`; each parent table/column grant records both `all_membership_edges_inherit` and `all_membership_edges_set_role`. Direct role ACLs remain in the separate direct/effective result fields.
+- W80/PostgreSQL 17.11: [run 38878829978](https://github.com/abdalrhmanata-gif/nexo-w21-isolated-verification-20261015/actions/runs/38878829978) — **SUCCESS**. Flutter CI: [run 38878829957](https://github.com/abdalrhmanata-gif/nexo-w21-isolated-verification-20261015/actions/runs/38878829957) — **SUCCESS** on the same SHA.
+- Tests: catalog runner 8/8; read-only migration-effect runner and PowerShell wrapper 13/13; offline ledger/ACL reviewer 13/13. Self-test: `queries=13`, both pinned hashes, no network requests.
+- Disposable database: 89 checked-in migration files replayed with only the documented local compatibility fixture; W44 17/17, W46 8/8, W80 49/49 before/after W83 reapply, W84 21/21 before/after reapply, W85 12/12; query13 local smoke passed and cleanup verified.
+- Evidence artifact [12036577429](https://github.com/abdalrhmanata-gif/nexo-w21-isolated-verification-20261015/actions/runs/38878829978/artifacts/12036577429), digest `sha256:bdc92bfda664dfaca535f475c4666ca042ffed52622dd1754d40a946324817bc`.
+
+**Still blocked on fresh hosted evidence:** the supplied evidence ZIP has only 12 queries; this run is local/disposable and is not a hosted capture. Run `powershell -NoProfile -ExecutionPolicy Bypass -File .\\tools\\run_zavqera_readonly_effect_audit.ps1` locally from the isolated repository checkout on `codex/migration-ledger-provenance-20261015`, using the hidden prompt for a scoped Development-only read-only token. Do not paste or upload the token; upload only the resulting evidence ZIP containing `query_13.json`. The reviewer never authorizes hosted writes (`hosted_write_authorized=false`), even if no parent-role ACL is observed. Historical migration SQL provenance and independent owner authorization remain required. No hosted write, migration repair, deployment, secret, billing, or DNS change was performed; release remains **NO-GO**.
+
+
+## Additional W86 future-grant guard — 2026-10-16
+
+W86 does not merely revoke the currently observed direct grants: after preflight it grants SELECT to `authenticated`. Therefore the reviewer must treat a reachable membership path from `service_role` to `authenticated` as an independent blocker when any path is reachable through all-INHERIT edges or all-SET ROLE edges, even if query 13 reports zero inherited table/column ACL rows. This specific case is now enforced in the W86 candidate and the offline reviewer.
+
+- W86 PostgreSQL 17.11 disposable negative control: [W80 run 38889778593](https://github.com/abdalrhmanata-gif/nexo-w21-isolated-verification-20261015/actions/runs/38889778593), exact code/test/workflow SHA `a94d104f71a4a6ba57233b92ba797b96aa7f3120`; expected fail-closed exit 3, no-mutation check passed, W86 21/21 after fixture cleanup, cleanup verified.
+- Audit reviewer regression: [W80 run 38889843683](https://github.com/abdalrhmanata-gif/nexo-w21-isolated-verification-20261015/actions/runs/38889843683), SHA `35342455b968bc72f964ce28df15049e364e0bad`; 14 offline reviewer tests passed, including the case of an authenticated parent path without any parent ACL rows.
+
+This only strengthens the isolated candidate and offline report. If query 13 shows any inherited parent ACL, or any reachable service_role-to-authenticated path, do not apply W86 as-is. If neither is present, hosted writes still remain unauthorized until historical migration SQL provenance and an independent owner review/explicit authorization are complete. Hosted release remains **NO-GO**.
+
+
+## Cross-query W66/W86 evidence consistency gate — 2026-10-16
+
+The current capture runner and offline reviewer cross-check the two pinned read-only result sets before accepting the evidence for manual review:
+
+- Query 12 must contain the complete, unique effective privilege matrix for `anon`, `authenticated`, `service_role`, and `postgres`, and every privilege result must have the expected boolean shape and relation metadata.
+- Query 13 must identify `public.agent_executions`, the same owner role and RLS flags, and exactly typed booleans for the eight `service_role_effective_privileges` entries.
+- The eight effective `service_role` privilege booleans in query 12 must equal the query-13 summary. Any disagreement blocks the capture/review; it is not safe to choose whichever query appears more plausible.
+- Every inherited table/column ACL row must also match a concrete membership-path tuple with role name, exact integer depth, `INHERIT`, and `SET ROLE` flags. Owner-authority paths and paths to `authenticated` remain independent W86 blockers.
+
+The expanded stored table ACL from query 12 must also match query 13's direct `table_acl_entries` projection on grantee, privilege, grantability, and grantor. The comparison preserves duplicate rows so inconsistent counts cannot be hidden by converting the ACL to a set.
+
+The two queries are separate read-only API requests, not a single atomic catalog snapshot. Consistency checks catch malformed or contradictory responses but do **not** prove transaction-level snapshot identity, deployed historical SQL equality, or authorize hosted changes. A fresh Development-only 13-query capture, manual migration-source reconciliation, independent database-owner review, and separate authorization remain mandatory. Release stays **NO-GO**.
+
+
+### Membership-path ancestry validation
+
+The collector and offline reviewer validate that each query-13 membership row belongs to a connected chain rooted at a single `service_role` row at depth 0. A non-root `member_of_role` must identify a row at the preceding depth, and cumulative `INHERIT` / `SET ROLE` flags may transition from true to false but cannot become true again after a false edge. Repeated projected tuples can occur when distinct ancestry branches converge to the same observable role/depth/parent/flag tuple; such exact duplicates are tolerated because they do not change the reachability facts encoded by the tuple. Root rows with a parent, missing parent rows, malformed flags, or disconnected paths are rejected before role-path conclusions are emitted.
+
+
+### ACL row field-shape validation
+
+Query 13's direct table ACL, direct column ACL, inherited table ACL, and inherited column ACL arrays are rejected if their row fields are missing or malformed. Each row must use a non-empty grantee/grantee-role and grantor name, a privilege name from the pinned PostgreSQL privilege set, and an actual boolean `is_grantable` value. Column ACL rows also require a non-empty `column_name`. Inherited rows additionally require an exact integer membership depth greater than zero and actual boolean `INHERIT` / `SET ROLE` flags. These checks validate evidence shape; they do not authorize changes or replace the hosted review gates.
+
+
+## Mixed INHERIT / SET ROLE path reachability — 2026-10-16
+
+PostgreSQL permits a session to `SET ROLE` to an intermediate member and then inherit ACL privileges from roles above that intermediate. A path can therefore be reachable even when its cumulative `all_edges_inherit` and `all_edges_set_role` flags are both false. The pinned query-13 SQL computes `reachable_via_membership_options` recursively: a target is reachable if the parent is reachable and the current membership grants `INHERIT`, or if the full prefix to the parent grants `SET ROLE` and the current edge also grants `SET ROLE`. This models any all-SET prefix followed by an all-INHERIT suffix. See [PostgreSQL 17 role membership](https://www.postgresql.org/docs/17/role-membership.html).
+
+The collector and offline reviewer validate this recurrence and use the reachability flag for inherited ACLs, the future `authenticated` grant target, and table-owner authority. Regression cases cover `service_role --SET ROLE--> intermediate --INHERIT--> parent` where both cumulative flags on the final parent are false.
+
+Query 13 SHA-256 is now `806c1fbc1842860387dea71cdcefc6d02edf8e4f23ad1aa07ece96c1a1a8312b`. SHA values and runs in earlier dated sections refer to historic versions of the query. This remains isolated validation only; it is not a fresh hosted Development capture and never authorizes hosted writes.
+
+
+## Correction: mixed SET ROLE then INHERIT path reachability — 2026-10-16
+
+Review against the official PostgreSQL 17 role-membership documentation confirms that **a parent role reached by SET ROLE may itself inherit privileges from roles above it**. Consequently, a path can be reachable even when its cumulative `all_edges_inherit` and `all_edges_set_role` flags are both false. The immediately preceding homogeneous-only interpretation was incorrect and has been withdrawn; that proposed formula was reverted before any fresh hosted capture was made.
+
+The validated recurrence is:
+
+- `all_edges_inherit`: previous `all_edges_inherit` AND this membership's `inherit_option`;
+- `all_edges_set_role`: previous `all_edges_set_role` AND this membership's `set_option`;
+- `reachable_via_membership_options`: (`parent.reachable_via_membership_options` AND current `inherit_option`) OR (`parent.all_edges_set_role` AND current `set_option`).
+
+This lets an already reachable intermediate role pass inherited privileges upward, while the SET ROLE branch still requires every edge of that prefix to permit SET ROLE. The collector and offline reviewer now enforce that recurrence, and their three-level regression requires the mixed SET-then-INHERIT grandparent to be reachable; a forged `false` result fails validation.
+
+PostgreSQL 17 reference: [Role Membership](https://www.postgresql.org/docs/17/role-membership.html). Current query-13 SHA-256: `806c1fbc1842860387dea71cdcefc6d02edf8e4f23ad1aa07ece96c1a1a8312b`. No hosted capture or write was performed for this code correction. A fresh Development-only 13-query capture, historical migration-source reconciliation, independent database-owner review, and separate explicit authorization remain mandatory. Release remains **NO-GO**.

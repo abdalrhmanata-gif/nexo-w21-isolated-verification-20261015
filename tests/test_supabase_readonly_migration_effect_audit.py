@@ -1,6 +1,7 @@
 import contextlib
 import importlib.util
 import io
+from itertools import product
 import json
 import os
 from pathlib import Path
@@ -44,6 +45,48 @@ def valid_role_row(**overrides):
     return row
 
 
+def valid_provenance_payload(inherited=True, **overrides):
+    privileges = {
+        "SELECT": False, "INSERT": False, "UPDATE": inherited, "DELETE": False,
+        "TRUNCATE": False, "REFERENCES": False, "TRIGGER": False, "MAINTAIN": False,
+    }
+    payload = {
+        "probe_name": "w86_acl_provenance_v1",
+        "current_user": "supabase_read_only_user",
+        "session_user": "supabase_read_only_user",
+        "transaction_read_only": "on",
+        "relation": {"exists": True, "owner_role": "postgres", "schema_name": "public",
+                     "relation_name": "agent_executions", "stored_acl_is_null": False,
+                     "row_level_security_enabled": True, "row_level_security_forced": False},
+        "service_role_effective_privileges": privileges,
+        "service_role_membership_paths": [{"role_name": "service_role", "depth": 0,
+                                            "member_of_role": None, "all_edges_inherit": True,
+                                            "all_edges_set_role": True, "edge_inherit_option": None, "edge_set_option": None, "reachable_via_membership_options": True}],
+        "table_acl_entries": [],
+        "column_acl_entries": [],
+        "service_role_inherited_table_acl_entries": (
+            [{"grantee_role": "w86_acl_probe_parent", "membership_depth": 1,
+              "all_membership_edges_inherit": True, "all_membership_edges_set_role": True, "member_of_role": "service_role", "edge_inherit_option": True, "edge_set_option": True, "reachable_via_membership_options": True,
+              "privilege_type": "UPDATE",
+              "is_grantable": False, "grantor": "postgres"}] if inherited else []
+        ),
+        "service_role_inherited_column_acl_entries": (
+            [{"column_name": "id", "grantee_role": "w86_acl_probe_parent", "membership_depth": 1,
+              "all_membership_edges_inherit": True, "all_membership_edges_set_role": True, "member_of_role": "service_role", "edge_inherit_option": True, "edge_set_option": True, "reachable_via_membership_options": True,
+              "privilege_type": "SELECT",
+              "is_grantable": False, "grantor": "postgres"}] if inherited else []
+        ),
+    }
+    if inherited:
+        payload["service_role_membership_paths"].append({
+            "role_name": "w86_acl_probe_parent", "depth": 1,
+            "member_of_role": "service_role", "all_edges_inherit": True,
+            "all_edges_set_role": True, "edge_inherit_option": True, "edge_set_option": True, "reachable_via_membership_options": True,
+        })
+    payload.update(overrides)
+    return payload
+
+
 class ReadOnlyEffectAuditTests(unittest.TestCase):
     def setUp(self):
         self.created_output = []
@@ -75,12 +118,48 @@ class ReadOnlyEffectAuditTests(unittest.TestCase):
         self._capture_evidence_path(output)
         return code, output
 
-    def test_checked_in_pack_is_pinned_to_twelve_selects(self):
+    def test_checked_in_pack_is_pinned_to_thirteen_selects(self):
         root = Path(__file__).resolve().parents[1]
         statements, digest = audit.load_pack(root)
-        self.assertEqual(len(statements), 12)
+        self.assertEqual(len(statements), 13)
         self.assertEqual(digest, audit.PACK_SHA256)
+        self.assertEqual(audit.ACL_PROVENANCE_SHA256,
+                         "806c1fbc1842860387dea71cdcefc6d02edf8e4f23ad1aa07ece96c1a1a8312b")
         self.assertTrue(all(re.match(r"(?is)^\s*SELECT\b", audit.no_comments(s).strip()) for s in statements))
+
+    def test_acl_provenance_query_excludes_direct_grants_from_parent_acl_rows(self):
+        root = Path(__file__).resolve().parents[1]
+        sql_path = root / "supabase" / "tests" / "hosted_readonly_w86_acl_provenance_query.sql"
+        sql = sql_path.read_text(encoding="utf-8")
+        self.assertEqual(sql.count("AND rp.depth > 0"), 2)
+        self.assertEqual(sql.count("'all_membership_edges_set_role', rp.can_set_role"), 2)
+        self.assertNotIn("rp.depth = 0 OR rp.inherits_all OR rp.can_set_role", sql)
+        self.assertIn("'service_role_effective_privileges'", sql)
+        self.assertIn("'table_acl_entries'", sql)
+        self.assertIn("'service_role_inherited_table_acl_entries'", sql)
+        self.assertIn("'service_role_inherited_column_acl_entries'", sql)
+        self.assertIn("child.inherits_all AND membership.inherit_option", sql)
+        self.assertIn("(child.reachable_via_membership_options AND membership.inherit_option)", sql)
+        self.assertIn("child.can_set_role AND membership.set_option", sql)
+        self.assertIn("'reachable_via_membership_options'", sql)
+        self.assertEqual(sql.count("AND rp.reachable_via_membership_options"), 2)
+        self.assertNotIn("AND (rp.inherits_all OR rp.can_set_role)", sql)
+
+    def test_powershell_wrapper_handles_token_locally_and_cleans_environment(self):
+        wrapper_path = SCRIPT.parent / "run_zavqera_readonly_effect_audit.ps1"
+        wrapper = wrapper_path.read_text(encoding="utf-8")
+        self.assertIn("Read-Host", wrapper)
+        self.assertIn("-AsSecureString", wrapper)
+        self.assertIn("SecureStringToBSTR", wrapper)
+        self.assertIn("ZeroFreeBSTR", wrapper)
+        self.assertIn(r"Remove-Item Env:\SUPABASE_ACCESS_TOKEN", wrapper)
+        self.assertLess(wrapper.index(r"Remove-Item Env:\SUPABASE_ACCESS_TOKEN"),
+                        wrapper.index("py -3 $reviewer"))
+        self.assertIn("DEVELOPMENT_ONLY_READ_ONLY", wrapper)
+        self.assertIn("py -3 $runner --self-test", wrapper)
+        self.assertIn("py -3 $runner 2>&1", wrapper)
+        self.assertIn("Compress-Archive", wrapper)
+        self.assertNotRegex(wrapper, r"sb_secret_[A-Za-z0-9_-]{20,}")
 
     def test_splitter_handles_literals_nested_comments_and_dollar_quotes(self):
         sql = "-- semicolon ;\nSELECT 'a;''b' AS x; /* outer ; /* inner ; */ end */ SELECT $$c;d$$ AS y;"
@@ -156,7 +235,8 @@ class ReadOnlyEffectAuditTests(unittest.TestCase):
                             "relation_name": "agent_executions", "owner_role": "postgres",
                             "row_level_security_enabled": True, "row_level_security_forced": False,
                             "grantee": role, "privilege_type": privilege,
-                            "effective_privilege": role == "postgres", "is_grantable": None, "grantor": None,
+                            "effective_privilege": role == "postgres" or (role == "service_role" and privilege == "UPDATE"),
+                            "is_grantable": None, "grantor": None,
                         })
                 rows.append({
                     "evidence_kind": "STORED_ACL", "schema_name": "public",
@@ -166,12 +246,49 @@ class ReadOnlyEffectAuditTests(unittest.TestCase):
                     "is_grantable": False, "grantor": "postgres",
                 })
                 return {"result": rows}
+            if number == 13:
+                provenance = valid_provenance_payload(inherited=True)
+                provenance["service_role_membership_paths"] = [
+                    {"role_name": "service_role", "depth": 0, "member_of_role": None,
+                     "all_edges_inherit": True, "all_edges_set_role": True,
+                     "edge_inherit_option": None, "edge_set_option": None,
+                     "reachable_via_membership_options": True},
+                    {"role_name": "w86_acl_probe_intermediate", "depth": 1,
+                     "member_of_role": "service_role", "all_edges_inherit": False,
+                     "all_edges_set_role": True, "edge_inherit_option": False,
+                     "edge_set_option": True, "reachable_via_membership_options": True},
+                    {"role_name": "w86_acl_probe_parent", "depth": 2,
+                     "member_of_role": "w86_acl_probe_intermediate", "all_edges_inherit": False,
+                     "all_edges_set_role": False, "edge_inherit_option": True,
+                     "edge_set_option": False, "reachable_via_membership_options": True},
+                ]
+                provenance["service_role_inherited_table_acl_entries"] = [{
+                    "grantee_role": "w86_acl_probe_parent", "membership_depth": 2,
+                    "all_membership_edges_inherit": False, "all_membership_edges_set_role": False,
+                    "member_of_role": "w86_acl_probe_intermediate", "edge_inherit_option": True,
+                    "edge_set_option": False, "reachable_via_membership_options": True,
+                    "privilege_type": "UPDATE", "is_grantable": False, "grantor": "postgres",
+                }]
+                provenance["service_role_inherited_column_acl_entries"] = [{
+                    "column_name": "id", "grantee_role": "w86_acl_probe_parent", "membership_depth": 2,
+                    "all_membership_edges_inherit": False, "all_membership_edges_set_role": False,
+                    "member_of_role": "w86_acl_probe_intermediate", "edge_inherit_option": True,
+                    "edge_set_option": False, "reachable_via_membership_options": True,
+                    "privilege_type": "SELECT", "is_grantable": False, "grantor": "postgres",
+                }]
+                provenance["table_acl_entries"] = [{
+                    "grantee": "postgres", "privilege_type": "SELECT",
+                    "is_grantable": False, "grantor": "postgres",
+                }]
+                return {"result": [{"w86_acl_provenance": provenance}]}
             return {"result": [{"query_number": number, "ok": True}]}
         code, output = self._run_with_fake_api(fake_api)
         self.assertEqual(code, 0)
         self.assertIn('"status": "CAPTURED_FOR_MANUAL_REVIEW"', output)
+        self.assertIn('"service_role_inherited_table_acl_rows": 1', output)
+        self.assertIn('"service_role_inherited_column_acl_rows": 1', output)
         posts = [call for call in calls if call[1] == "POST"]
-        self.assertEqual(len(posts), 12)
+        self.assertEqual(len(posts), 13)
         self.assertTrue(all(call[2].endswith("/database/query/read-only") for call in posts))
         self.assertFalse(any(call[2].endswith("/database/query") for call in posts))
         self.assertTrue(all(call[0] == TOKEN for call in calls))  # token is passed to the API client only
@@ -181,6 +298,502 @@ class ReadOnlyEffectAuditTests(unittest.TestCase):
         metadata = json.loads((evidence / "run_metadata.json").read_text(encoding="utf-8"))
         self.assertFalse(metadata["token_saved"])
 
+    def test_w66_w86_service_role_privilege_map_must_match(self):
+        calls = []
+        def fake_api(token, method, path, body=None):
+            calls.append((method, path, body))
+            if method == "GET":
+                return valid_project()
+            number = sum(1 for verb, _, _ in calls if verb == "POST")
+            if number == 1:
+                return {"result": [valid_role_row()]}
+            if number < 11:
+                return {"result": [{"query_number": number, "ok": True}]}
+            if number == 11:
+                return {"result": [
+                    {"version": "20261013100000", "name": "w80_fail_closed_workspace_role_checks"},
+                    {"version": "20261015100000", "name": "w83_workspace_invitation_privilege_correction"},
+                ]}
+            if number == 12:
+                rows = []
+                for role in ("anon", "authenticated", "service_role", "postgres"):
+                    for privilege in ("SELECT", "INSERT", "UPDATE", "DELETE", "TRUNCATE", "REFERENCES", "TRIGGER", "MAINTAIN"):
+                        rows.append({
+                            "evidence_kind": "EFFECTIVE_PRIVILEGE", "schema_name": "public",
+                            "relation_name": "agent_executions", "owner_role": "postgres",
+                            "row_level_security_enabled": True, "row_level_security_forced": False,
+                            "grantee": role, "privilege_type": privilege,
+                            "effective_privilege": role == "postgres", "is_grantable": None, "grantor": None,
+                        })
+                return {"result": rows}
+            return {"result": [{"w86_acl_provenance": valid_provenance_payload(inherited=True)}]}
+
+        code, output = self._run_with_fake_api(fake_api)
+        self.assertEqual(code, 5, output)
+        self.assertIn("query 12 and query 13 service_role effective privilege maps disagree", output)
+        self.assertEqual(len([call for call in calls if call[0] == "POST"]), 13)
+
+    def test_membership_reachability_matches_role_option_paths_exhaustively(self):
+        edge_options = ((False, False), (False, True), (True, False), (True, True))
+        for length in range(1, 5):
+            for edges in product(edge_options, repeat=length):
+                paths = [{
+                    "role_name": "service_role", "depth": 0, "member_of_role": None,
+                    "all_edges_inherit": True, "all_edges_set_role": True,
+                    "edge_inherit_option": None, "edge_set_option": None,
+                    "reachable_via_membership_options": True,
+                }]
+                all_inherit = True
+                all_set_role = True
+                prefix = []
+                parent_name = "service_role"
+                for depth, (edge_inherit, edge_set_role) in enumerate(edges, start=1):
+                    prefix.append((edge_inherit, edge_set_role))
+                    all_inherit = all_inherit and edge_inherit
+                    all_set_role = all_set_role and edge_set_role
+                    expected_reachable = any(
+                        all(edge[1] for edge in prefix[:split])
+                        and all(edge[0] for edge in prefix[split:])
+                        for split in range(len(prefix) + 1)
+                    )
+                    role_name = f"role_{depth}"
+                    paths.append({
+                        "role_name": role_name, "depth": depth, "member_of_role": parent_name,
+                        "all_edges_inherit": all_inherit, "all_edges_set_role": all_set_role,
+                        "edge_inherit_option": edge_inherit, "edge_set_option": edge_set_role,
+                        "reachable_via_membership_options": expected_reachable,
+                    })
+                    parent_name = role_name
+                self.assertTrue(audit.membership_paths_form_valid_chain(paths), msg=f"valid edge sequence rejected: {edges}")
+                corrupted = [dict(item) for item in paths]
+                corrupted[-1]["reachable_via_membership_options"] = not corrupted[-1]["reachable_via_membership_options"]
+                self.assertFalse(audit.membership_paths_form_valid_chain(corrupted), msg=f"corrupt edge sequence accepted: {edges}")
+
+    def test_membership_reachability_allows_set_role_then_inherit(self):
+        paths = [
+            {
+                "role_name": "service_role", "depth": 0, "member_of_role": None,
+                "all_edges_inherit": True, "all_edges_set_role": True,
+                "edge_inherit_option": None, "edge_set_option": None,
+                "reachable_via_membership_options": True,
+            },
+            {
+                "role_name": "set_only_parent", "depth": 1, "member_of_role": "service_role",
+                "all_edges_inherit": False, "all_edges_set_role": True,
+                "edge_inherit_option": False, "edge_set_option": True,
+                "reachable_via_membership_options": True,
+            },
+            {
+                "role_name": "inherit_only_grandparent", "depth": 2, "member_of_role": "set_only_parent",
+                "all_edges_inherit": False, "all_edges_set_role": False,
+                "edge_inherit_option": True, "edge_set_option": False,
+                "reachable_via_membership_options": True,
+            },
+        ]
+        self.assertTrue(audit.membership_paths_form_valid_chain(paths))
+        # The intermediate role is reachable via SET ROLE and its parent via INHERIT.
+        # Forging the final path as unreachable must be rejected.
+        paths[2]["reachable_via_membership_options"] = False
+        self.assertFalse(audit.membership_paths_form_valid_chain(paths))
+
+    def test_w86_provenance_malformed_membership_parent_fails_closed(self):
+        calls = []
+        def fake_api(token, method, path, body=None):
+            calls.append((method, path, body))
+            if method == "GET":
+                return valid_project()
+            number = sum(1 for verb, _, _ in calls if verb == "POST")
+            if number == 1:
+                return {"result": [valid_role_row()]}
+            if number < 11:
+                return {"result": [{"query_number": number, "ok": True}]}
+            if number == 11:
+                return {"result": [
+                    {"version": "20261013100000", "name": "w80_fail_closed_workspace_role_checks"},
+                    {"version": "20261015100000", "name": "w83_workspace_invitation_privilege_correction"},
+                ]}
+            if number == 12:
+                rows = []
+                for role in ("anon", "authenticated", "service_role", "postgres"):
+                    for privilege in ("SELECT", "INSERT", "UPDATE", "DELETE", "TRUNCATE", "REFERENCES", "TRIGGER", "MAINTAIN"):
+                        rows.append({
+                            "evidence_kind": "EFFECTIVE_PRIVILEGE", "schema_name": "public",
+                            "relation_name": "agent_executions", "owner_role": "postgres",
+                            "row_level_security_enabled": True, "row_level_security_forced": False,
+                            "grantee": role, "privilege_type": privilege,
+                            "effective_privilege": role == "postgres" or (role == "service_role" and privilege == "UPDATE"),
+                            "is_grantable": None, "grantor": None,
+                        })
+                return {"result": rows}
+            provenance = valid_provenance_payload(inherited=True)
+            provenance["service_role_membership_paths"][1]["member_of_role"] = 17
+            return {"result": [{"w86_acl_provenance": provenance}]}
+
+        code, output = self._run_with_fake_api(fake_api)
+        self.assertEqual(code, 5, output)
+        self.assertIn("role gate or inherited ACL provenance result incomplete/unrecognized", output)
+        self.assertEqual(len([call for call in calls if call[0] == "POST"]), 13)
+
+    def test_w86_provenance_malformed_acl_rows_fail_closed(self):
+        cases = (
+            ("direct table grantor", "table_acl_entries", {"grantee": "PUBLIC", "privilege_type": "SELECT", "is_grantable": False, "grantor": "postgres"}, "grantor", 17),
+            ("direct column name", "column_acl_entries", {"column_name": "id", "grantee": "PUBLIC", "privilege_type": "SELECT", "is_grantable": False, "grantor": "postgres"}, "column_name", ""),
+            ("inherited table privilege", "service_role_inherited_table_acl_entries", None, "privilege_type", "UNKNOWN"),
+            ("inherited column grantability", "service_role_inherited_column_acl_entries", None, "is_grantable", "false"),
+        )
+        for label, key, row, field, value in cases:
+            with self.subTest(label=label):
+                calls = []
+                def fake_api(token, method, path, body=None):
+                    calls.append((method, path, body))
+                    if method == "GET":
+                        return valid_project()
+                    number = sum(1 for verb, _, _ in calls if verb == "POST")
+                    if number == 1:
+                        return {"result": [valid_role_row()]}
+                    if number < 11:
+                        return {"result": [{"query_number": number, "ok": True}]}
+                    if number == 11:
+                        return {"result": [
+                            {"version": "20261013100000", "name": "w80_fail_closed_workspace_role_checks"},
+                            {"version": "20261015100000", "name": "w83_workspace_invitation_privilege_correction"},
+                        ]}
+                    if number == 12:
+                        rows = []
+                        for role in ("anon", "authenticated", "service_role", "postgres"):
+                            for privilege in ("SELECT", "INSERT", "UPDATE", "DELETE", "TRUNCATE", "REFERENCES", "TRIGGER", "MAINTAIN"):
+                                rows.append({
+                                    "evidence_kind": "EFFECTIVE_PRIVILEGE", "schema_name": "public",
+                                    "relation_name": "agent_executions", "owner_role": "postgres",
+                                    "row_level_security_enabled": True, "row_level_security_forced": False,
+                                    "grantee": role, "privilege_type": privilege,
+                                    "effective_privilege": role == "postgres" or (role == "service_role" and privilege == "UPDATE"),
+                                    "is_grantable": None, "grantor": None,
+                                })
+                        return {"result": rows}
+                    provenance = valid_provenance_payload(inherited=True)
+                    if row is not None:
+                        provenance[key].append(dict(row))
+                        target = provenance[key][-1]
+                    else:
+                        target = provenance[key][0]
+                    target[field] = value
+                    return {"result": [{"w86_acl_provenance": provenance}]}
+
+                code, output = self._run_with_fake_api(fake_api)
+                self.assertEqual(code, 5, output)
+                self.assertIn("role gate or inherited ACL provenance result incomplete/unrecognized", output)
+                self.assertEqual(len([call for call in calls if call[0] == "POST"]), 13)
+
+    def test_w66_w86_stored_acl_projection_must_match(self):
+        calls = []
+        def fake_api(token, method, path, body=None):
+            calls.append((method, path, body))
+            if method == "GET":
+                return valid_project()
+            number = sum(1 for verb, _, _ in calls if verb == "POST")
+            if number == 1:
+                return {"result": [valid_role_row()]}
+            if number < 11:
+                return {"result": [{"query_number": number, "ok": True}]}
+            if number == 11:
+                return {"result": [
+                    {"version": "20261013100000", "name": "w80_fail_closed_workspace_role_checks"},
+                    {"version": "20261015100000", "name": "w83_workspace_invitation_privilege_correction"},
+                ]}
+            if number == 12:
+                rows = []
+                for role in ("anon", "authenticated", "service_role", "postgres"):
+                    for privilege in ("SELECT", "INSERT", "UPDATE", "DELETE", "TRUNCATE", "REFERENCES", "TRIGGER", "MAINTAIN"):
+                        rows.append({
+                            "evidence_kind": "EFFECTIVE_PRIVILEGE", "schema_name": "public",
+                            "relation_name": "agent_executions", "owner_role": "postgres",
+                            "row_level_security_enabled": True, "row_level_security_forced": False,
+                            "grantee": role, "privilege_type": privilege,
+                            "effective_privilege": False, "is_grantable": None, "grantor": None,
+                        })
+                rows.append({
+                    "evidence_kind": "STORED_ACL", "schema_name": "public",
+                    "relation_name": "agent_executions", "owner_role": "postgres",
+                    "row_level_security_enabled": True, "row_level_security_forced": False,
+                    "grantee": "service_role", "privilege_type": "UPDATE",
+                    "effective_privilege": None, "is_grantable": False, "grantor": "postgres",
+                })
+                return {"result": rows}
+            return {"result": [{"w86_acl_provenance": valid_provenance_payload(inherited=False)}]}
+
+        code, output = self._run_with_fake_api(fake_api)
+        self.assertEqual(code, 5, output)
+        self.assertIn("query 12 stored table ACL and query 13 table ACL projections disagree", output)
+        self.assertEqual(len([call for call in calls if call[0] == "POST"]), 13)
+
+    def test_w66_acl_metadata_must_match_query13_relation_identity(self):
+        calls = []
+        def fake_api(token, method, path, body=None):
+            calls.append((method, path, body))
+            if method == "GET":
+                return valid_project()
+            number = sum(1 for verb, _, _ in calls if verb == "POST")
+            if number == 1:
+                return {"result": [valid_role_row()]}
+            if number < 11:
+                return {"result": [{"query_number": number, "ok": True}]}
+            if number == 11:
+                return {"result": [
+                    {"version": "20261013100000", "name": "w80_fail_closed_workspace_role_checks"},
+                    {"version": "20261015100000", "name": "w83_workspace_invitation_privilege_correction"},
+                ]}
+            if number == 12:
+                rows = []
+                for role in ("anon", "authenticated", "service_role", "postgres"):
+                    for privilege in ("SELECT", "INSERT", "UPDATE", "DELETE", "TRUNCATE", "REFERENCES", "TRIGGER", "MAINTAIN"):
+                        rows.append({
+                            "evidence_kind": "EFFECTIVE_PRIVILEGE", "schema_name": "public",
+                            "relation_name": "agent_executions", "owner_role": "service_role",
+                            "row_level_security_enabled": True, "row_level_security_forced": False,
+                            "grantee": role, "privilege_type": privilege,
+                            "effective_privilege": False, "is_grantable": None, "grantor": None,
+                        })
+                return {"result": rows}
+            return {"result": [{"w86_acl_provenance": valid_provenance_payload(inherited=False)}]}
+
+        code, output = self._run_with_fake_api(fake_api)
+        self.assertEqual(code, 5, output)
+        self.assertIn("query 12 and query 13 relation identity/RLS metadata disagree", output)
+        self.assertEqual(len([call for call in calls if call[0] == "POST"]), 13)
+
+    def test_w66_acl_non_boolean_effective_privilege_fails_closed(self):
+        calls = []
+        def fake_api(token, method, path, body=None):
+            calls.append((method, path, body))
+            if method == "GET":
+                return valid_project()
+            number = sum(1 for verb, _, _ in calls if verb == "POST")
+            if number == 1:
+                return {"result": [valid_role_row()]}
+            if number == 11:
+                return {"result": [
+                    {"version": "20261013100000", "name": "w80_fail_closed_workspace_role_checks"},
+                    {"version": "20261015100000", "name": "w83_workspace_invitation_privilege_correction"},
+                ]}
+            if number < 12:
+                return {"result": [{"query_number": number, "ok": True}]}
+            if number == 12:
+                rows = []
+                for role in ("anon", "authenticated", "service_role", "postgres"):
+                    for privilege in ("SELECT", "INSERT", "UPDATE", "DELETE", "TRUNCATE", "REFERENCES", "TRIGGER", "MAINTAIN"):
+                        rows.append({
+                            "evidence_kind": "EFFECTIVE_PRIVILEGE", "schema_name": "public",
+                            "relation_name": "agent_executions", "owner_role": "postgres",
+                            "row_level_security_enabled": True, "row_level_security_forced": False,
+                            "grantee": role, "privilege_type": privilege,
+                            "effective_privilege": False, "is_grantable": None, "grantor": None,
+                        })
+                rows[0]["effective_privilege"] = "false"
+                return {"result": rows}
+            self.fail("query 13 must not run after malformed query 12")
+        code, output = self._run_with_fake_api(fake_api)
+        self.assertEqual(code, 5, output)
+        self.assertIn("effective/stored ACL result set incomplete, duplicated, or malformed", output)
+        self.assertEqual(len([call for call in calls if call[0] == "POST"]), 12)
+
+    def test_w66_acl_duplicate_effective_privilege_fails_closed(self):
+        calls = []
+        def fake_api(token, method, path, body=None):
+            calls.append((method, path, body))
+            if method == "GET":
+                return valid_project()
+            number = sum(1 for verb, _, _ in calls if verb == "POST")
+            if number == 1:
+                return {"result": [valid_role_row()]}
+            if number == 11:
+                return {"result": [
+                    {"version": "20261013100000", "name": "w80_fail_closed_workspace_role_checks"},
+                    {"version": "20261015100000", "name": "w83_workspace_invitation_privilege_correction"},
+                ]}
+            if number < 12:
+                return {"result": [{"query_number": number, "ok": True}]}
+            if number == 12:
+                rows = []
+                for role in ("anon", "authenticated", "service_role", "postgres"):
+                    for privilege in ("SELECT", "INSERT", "UPDATE", "DELETE", "TRUNCATE", "REFERENCES", "TRIGGER", "MAINTAIN"):
+                        rows.append({
+                            "evidence_kind": "EFFECTIVE_PRIVILEGE", "schema_name": "public",
+                            "relation_name": "agent_executions", "owner_role": "postgres",
+                            "row_level_security_enabled": True, "row_level_security_forced": False,
+                            "grantee": role, "privilege_type": privilege,
+                            "effective_privilege": False, "is_grantable": None, "grantor": None,
+                        })
+                rows.append(dict(rows[0]))
+                return {"result": rows}
+            self.fail("query 13 must not run after duplicated query 12")
+        code, output = self._run_with_fake_api(fake_api)
+        self.assertEqual(code, 5, output)
+        self.assertIn("effective/stored ACL result set incomplete, duplicated, or malformed", output)
+        self.assertEqual(len([call for call in calls if call[0] == "POST"]), 12)
+
+    def test_w86_provenance_non_boolean_effective_privilege_fails_closed(self):
+        calls = []
+        def fake_api(token, method, path, body=None):
+            calls.append((method, path, body))
+            if method == "GET":
+                return valid_project()
+            number = sum(1 for verb, _, _ in calls if verb == "POST")
+            if number == 1:
+                return {"result": [valid_role_row()]}
+            if number == 11:
+                return {"result": [
+                    {"version": "20261013100000", "name": "w80_fail_closed_workspace_role_checks"},
+                    {"version": "20261015100000", "name": "w83_workspace_invitation_privilege_correction"},
+                ]}
+            if number == 12:
+                rows = []
+                for role in ("anon", "authenticated", "service_role", "postgres"):
+                    for privilege in ("SELECT", "INSERT", "UPDATE", "DELETE", "TRUNCATE", "REFERENCES", "TRIGGER", "MAINTAIN"):
+                        rows.append({
+                            "evidence_kind": "EFFECTIVE_PRIVILEGE", "schema_name": "public",
+                            "relation_name": "agent_executions", "owner_role": "postgres",
+                            "row_level_security_enabled": True, "row_level_security_forced": False,
+                            "grantee": role, "privilege_type": privilege,
+                            "effective_privilege": False, "is_grantable": None, "grantor": None,
+                        })
+                return {"result": rows}
+            provenance = valid_provenance_payload(inherited=False)
+            provenance["service_role_effective_privileges"]["UPDATE"] = "false"
+            return {"result": [{"w86_acl_provenance": provenance}]}
+
+        code, output = self._run_with_fake_api(fake_api)
+        self.assertEqual(code, 5)
+        self.assertIn("ACL provenance result incomplete/unrecognized", output)
+        self.assertEqual(len([call for call in calls if call[0] == "POST"]), 13)
+
+    def test_w86_provenance_acl_entry_must_match_membership_path(self):
+        calls = []
+        def fake_api(token, method, path, body=None):
+            calls.append((method, path, body))
+            if method == "GET":
+                return valid_project()
+            number = sum(1 for verb, _, _ in calls if verb == "POST")
+            if number == 1:
+                return {"result": [valid_role_row()]}
+            if number == 11:
+                return {"result": [
+                    {"version": "20261013100000", "name": "w80_fail_closed_workspace_role_checks"},
+                    {"version": "20261015100000", "name": "w83_workspace_invitation_privilege_correction"},
+                ]}
+            if number == 12:
+                rows = []
+                for role in ("anon", "authenticated", "service_role", "postgres"):
+                    for privilege in ("SELECT", "INSERT", "UPDATE", "DELETE", "TRUNCATE", "REFERENCES", "TRIGGER", "MAINTAIN"):
+                        rows.append({
+                    "evidence_kind": "EFFECTIVE_PRIVILEGE", "schema_name": "public",
+                    "relation_name": "agent_executions", "owner_role": "postgres",
+                    "row_level_security_enabled": True, "row_level_security_forced": False,
+                    "grantee": role, "privilege_type": privilege,
+                    "effective_privilege": False, "is_grantable": None, "grantor": None,
+                })
+                for service_update in rows:
+                    if service_update.get("grantee") == "service_role" and service_update.get("privilege_type") == "UPDATE":
+                        service_update["effective_privilege"] = True
+                return {"result": rows}
+            provenance = valid_provenance_payload(inherited=True)
+            provenance["service_role_inherited_table_acl_entries"][0]["membership_depth"] = 2
+            return {"result": [{"w86_acl_provenance": provenance}]}
+
+        code, output = self._run_with_fake_api(fake_api)
+        self.assertEqual(code, 5)
+        self.assertIn("does not match a reachable membership path", output)
+        self.assertEqual(len([call for call in calls if call[0] == "POST"]), 13)
+
+    def test_w86_provenance_role_mismatch_fails_closed(self):
+        calls = []
+        def fake_api(token, method, path, body=None):
+            calls.append((method, path, body))
+            if method == "GET":
+                return valid_project()
+            number = sum(1 for verb, _, _ in calls if verb == "POST")
+            if number == 1:
+                return {"result": [valid_role_row()]}
+            if number == 11:
+                return {"result": [{"version": "20261015100000", "name": "w83_workspace_invitation_privilege_correction"}]}
+            if number == 12:
+                rows = []
+                for role in ("anon", "authenticated", "service_role", "postgres"):
+                    for privilege in ("SELECT", "INSERT", "UPDATE", "DELETE", "TRUNCATE", "REFERENCES", "TRIGGER", "MAINTAIN"):
+                        rows.append({
+                    "evidence_kind": "EFFECTIVE_PRIVILEGE", "schema_name": "public",
+                    "relation_name": "agent_executions", "owner_role": "postgres",
+                    "row_level_security_enabled": True, "row_level_security_forced": False,
+                    "grantee": role, "privilege_type": privilege,
+                    "effective_privilege": False, "is_grantable": None, "grantor": None,
+                })
+                return {"result": rows}
+            return {"result": [{"w86_acl_provenance": valid_provenance_payload(inherited=False, current_user="postgres")}]}
+        code, output = self._run_with_fake_api(fake_api)
+        self.assertEqual(code, 5)
+        self.assertIn("w86_acl_provenance", output)
+        self.assertEqual(len([call for call in calls if call[0] == "POST"]), 13)
+
+    def test_w86_provenance_missing_relation_owner_fails_closed(self):
+        calls = []
+        def fake_api(token, method, path, body=None):
+            calls.append((method, path, body))
+            if method == "GET":
+                return valid_project()
+            number = sum(1 for verb, _, _ in calls if verb == "POST")
+            if number == 1:
+                return {"result": [valid_role_row()]}
+            if number == 11:
+                return {"result": [{"version": "20261015100000", "name": "w83_workspace_invitation_privilege_correction"}]}
+            if number == 12:
+                rows = []
+                for role in ("anon", "authenticated", "service_role", "postgres"):
+                    for privilege in ("SELECT", "INSERT", "UPDATE", "DELETE", "TRUNCATE", "REFERENCES", "TRIGGER", "MAINTAIN"):
+                        rows.append({
+                    "evidence_kind": "EFFECTIVE_PRIVILEGE", "schema_name": "public",
+                    "relation_name": "agent_executions", "owner_role": "postgres",
+                    "row_level_security_enabled": True, "row_level_security_forced": False,
+                    "grantee": role, "privilege_type": privilege,
+                    "effective_privilege": False, "is_grantable": None, "grantor": None,
+                })
+                return {"result": rows}
+            provenance = valid_provenance_payload(inherited=False)
+            provenance["relation"].pop("owner_role")
+            return {"result": [{"w86_acl_provenance": provenance}]}
+        code, output = self._run_with_fake_api(fake_api)
+        self.assertEqual(code, 5)
+        self.assertIn("ACL provenance result incomplete/unrecognized", output)
+        self.assertEqual(len([call for call in calls if call[0] == "POST"]), 13)
+    def test_w86_provenance_missing_root_membership_path_fails_closed(self):
+        calls = []
+        def fake_api(token, method, path, body=None):
+            calls.append((method, path, body))
+            if method == "GET":
+                return valid_project()
+            number = sum(1 for verb, _, _ in calls if verb == "POST")
+            if number == 1:
+                return {"result": [valid_role_row()]}
+            if number == 11:
+                return {"result": [{"version": "20261015100000", "name": "w83_workspace_invitation_privilege_correction"}]}
+            if number == 12:
+                rows = []
+                for role in ("anon", "authenticated", "service_role", "postgres"):
+                    for privilege in ("SELECT", "INSERT", "UPDATE", "DELETE", "TRUNCATE", "REFERENCES", "TRIGGER", "MAINTAIN"):
+                        rows.append({
+                    "evidence_kind": "EFFECTIVE_PRIVILEGE", "schema_name": "public",
+                    "relation_name": "agent_executions", "owner_role": "postgres",
+                    "row_level_security_enabled": True, "row_level_security_forced": False,
+                    "grantee": role, "privilege_type": privilege,
+                    "effective_privilege": False, "is_grantable": None, "grantor": None,
+                })
+                return {"result": rows}
+            provenance = valid_provenance_payload(inherited=False)
+            provenance["service_role_membership_paths"] = []
+            return {"result": [{"w86_acl_provenance": provenance}]}
+        code, output = self._run_with_fake_api(fake_api)
+        self.assertEqual(code, 5)
+        self.assertIn("ACL provenance result incomplete/unrecognized", output)
+        self.assertEqual(len([call for call in calls if call[0] == "POST"]), 13)
     def test_api_query_error_stops_without_sending_later_queries(self):
         calls = []
         def fake_api(token, method, path, body=None):
@@ -231,8 +844,37 @@ class ReadOnlyEffectAuditTests(unittest.TestCase):
             return {"result": []}
         code, output = self._run_with_fake_api(fake_api)
         self.assertEqual(code, 5)
-        self.assertIn("effective ACL result set incomplete", output)
+        self.assertIn("effective/stored ACL result set incomplete", output)
         self.assertEqual(len([call for call in calls if call[0] == "POST"]), 12)
 
+    def test_runbook_points_to_current_13_query_secure_wrapper(self):
+        root = Path(__file__).resolve().parents[1]
+        runbook = (root / "docs" / "ZAVQERA_HOSTED_MIGRATION_EFFECT_AUDIT_RUNBOOK_2026-10-15.md").read_text(encoding="utf-8")
+        self.assertIn("Current status — 2026-10-16: REVIEW REQUIRED / NO-GO.", runbook)
+        self.assertIn("no fresh hosted 13-query capture has been recorded", runbook)
+        self.assertIn("`query_13.json`", runbook)
+        self.assertIn("f9f56944ddd04dd135329ff930cf5259e215eb89f30784b75e03a93f221ff38e", runbook)
+        self.assertIn(audit.ACL_PROVENANCE_SHA256, runbook)
+        self.assertIn("Cross-query W66/W86 evidence consistency gate", runbook)
+        self.assertIn("must equal the query-13 summary", runbook)
+        self.assertIn("not a single atomic catalog snapshot", runbook)
+        self.assertIn("Correction: mixed SET ROLE then INHERIT path reachability", runbook)
+        self.assertIn("a parent role reached by SET ROLE may itself inherit privileges from roles above it", runbook)
+        self.assertIn("Membership-path ancestry validation", runbook)
+        self.assertIn("direct `table_acl_entries` projection", runbook)
+        self.assertIn("preserves duplicate rows", runbook)
+        self.assertIn("preceding depth", runbook)
+        self.assertIn("Repeated projected tuples can occur", runbook)
+        self.assertIn("ACL row field-shape validation", runbook)
+        self.assertIn("non-empty grantee/grantee-role and grantor name", runbook)
+        self.assertIn("actual boolean `is_grantable`", runbook)
+        self.assertIn("non-empty `column_name`", runbook)
+        self.assertIn("do not change the reachability facts", runbook)
+        current = runbook.split("## Current Windows PowerShell procedure — use only this procedure", 1)[1]
+        current = current.split("## Expected output and interpretation", 1)[0]
+        self.assertIn(r".\tools\run_zavqera_readonly_effect_audit.ps1", current)
+        self.assertIn("Upload **only the ZIP**", current)
+        self.assertNotIn("$secure = Read-Host", current)
+        self.assertNotIn("py -3 tools/supabase_readonly_migration_effect_audit.py", current)
 if __name__ == "__main__":
     unittest.main()
