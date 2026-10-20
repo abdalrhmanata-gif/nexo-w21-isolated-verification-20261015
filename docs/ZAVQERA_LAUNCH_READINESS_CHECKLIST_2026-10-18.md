@@ -6,6 +6,9 @@
 
 Every gate below is mandatory. Status describes current evidence only; no older-SHA result is attributed to a newer source. `N/A` requires documented approval by the accountable owner and independent reviewer. A `PASS` is valid only for the exact source SHA and scope stated in its evidence field. No gate authorizes hosted writes, migration rollout, production deployment, or provider activation.
 
+**Status correction — 2026-10-20:** Isolated audit PR #2 (`codex/migration-ledger-provenance-20261015`, HEAD `73ac8f13a4f31848a380d14f00f4459d82a3b2f5`) is now **MERGED**. This preserves the audit artifacts only; it does not represent independent database-owner approval or resolve migration provenance. Launch-readiness PR #3 remains **OPEN / Draft / Unmerged** at the current reviewed head, and no independent review submission is recorded. All gates remain BLOCKED; `candidate_sha=NONE`, `hosted_write_authorized=false`, and release remains NO-GO.
+
+
 ### Gate A — Candidate identity and reproducible verification
 
 - **Status:** BLOCKED
