@@ -1,7 +1,7 @@
 # ZAVQERA Four-Blocker Remediation Checkpoint
 
-**Observed:** 2026-10-20  
-**Purpose:** preserve current release evidence and the exact external dependencies still required.  
+**Observed:** 2026-10-20
+**Purpose:** preserve current release evidence and the exact external dependencies still required.
 **Status:** evidence checkpoint only; not an independent review, production approval, or authorization to change hosted systems.
 
 ## Decision
