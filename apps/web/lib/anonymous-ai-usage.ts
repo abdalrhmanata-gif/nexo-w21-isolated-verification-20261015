@@ -1,15 +1,16 @@
 import { supabaseUrl } from "./supabase/config";
 import { postgrestRpc } from "./postgrest-rpc.mjs";
 
-function getServerDbKey() {
+function getServerDbConfig() {
+  const url = supabaseUrl;
   const key = process.env.ZAVQERA_SERVER_DB_KEY;
-  if (!supabaseUrl || !key) throw new Error("ANONYMOUS_AI_GUARD_UNAVAILABLE");
-  return key;
+  if (!url || !key) throw new Error("ANONYMOUS_AI_GUARD_UNAVAILABLE");
+  return { url, key };
 }
 
 async function callRpc<T>(name: string, body: Record<string, unknown>) {
-  const key = getServerDbKey();
-  return await postgrestRpc(supabaseUrl, key, name, body) as T;
+  const { url, key } = getServerDbConfig();
+  return await postgrestRpc(url, key, name, body) as T;
 }
 
 export async function reserveAnonymousAiGeneration(
