@@ -2,7 +2,7 @@
 begin;
 create extension if not exists pgtap;
 
-select plan(18);
+select plan(19);
 
 select is((
   select count(*)::integer
@@ -30,8 +30,18 @@ select is((
      and p.proname in ('reserve_anonymous_ai_generation',
                        'consume_anonymous_ai_generation',
                        'release_anonymous_ai_generation')
-     and p.proconfig @> array['search_path=pg_catalog']
-), 3, 'all wrappers pin search_path to pg_catalog');
+     and p.proconfig @> array['search_path=pg_catalog, public']
+), 3, 'all wrappers pin search_path to pg_catalog, public');
+
+select is((
+  select count(*)::integer
+    from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+   where n.nspname = 'public'
+     and p.proname in ('reserve_anonymous_ai_generation',
+                       'consume_anonymous_ai_generation',
+                       'release_anonymous_ai_generation')
+     and (p.prosrc not like '%auth.uid()%' or p.prosrc not like '%auth.role()%')
+), 0, 'all wrappers bind the request to service_role and no user uid');
 
 select is(has_function_privilege('service_role', 'public.reserve_anonymous_ai_generation(text,text,uuid)', 'EXECUTE'), true, 'service_role can call reserve wrapper');
 select is(has_function_privilege('service_role', 'public.consume_anonymous_ai_generation(uuid)', 'EXECUTE'), true, 'service_role can call consume wrapper');

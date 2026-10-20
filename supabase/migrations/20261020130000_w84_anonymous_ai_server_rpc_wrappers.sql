@@ -11,29 +11,45 @@ returns table (
   remaining integer,
   reason text
 )
-language sql
+language plpgsql
 security definer
-set search_path = pg_catalog
+set search_path = pg_catalog, public
 as $function$
-  select * from private.reserve_anonymous_ai_generation(p_visitor_hash, p_ip_hash, p_request_id)
+begin
+  if coalesce(auth.role(), '') <> 'service_role' or auth.uid() is not null then
+    raise exception using errcode = '42501', message = 'service_role_required';
+  end if;
+  return query
+    select * from private.reserve_anonymous_ai_generation(p_visitor_hash, p_ip_hash, p_request_id);
+end;
 $function$;
 
 create or replace function public.consume_anonymous_ai_generation(p_reservation_id uuid)
 returns boolean
-language sql
+language plpgsql
 security definer
-set search_path = pg_catalog
+set search_path = pg_catalog, public
 as $function$
-  select private.consume_anonymous_ai_generation(p_reservation_id)
+begin
+  if coalesce(auth.role(), '') <> 'service_role' or auth.uid() is not null then
+    raise exception using errcode = '42501', message = 'service_role_required';
+  end if;
+  return private.consume_anonymous_ai_generation(p_reservation_id);
+end;
 $function$;
 
 create or replace function public.release_anonymous_ai_generation(p_reservation_id uuid)
 returns boolean
-language sql
+language plpgsql
 security definer
-set search_path = pg_catalog
+set search_path = pg_catalog, public
 as $function$
-  select private.release_anonymous_ai_generation(p_reservation_id)
+begin
+  if coalesce(auth.role(), '') <> 'service_role' or auth.uid() is not null then
+    raise exception using errcode = '42501', message = 'service_role_required';
+  end if;
+  return private.release_anonymous_ai_generation(p_reservation_id);
+end;
 $function$;
 
 revoke all on function public.reserve_anonymous_ai_generation(text, text, uuid)
