@@ -1,4 +1,4 @@
-/** Call a server-only RPC while selecting the private PostgREST schema. */
+/** Call a server-only RPC in the default public PostgREST schema. */
 export async function postgrestRpc(supabaseUrl, apiKey, name, body, fetchImpl = fetch) {
   if (!supabaseUrl || !apiKey || !/^[a-z][a-z0-9_]*$/.test(name)) {
     throw new Error("ANONYMOUS_AI_GUARD_UNAVAILABLE");
@@ -9,7 +9,6 @@ export async function postgrestRpc(supabaseUrl, apiKey, name, body, fetchImpl = 
     headers: {
       apikey: apiKey,
       "Content-Type": "application/json",
-      "Content-Profile": "private",
     },
     body: JSON.stringify(body),
     cache: "no-store",
