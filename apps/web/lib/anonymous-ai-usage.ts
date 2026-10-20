@@ -1,4 +1,5 @@
 import { supabaseUrl } from "./supabase/config";
+import { postgrestRpc } from "./postgrest-rpc.mjs";
 
 function getServerDbKey() {
   const key = process.env.ZAVQERA_SERVER_DB_KEY;
@@ -8,18 +9,7 @@ function getServerDbKey() {
 
 async function callRpc<T>(name: string, body: Record<string, unknown>) {
   const key = getServerDbKey();
-  const response = await fetch(`${supabaseUrl}/rest/v1/rpc/${name}`, {
-    method: "POST",
-    headers: {
-      apikey: key,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify(body),
-    cache: "no-store",
-    redirect: "error",
-  });
-  if (!response.ok) throw new Error("ANONYMOUS_AI_GUARD_UNAVAILABLE");
-  return await response.json() as T;
+  return await postgrestRpc(supabaseUrl, key, name, body) as T;
 }
 
 export async function reserveAnonymousAiGeneration(
