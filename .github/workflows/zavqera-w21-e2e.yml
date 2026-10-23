@@ -211,9 +211,9 @@ jobs:
         run: |
           set -euo pipefail
           supabase start --ignore-health-check -x "studio,imgproxy,realtime,storage-api,postgres-meta,edge-runtime,logflare,vector,supavisor" --workdir "$ZAVQERA_E2E_SUPABASE_WORKDIR"
-          auth_container="$(docker ps --filter ancestor=ghcr.io/supabase/gotrue:v2.197.0 --format '{{.ID}}')"
+          auth_container="$(docker ps --format '{{.ID}} {{.Image}}' | awk '$2 ~ /supabase\/gotrue/ {print $1}')"
           if [ "$(printf '%s\n' "$auth_container" | sed '/^$/d' | wc -l)" -ne 1 ]; then
-            echo "Expected exactly one disposable GoTrue v2.197.0 container; refusing to infer Auth configuration."
+            echo "Expected exactly one running Supabase GoTrue container; refusing to infer Auth configuration."
             exit 1
           fi
           autoconfirm="$(docker inspect "$auth_container" --format '{{range .Config.Env}}{{println .}}{{end}}' | sed -n 's/^GOTRUE_MAILER_AUTOCONFIRM=//p')"
