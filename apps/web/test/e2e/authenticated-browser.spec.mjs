@@ -145,10 +145,13 @@ async function signUp(page, user) {
     ? rawErrorCode
     : "none";
   const sessionCreated = Boolean(signupPayload?.session?.access_token);
+  const userReturned = Boolean(signupPayload?.user);
+  const userIdReturned = typeof signupPayload?.user?.id === "string" && signupPayload.user.id.length > 0;
+  const identityCount = Array.isArray(signupPayload?.user?.identities) ? signupPayload.user.identities.length : -1;
   const userConfirmed = Boolean(signupPayload?.user?.confirmed_at);
   const confirmationSent = Boolean(signupPayload?.user?.confirmation_sent_at);
   // Never log the fixture email, password, response body, or session tokens.
-  console.info(`[W21_AUTH_SIGNUP] status=${signupResponse.status()} session=${sessionCreated} confirmed=${userConfirmed} confirmation_sent=${confirmationSent} error_code=${errorCode}`);
+  console.info(`[W21_AUTH_SIGNUP] status=${signupResponse.status()} session=${sessionCreated} user=${userReturned} user_id=${userIdReturned} identities=${identityCount} confirmed=${userConfirmed} confirmation_sent=${confirmationSent} error_code=${errorCode}`);
   expect(signupResponse.ok(), `Local disposable Auth rejected sign-up (HTTP ${signupResponse.status()}, code ${errorCode}).`)
     .toBe(true);
   expect(sessionCreated, `Local disposable Auth returned no session (HTTP ${signupResponse.status()}, code ${errorCode}).`)
