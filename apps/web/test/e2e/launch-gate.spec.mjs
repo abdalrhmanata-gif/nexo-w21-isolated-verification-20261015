@@ -310,13 +310,18 @@ test("ZAVQERA launch gate: auth, password reset, AI quota, isolation and Mission
       await expect(pageA.getByLabel(/^First steps/)).not.toHaveValue("");
 
       const requestId = `gate-${runtime.runId}-abcdefghijkl`;
+      const sameOriginHeaders = {
+        origin: runtime.baseURL,
+        "sec-fetch-site": "same-origin",
+        "x-request-id": requestId,
+      };
       const first = await pageA.request.post("/api/ai/plan", {
-        headers: { "x-request-id": requestId },
+        headers: sameOriginHeaders,
         data: { goal: "Create one reversible next step for this test." },
         timeout: 20_000,
       });
       const second = await pageA.request.post("/api/ai/plan", {
-        headers: { "x-request-id": requestId },
+        headers: sameOriginHeaders,
         data: { goal: "Create one reversible next step for this test." },
         timeout: 20_000,
       });
