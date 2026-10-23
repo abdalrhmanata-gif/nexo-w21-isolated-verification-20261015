@@ -23,9 +23,12 @@ function assertRuntime() {
 }
 
 function freshUser(label) {
-  // Generated per run and never logged. They exist only in the disposable stack.
+  // Unique per invocation so Playwright retries cannot hit GoTrue's
+  // anti-enumeration response for an account left by an earlier attempt.
+  // Never logged; accounts exist only in the disposable stack.
+  const attemptId = randomBytes(6).toString("hex");
   return {
-    email: `zavqera-e2e-${runtime.runId}-${label}@example.test`,
+    email: `zavqera-e2e-${runtime.runId}-${label}-${attemptId}@example.test`,
     password: `${randomBytes(18).toString("base64url")}Aa1!`,
   };
 }
