@@ -320,6 +320,7 @@ test("ZAVQERA launch gate: auth, password reset, AI quota, isolation and Mission
         data: { goal: "Create one reversible next step for this test." },
         timeout: 20_000,
       });
+      console.info(`[W21_AI_IDEMPOTENCY] first_status=${first.status()} replay_status=${second.status()}`);
       expect(first.status()).toBe(200);
       expect(second.status()).toBe(409);
       expect(await second.text()).toContain("already handled");
