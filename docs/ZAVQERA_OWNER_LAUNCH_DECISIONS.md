@@ -77,10 +77,16 @@ Owner selection/approval/date: ___
 
 **Selected by owner; execution awaits the local Docker/Supabase prerequisites.**
 
-Use [checklist](ZAVQERA_E2E_OWNER_RUN_CHECKLIST.md). No browser PASS is claimed.
-Acceptance must name the limited stage, residual auth/browser risk and reviewer;
-it does not waive ownership/verification guards or establish backup readiness.
-Never run automated full-loop tests against hosted Development.
+Use [checklist](ZAVQERA_E2E_OWNER_RUN_CHECKLIST.md). **Update as of 2026-10-18:**
+the automated disposable W21 CI browser E2E passed 2/2 at exact source HEAD
+`0fd69902305ef9603e90aef4ae446a95161306d1` ([run](https://github.com/abdalrhmanata-gif/nexo-w21-isolated-verification-20261015/actions/runs/39154053027)).
+This supersedes the historical “no browser PASS” statement only for that CI run.
+The selected **owner-run local Docker test remains unperformed**; do not treat the
+CI run as proof that the owner-local checklist was completed. Any decision to
+accept the CI run for a limited stage must name scope, residual auth/browser risk,
+and an independent reviewer. It does not waive ownership/verification guards or
+establish backup readiness. Never run automated full-loop tests against hosted
+Development.
 
 Owner selection/approval/date: ___
 
@@ -92,3 +98,8 @@ verification evidence, and update the
 [final gate](ZAVQERA_FINAL_LAUNCH_GATE.md). Choices alone do not prove completion
 of infrastructure, restore or deployment work, and do not authorize public launch
 until the agreed prerequisites are satisfied.
+
+
+## Current execution update — 2026-10-18
+
+The latest isolated GitHub Actions W21 run is [39154053027](https://github.com/abdalrhmanata-gif/nexo-w21-isolated-verification-20261015/actions/runs/39154053027), on source HEAD `0fd69902305ef9603e90aef4ae446a95161306d1`, with all 26 steps successful, including browser E2E and cleanup verification. This is reproducible CI evidence, not an owner-run local Docker result. The owner's local-test selection above is not silently changed; the owner must record whether the CI evidence satisfies the selected launch stage or complete the owner-local run. Backup/restore, production operations, hosted database parity, and independent release authorization remain separate blockers.

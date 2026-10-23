@@ -4,8 +4,9 @@ Audit: 2026-10-01. Repository baseline:
 `3f5fea95b9c17ede66e591b37a9dc64988b5b0de`.
 Branch: `zavqera/alternative-web-deployment`.
 
-**TECHNICAL MVP: GREEN / PASS**, with the W21 owner-run E2E alternative retained.
-**PUBLIC PRODUCTION: OWNER DECISION REQUIRED; NOT AUTHORIZED.**
+**ISOLATED CI VERIFICATION: PASS** on exact source HEAD `0fd69902305ef9603e90aef4ae446a95161306d1` (W21 26/26
+steps; Web Unit, Web CI/build, Flutter CI, and 37 launch-validator tests passed).
+**HOSTED DATABASE / PUBLIC RELEASE: BLOCKED — NO-GO.**
 **PRODUCTION BACKEND STATUS: OWNER DECISION REQUIRED before real public users.**
 
 Public launch is not authorized by green code. The primary site returns 404,
@@ -28,16 +29,17 @@ RED = BLOCKED for public production, not necessarily a code defect.
 |---|---|---|
 | CODE | GREEN / READY | No runtime diff after tested `a89d0a1`; no new defect found |
 | TESTS | GREEN / READY | 128 passed, 0 failed, 0 skipped; typecheck/lint/build passed |
-| DATABASE | GREEN / READY for Development | W20/W21 present; guards, RLS, grants and history rechecked read-only |
-| AUTH | YELLOW / OWNER DECISION REQUIRED | Source checks and anonymous redirects pass; real-auth browser E2E unexecuted |
-| SECURITY | YELLOW / OWNER DECISION REQUIRED | No source-review finding; 0 advisor errors, 6 warnings including disabled leaked-password protection |
+| DATABASE | RED / BLOCKED | The 2026-10-17 13-query capture found direct `service_role` privileges on `public.agent_executions`, missing expected relations/columns/constraints/indexes/trigger, routine/default-ACL drift, and unresolved deployed SQL provenance. No hosted fix is authorized. |
+| MIGRATION PROVENANCE | RED / BLOCKED | 22 same-name/different-version conflicts and six hosted-only names remain unresolved; checked-in files and ledger metadata do not prove which SQL bytes were deployed. |
+| AUTH | YELLOW / PARTIALLY VERIFIED | Disposable Supabase auth/browser E2E passed 2/2 at W21 run 39154053027; hosted auth callback, SMTP/OAuth, session, and production redirect configuration remain unverified. |
+| SECURITY | RED / BLOCKED | Independent security/database review is missing; the hosted capture has direct table grants and permission/schema/function discrepancies. Six prior advisor warnings, including disabled leaked-password protection, remain unresolved. |
 | DEPLOYMENT | YELLOW / OWNER DECISION REQUIRED | Primary URL currently unusable (404); tested branch ready; production publishing reported paused |
 | ENVIRONMENT | YELLOW / OWNER DECISION REQUIRED | Netlify production context points to Development; dedicated production backend preferable |
 | DOMAIN | YELLOW / OWNER DECISION REQUIRED | Custom domain NOT CONFIGURED; working branch subdomain can support an explicitly approved controlled beta |
 | MONITORING | YELLOW / OWNER DECISION REQUIRED | Provider dashboards/commit checks exist; no established uptime/error alerting or staffed incident contact |
 | BACKUP/RECOVERY | YELLOW / OWNER DECISION REQUIRED | Recovery not established; choose managed backups or encrypted off-site dumps and prove restore |
 | ROLLBACK | YELLOW / OWNER DECISION REQUIRED | Procedure documented, existing branch artifact ready; production execution/permissions not rehearsed |
-| USER EVIDENCE | GREEN / READY, owner-confirmed | T01-T05 PASS; missing detail is a limitation, not a blocker |
+| USER EVIDENCE | YELLOW / INCOMPLETE | T01-T05 carry owner-confirmed PASS labels, but detailed session observations were not recorded; independent end-to-end acceptance is still needed. |
 
 ## Repository and runtime
 
@@ -196,11 +198,16 @@ session refresh, persistence or cross-user behavior in a browser.
 2. Netlify capacity: wait for the new billing cycle, or explicitly upgrade.
 3. Backup strategy: Supabase Pro managed backups, or external encrypted db dumps.
 4. Domain: continue the temporary Netlify URL, or connect a custom domain.
-5. E2E: execute owner-run local Docker tests, or explicitly accept unexecuted E2E.
+5. E2E: automated W21 browser E2E now passed 2/2 in GitHub Actions on
+   `0fd69902305ef9603e90aef4ae446a95161306d1`; the separate owner-run local Docker test remains unperformed.
+   Decide explicitly whether this disposable CI evidence satisfies the chosen
+   stage, or complete the owner-run local checklist. Neither choice waives the
+   hosted database, security, or recovery gates.
 
-All five remain UNDECIDED. Contact assignments, capacity/promotion checks,
-restore evidence and limited-beta safeguards are implementation conditions,
-not decisions silently made here. Supporting packages:
+Decisions 1-4 remain UNDECIDED. Decision 5 still needs an explicit recorded
+acceptance of CI evidence or completion of the owner-run local test. Contact
+assignments, capacity/promotion checks, restore evidence and limited-beta
+safeguards are implementation conditions, not decisions silently made here. Supporting packages:
 [backup/recovery](ZAVQERA_PRODUCTION_BACKUP_AND_RECOVERY.md),
 [operations](ZAVQERA_PRODUCTION_OPERATIONS.md),
 [domain plan](ZAVQERA_DOMAIN_LAUNCH_PLAN.md) and
@@ -216,3 +223,40 @@ Each of T01, T02, T03, T04 and T05 is recorded only as:
 No quotes, timings, friction frequency, retention or conversion were invented.
 No repeated high-severity user friction was established by this launch audit,
 and no speculative product behavior change was made.
+
+
+## Current isolated recovery smoke — 39157505523
+
+The exact W21 source/test HEAD `86b8b49ee3dd16371ca607089f49de8ba0778f9f` passed [W21 run 39157505523](https://github.com/abdalrhmanata-gif/nexo-w21-isolated-verification-20261015/actions/runs/39157505523), 27/27 steps. Browser E2E was 2/2; the disposable logical restore smoke matched 51 application/auth/migration relations and checked core row counts, then verified removal of the temporary database and dump. It was an empty-data, allowlisted-schema smoke; extension relation parity was excluded (source 2, restored 0), and there is no production-data restore or RPO/RTO evidence. The four documented blockers remain open and public production remains **NO-GO**. See [the current blocker closure register](ZAVQERA_BLOCKER_CLOSURE_REGISTER_2026-10-18.md).
+
+
+## Superseding seeded restore-smoke evidence — 2026-10-19
+
+At exact code/test HEAD `6cd8bf6044c2a6f2ac173f19b9d8fb78f2af7f2f`, [W21 run 39222501670](https://github.com/abdalrhmanata-gif/nexo-w21-isolated-verification-20261015/actions/runs/39222501670) completed **SUCCESS, 27/27 steps**.
+
+- Disposable PostgreSQL 17 replay and pgTAP succeeded; Mission Authority and quota/workspace suites succeeded; four concurrency proofs and W72 fake-provider integration succeeded.
+- Browser E2E: **2 passed (2.6 minutes)**. Cleanup evidence states `remaining_containers=none`, `remaining_volumes=none`, `cleanup_verified=true`.
+- A custom-format allowlisted-schema dump (477,328 bytes; SHA-256 `4c6e134de68aac8b769aad1147da5a7c086e19327c70b19d34e3e965adac5b3b`) was restored to a separate temporary database. It proved `source_app_relation_count=52` and `restored_app_relation_count=52`, and the exact synthetic row matched (`sentinel_row_matched=true`). It also checked core relation row counts: `public.w21_restore_smoke_sentinel=1`; the app business tables and auth users/identities were empty; `supabase_migrations.schema_migrations=88`.
+- The temporary database, dump file and source sentinel were removed and verified: `restore_database_removed=true`, `dump_removed=true`, `source_sentinel_removed=true`, `restore_cleanup_verified=true`.
+- Schema `extensions` remains outside strict relation parity: source has 2 relations there and restore has 0. Extension-member/managed-schema parity is **not proven**. This is a disposable, synthetic-data logical restore smoke—not a complete Supabase backup/restore, representative production data recovery, measured RPO/RTO, or recovery acceptance.
+- All other exact-head workflows succeeded: [Web Unit 39222509610](https://github.com/abdalrhmanata-gif/nexo-w21-isolated-verification-20261015/actions/runs/39222509610) (**374 tests; 373 pass, 0 fail, 1 skipped**), [Web CI 39222509604](https://github.com/abdalrhmanata-gif/nexo-w21-isolated-verification-20261015/actions/runs/39222509604), and [Flutter CI 39222509681](https://github.com/abdalrhmanata-gif/nexo-w21-isolated-verification-20261015/actions/runs/39222509681).
+
+This reduces uncertainty for the isolated restore path but does not resolve the four public-release blockers: hosted Development DB/security drift; historical migration provenance; missing independent security/database approval; and full data-bearing recovery/RPO/RTO, staffed operations exercise, detailed T01–T05 observations and accountable release approval. Preserve `hosted_write_authorized=false`, keep `TRUSTED_DISPATCH_ADAPTERS` empty/fail-closed, and keep public production **NO-GO**.
+
+
+## Superseding current-head evidence — 2026-10-19 — `7c0a9fe06d8fcefb0310447ccb52c92c1be6543b`
+
+On exact current launch-gate HEAD `7c0a9fe06d8fcefb0310447ccb52c92c1be6543b`, the following GitHub Actions runs all completed **SUCCESS**:
+
+- [W21 Local Launch Gate 39223464834](https://github.com/abdalrhmanata-gif/nexo-w21-isolated-verification-20261015/actions/runs/39223464834): **27/27 steps**; PostgreSQL 17 replay and pgTAP, Mission Authority/quota/workspace security tests, four concurrency proofs, W72 fake-provider gateway, browser E2E **2 passed (2.4 minutes)**, and disposable-stack cleanup.
+- [Web CI/build 39223471551](https://github.com/abdalrhmanata-gif/nexo-w21-isolated-verification-20261015/actions/runs/39223471551): success.
+- [Web Unit 39223471584](https://github.com/abdalrhmanata-gif/nexo-w21-isolated-verification-20261015/actions/runs/39223471584): success.
+- [Flutter CI 39223471648](https://github.com/abdalrhmanata-gif/nexo-w21-isolated-verification-20261015/actions/runs/39223471648): success.
+
+W21 evidence artifact `W21_EVIDENCE.txt` was downloaded and inspected. It reports `result=success`, exact `git_sha=7c0a9fe06d8fcefb0310447ccb52c92c1be6543b`, `postgres_major=17`, `cleanup_verified=true`, `remaining_containers=none`, and `remaining_volumes=none`. The allowlisted custom-format logical dump was 477,328 bytes (SHA-256 `b1920bf974a2fa7d6e65d10a2c7f2a34d8ae5e5166f646437af36c6348ec4903`). It restored into a separate disposable database and verified 52 source/52 restored application/auth/migration relations plus an exact synthetic sentinel row. The source sentinel, restore database and dump were deleted and each cleanup check passed.
+
+**Limits:** schema `extensions` reports 2 source relations and 0 restored relations and remains outside strict relation parity. Business tables and auth users/identities were empty apart from the synthetic test row; disposable migration row count was 88. This is not a representative production-data backup, complete managed Supabase recovery, extension-parity proof, measured RPO/RTO, hosted Development parity, or independent release approval. The four blockers below remain open; public production remains **NO-GO**.
+
+### Final decision
+
+The latest isolated technical verification has improved confidence in code paths and synthetic restore mechanics only. It does **not** turn the hosted Development schema into the expected candidate, resolve historic SQL provenance, replace an independent reviewer, or prove operational/data recovery. Release gate remains **NO-GO**.

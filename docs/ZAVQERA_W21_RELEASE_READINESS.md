@@ -1,5 +1,7 @@
 # W21 release readiness
 
+> **Current status addendum — 2026-10-18:** The historical audit below remains a record of the 2026-10-01 evidence, not the current E2E status. W21 browser E2E has since passed 2/2 in [GitHub Actions run 39154053027](https://github.com/abdalrhmanata-gif/nexo-w21-isolated-verification-20261015/actions/runs/39154053027) on source HEAD `0fd69902305ef9603e90aef4ae446a95161306d1`; W21 completed 26/26 steps and verified no remaining disposable containers/volumes. [Web Unit](https://github.com/abdalrhmanata-gif/nexo-w21-isolated-verification-20261015/actions/runs/39154055655), [Web CI/build](https://github.com/abdalrhmanata-gif/nexo-w21-isolated-verification-20261015/actions/runs/39154055648), and [Flutter CI](https://github.com/abdalrhmanata-gif/nexo-w21-isolated-verification-20261015/actions/runs/39154055664) also passed on that exact head. This only corrects the old “browser E2E not executed” status. Hosted schema/ACL drift, migration provenance, independent security/database review, backup/restore/RPO/RTO, production-operations exercise, and complete user acceptance remain unresolved; public release remains NO-GO.
+
 Audit date: 2026-10-01. **W21 PASS / RELEASE READY for launch preparation**
 under the owner's latest final-blocker-fix Phase 11 criteria, including the
 explicitly permitted owner-run E2E setup alternative. **Browser E2E has not
@@ -254,3 +256,21 @@ Pre-existing `.agents/` and `skills-lock.json` are untouched; no secrets committ
 owner's revised gate.** This is not a claim of executed browser E2E, perfect
 research detail, a clean historical replay, or authorization to promote/merge
 main. Keep those limitations visible during launch preparation.
+
+
+## Superseding current-head evidence — 2026-10-19 — `7c0a9fe06d8fcefb0310447ccb52c92c1be6543b`
+
+On exact current launch-gate HEAD `7c0a9fe06d8fcefb0310447ccb52c92c1be6543b`, the following GitHub Actions runs all completed **SUCCESS**:
+
+- [W21 Local Launch Gate 39223464834](https://github.com/abdalrhmanata-gif/nexo-w21-isolated-verification-20261015/actions/runs/39223464834): **27/27 steps**; PostgreSQL 17 replay and pgTAP, Mission Authority/quota/workspace security tests, four concurrency proofs, W72 fake-provider gateway, browser E2E **2 passed (2.4 minutes)**, and disposable-stack cleanup.
+- [Web CI/build 39223471551](https://github.com/abdalrhmanata-gif/nexo-w21-isolated-verification-20261015/actions/runs/39223471551): success.
+- [Web Unit 39223471584](https://github.com/abdalrhmanata-gif/nexo-w21-isolated-verification-20261015/actions/runs/39223471584): success.
+- [Flutter CI 39223471648](https://github.com/abdalrhmanata-gif/nexo-w21-isolated-verification-20261015/actions/runs/39223471648): success.
+
+W21 evidence artifact `W21_EVIDENCE.txt` was downloaded and inspected. It reports `result=success`, exact `git_sha=7c0a9fe06d8fcefb0310447ccb52c92c1be6543b`, `postgres_major=17`, `cleanup_verified=true`, `remaining_containers=none`, and `remaining_volumes=none`. The allowlisted custom-format logical dump was 477,328 bytes (SHA-256 `b1920bf974a2fa7d6e65d10a2c7f2a34d8ae5e5166f646437af36c6348ec4903`). It restored into a separate disposable database and verified 52 source/52 restored application/auth/migration relations plus an exact synthetic sentinel row. The source sentinel, restore database and dump were deleted and each cleanup check passed.
+
+**Limits:** schema `extensions` reports 2 source relations and 0 restored relations and remains outside strict relation parity. Business tables and auth users/identities were empty apart from the synthetic test row; disposable migration row count was 88. This is not a representative production-data backup, complete managed Supabase recovery, extension-parity proof, measured RPO/RTO, hosted Development parity, or independent release approval. The four blockers below remain open; public production remains **NO-GO**.
+
+### Current management disposition
+
+The historical “technically ready for launch preparation” language above is not the current production-release decision. The current exact-head W21/Web/Flutter runs are green, but all four formal blockers remain open. Do not represent CI green as hosted parity, production readiness, or release authorization. Public production remains **NO-GO** until an authorized owner closes the hosted database and provenance gates, an independent reviewer records findings, and representative recovery/operations/user acceptance evidence and release approval are signed.

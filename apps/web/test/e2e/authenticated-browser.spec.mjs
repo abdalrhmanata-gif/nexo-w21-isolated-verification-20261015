@@ -23,9 +23,12 @@ function assertRuntime() {
 }
 
 function freshUser(label) {
-  // Generated per run and never logged. They exist only in the disposable stack.
+  // Unique per invocation so Playwright retries cannot hit GoTrue's
+  // anti-enumeration response for an account left by an earlier attempt.
+  // Never logged; accounts exist only in the disposable stack.
+  const attemptId = randomBytes(6).toString("hex");
   return {
-    email: `zavqera-e2e-${runtime.runId}-${label}@example.test`,
+    email: `zavqera-e2e-${runtime.runId}-${label}-${attemptId}@example.test`,
     password: `${randomBytes(18).toString("base64url")}Aa1!`,
   };
 }
@@ -121,7 +124,38 @@ async function signUp(page, user) {
   await page.goto("/auth/sign-up");
   await page.getByLabel("Email", { exact: true }).fill(user.email);
   await page.getByLabel("Password", { exact: true }).fill(user.password);
+  const signupResponsePromise = page.waitForResponse((response) => {
+    if (response.request().method() !== "POST") return false;
+    try {
+      return new URL(response.url()).pathname.endsWith("/auth/v1/signup");
+    } catch {
+      return false;
+    }
+  }, { timeout: 15_000 });
   await formWith(page, page.getByLabel("Email", { exact: true })).locator('button[type="submit"]').click();
+  const signupResponse = await signupResponsePromise;
+  let signupPayload;
+  try {
+    signupPayload = await signupResponse.json();
+  } catch {
+    signupPayload = null;
+  }
+  const rawErrorCode = signupPayload?.error_code ?? signupPayload?.code ?? signupPayload?.error?.code;
+  const errorCode = typeof rawErrorCode === "string" && /^[a-zA-Z0-9_-]{1,64}$/.test(rawErrorCode)
+    ? rawErrorCode
+    : "none";
+  const sessionCreated = Boolean(signupPayload?.session?.access_token);
+  const userReturned = Boolean(signupPayload?.user);
+  const userIdReturned = typeof signupPayload?.user?.id === "string" && signupPayload.user.id.length > 0;
+  const identityCount = Array.isArray(signupPayload?.user?.identities) ? signupPayload.user.identities.length : -1;
+  const userConfirmed = Boolean(signupPayload?.user?.confirmed_at);
+  const confirmationSent = Boolean(signupPayload?.user?.confirmation_sent_at);
+  // Never log the fixture email, password, response body, or session tokens.
+  console.info(`[W21_AUTH_SIGNUP] status=${signupResponse.status()} session=${sessionCreated} user=${userReturned} user_id=${userIdReturned} identities=${identityCount} confirmed=${userConfirmed} confirmation_sent=${confirmationSent} error_code=${errorCode}`);
+  expect(signupResponse.ok(), `Local disposable Auth rejected sign-up (HTTP ${signupResponse.status()}, code ${errorCode}).`)
+    .toBe(true);
+  expect(sessionCreated, `Local disposable Auth returned no session (HTTP ${signupResponse.status()}, code ${errorCode}).`)
+    .toBe(true);
   await expect(page, "Sign-up must return a session; disable email confirmations on the disposable stack.").toHaveURL(/\/app$/);
 }
 

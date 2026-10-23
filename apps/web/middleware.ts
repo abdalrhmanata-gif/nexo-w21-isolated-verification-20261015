@@ -1,5 +1,6 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
+import { isSameOriginRequest } from "./lib/same-origin-guard.mjs";
 
 type RuntimeGlobal = typeof globalThis & {
   Netlify?: {
@@ -18,6 +19,28 @@ function getRuntimeEnv(name: string) {
 }
 
 export async function middleware(request: NextRequest) {
+  const pathname = request.nextUrl.pathname;
+  const isApiRequest = pathname === "/api" || pathname.startsWith("/api/");
+  const isInternalApiRequest = pathname === "/api/internal" || pathname.startsWith("/api/internal/");
+
+  // The worker endpoint has its own fail-closed bearer-token boundary.
+  if (isApiRequest && isInternalApiRequest) return NextResponse.next();
+
+  if (isApiRequest) {
+    if (!isInternalApiRequest && !isSameOriginRequest({
+      method: request.method,
+      origin: request.headers.get("origin"),
+      secFetchSite: request.headers.get("sec-fetch-site"),
+      requestOrigin: request.nextUrl.origin,
+      siteUrl: getRuntimeEnv("NEXT_PUBLIC_SITE_URL"),
+    })) {
+      return NextResponse.json({ error: "Cross-origin request blocked." }, { status: 403 });
+    }
+    // API route handlers own their session checks; do not duplicate Supabase
+    // auth lookups here. The internal worker route separately checks its token.
+    return NextResponse.next({ request });
+  }
+
   // Read the public Supabase values at runtime. This prevents Next.js from
   // embedding the publishable key into the generated Netlify middleware bundle.
   const supabaseUrl = getRuntimeEnv("NEXT_PUBLIC_SUPABASE_URL");
@@ -58,5 +81,5 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/app/:path*", "/auth/:path*"],
+  matcher: ["/app/:path*", "/auth/:path*", "/api/:path*"],
 };
