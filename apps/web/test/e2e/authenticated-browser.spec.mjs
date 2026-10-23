@@ -121,7 +121,33 @@ async function signUp(page, user) {
   await page.goto("/auth/sign-up");
   await page.getByLabel("Email", { exact: true }).fill(user.email);
   await page.getByLabel("Password", { exact: true }).fill(user.password);
+  const signupResponsePromise = page.waitForResponse((response) => {
+    if (response.request().method() !== "POST") return false;
+    try {
+      return new URL(response.url()).pathname.endsWith("/auth/v1/signup");
+    } catch {
+      return false;
+    }
+  }, { timeout: 15_000 });
   await formWith(page, page.getByLabel("Email", { exact: true })).locator('button[type="submit"]').click();
+  const signupResponse = await signupResponsePromise;
+  let signupPayload;
+  try {
+    signupPayload = await signupResponse.json();
+  } catch {
+    signupPayload = null;
+  }
+  const rawErrorCode = signupPayload?.error_code ?? signupPayload?.code ?? signupPayload?.error?.code;
+  const errorCode = typeof rawErrorCode === "string" && /^[a-zA-Z0-9_-]{1,64}$/.test(rawErrorCode)
+    ? rawErrorCode
+    : "none";
+  const sessionCreated = Boolean(signupPayload?.session?.access_token);
+  // Never log the fixture email, password, response body, or session tokens.
+  console.info(`[W21_AUTH_SIGNUP] status=${signupResponse.status()} session=${sessionCreated} error_code=${errorCode}`);
+  expect(signupResponse.ok(), `Local disposable Auth rejected sign-up (HTTP ${signupResponse.status()}, code ${errorCode}).`)
+    .toBe(true);
+  expect(sessionCreated, `Local disposable Auth returned no session (HTTP ${signupResponse.status()}, code ${errorCode}).`)
+    .toBe(true);
   await expect(page, "Sign-up must return a session; disable email confirmations on the disposable stack.").toHaveURL(/\/app$/);
 }
 
