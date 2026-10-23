@@ -107,6 +107,16 @@ jobs:
           setv(lines, "auth.email.template.recovery", "subject", '"Reset your ZAVQERA password"')
           setv(lines, "auth.email.template.recovery", "content_path", '"./supabase/templates/recovery.html"')
           p.write_text("\n".join(lines) + "\n")
+          # Verify the exact parsed values Supabase CLI will consume. This is
+          # a local disposable stack; fail before starting it if TOML edits
+          # landed in the wrong section or were overridden.
+          import tomllib
+          config = tomllib.loads(p.read_text())
+          if config.get("auth", {}).get("email", {}).get("enable_confirmations") is not False:
+              raise SystemExit("Disposable Auth must have email confirmations disabled for session-based E2E.")
+          if config.get("auth", {}).get("site_url") != "http://127.0.0.1:3210":
+              raise SystemExit("Disposable Auth site_url is not the expected loopback origin.")
+          print("W21 disposable Auth config verified: confirmations=false; site_url=loopback")
           PY
           mkdir -p "$workdir/supabase/templates"
           cat > "$workdir/supabase/templates/recovery.html" <<'HTML'
