@@ -154,9 +154,21 @@ async function signUp(page, user) {
   console.info(`[W21_AUTH_SIGNUP] status=${signupResponse.status()} session=${sessionCreated} user=${userReturned} user_id=${userIdReturned} identities=${identityCount} confirmed=${userConfirmed} confirmation_sent=${confirmationSent} error_code=${errorCode}`);
   expect(signupResponse.ok(), `Local disposable Auth rejected sign-up (HTTP ${signupResponse.status()}, code ${errorCode}).`)
     .toBe(true);
-  expect(sessionCreated, `Local disposable Auth returned no session (HTTP ${signupResponse.status()}, code ${errorCode}).`)
-    .toBe(true);
-  await expect(page, "Sign-up must return a session; disable email confirmations on the disposable stack.").toHaveURL(/\/app$/);
+  if (sessionCreated) {
+    await expect(page).toHaveURL(/\/app$/);
+    return;
+  }
+  expect(userIdReturned && identityCount > 0, "Disposable Auth must create a real fixture identity when no session is returned.").toBe(true);
+  await expect(page.getByText("Check your email to confirm your account, then sign in.", { exact: true })).toBeVisible();
+  console.info("[W21_AUTH_CONFIRMATION] email delivery is not exercised; confirming fixture through local Admin API.");
+  const serviceRoleKey = process.env.ZAVQERA_E2E_RUNTIME_SERVICE_ROLE_KEY;
+  expect(serviceRoleKey, "Disposable service-role key is available only to the Node test process.").toBeTruthy();
+  const admin = createClient(runtime.supabaseUrl, serviceRoleKey, {
+    auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
+  });
+  const { error } = await admin.auth.admin.updateUserById(signupPayload.user.id, { email_confirm: true });
+  expect(error, "Disposable fixture confirmation through local Admin API should succeed.").toBeNull();
+  await signIn(page, user);
 }
 
 async function signIn(page, user) {
