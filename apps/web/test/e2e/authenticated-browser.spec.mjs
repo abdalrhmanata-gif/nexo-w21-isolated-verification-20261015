@@ -122,6 +122,12 @@ async function submit(page, field, { method, path, expectStatus }) {
 
 async function signUp(page, user) {
   await page.goto("/auth/sign-up");
+  await page.waitForFunction(() => {
+    const form = document.querySelector("form.form-grid");
+    return form && Object.keys(form).some((key) =>
+      key.startsWith("__reactProps$") && typeof form[key]?.onSubmit === "function"
+    );
+  }, { timeout: 15_000 });
   await page.getByLabel("Email", { exact: true }).fill(user.email);
   await page.getByLabel("Password", { exact: true }).fill(user.password);
   const signupResponsePromise = page.waitForResponse((response) => {
@@ -159,7 +165,19 @@ async function signUp(page, user) {
     return;
   }
   expect(userIdReturned && identityCount > 0, "Disposable Auth must create a real fixture identity when no session is returned.").toBe(true);
-  await expect(page.locator("form .success-state")).toBeVisible({ timeout: 15_000 });
+  try {
+    await expect(page.locator("form .success-state")).toBeVisible({ timeout: 15_000 });
+  } catch (error) {
+    const uiState = await page.evaluate(() => ({
+      pathname: window.location.pathname,
+      formPresent: Boolean(document.querySelector("form.form-grid")),
+      statusCount: document.querySelectorAll('form [role="status"]').length,
+      alertCount: document.querySelectorAll('form [role="alert"]').length,
+      submitDisabled: Boolean(document.querySelector('[data-testid="sign-up-submit"]:disabled')),
+    }));
+    console.info(`[W21_AUTH_UI] pathname=${uiState.pathname} form=${uiState.formPresent} status=${uiState.statusCount} alert=${uiState.alertCount} submit_disabled=${uiState.submitDisabled}`);
+    throw error;
+  }
   console.info("[W21_AUTH_CONFIRMATION] email delivery is not exercised; confirming fixture through local Admin API.");
   const serviceRoleKey = process.env.ZAVQERA_E2E_RUNTIME_SERVICE_ROLE_KEY;
   expect(serviceRoleKey, "Disposable service-role key is available only to the Node test process.").toBeTruthy();
