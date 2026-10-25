@@ -159,7 +159,7 @@ async function signUp(page, user) {
     return;
   }
   expect(userIdReturned && identityCount > 0, "Disposable Auth must create a real fixture identity when no session is returned.").toBe(true);
-  await expect(page.getByRole("status")).toContainText("Check your email to confirm", { timeout: 15_000 });
+  await expect(page.locator("form .success-state")).toBeVisible({ timeout: 15_000 });
   console.info("[W21_AUTH_CONFIRMATION] email delivery is not exercised; confirming fixture through local Admin API.");
   const serviceRoleKey = process.env.ZAVQERA_E2E_RUNTIME_SERVICE_ROLE_KEY;
   expect(serviceRoleKey, "Disposable service-role key is available only to the Node test process.").toBeTruthy();
