@@ -306,14 +306,19 @@ test("disposable full loop: auth, plan, lifecycle, follow-up, verification, outc
       await expect(page.getByLabel(/^First steps/)).not.toHaveValue("");
 
       const requestId = `w21-ai-idempotency-${runtime.runId}-abcdef`;
+      const sameOriginHeaders = {
+        origin: runtime.baseURL,
+        "sec-fetch-site": "same-origin",
+        "x-request-id": requestId,
+      };
       const first = await page.request.post("/api/ai/plan", {
-        headers: { "x-request-id": requestId },
+        headers: sameOriginHeaders,
         data: { goal: "Create one reversible next step for the same test mission." },
         timeout: 20_000,
       });
       expect(first.status()).toBe(200);
       const second = await page.request.post("/api/ai/plan", {
-        headers: { "x-request-id": requestId },
+        headers: sameOriginHeaders,
         data: { goal: "Create one reversible next step for the same test mission." },
         timeout: 20_000,
       });
