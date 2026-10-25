@@ -94,7 +94,16 @@ async function signUp(page, user) {
     }
     expect(typeof payload?.user?.id === "string" && payload.user.identities?.length > 0,
       "Disposable Auth must return a newly created fixture identity when confirmation is required.").toBe(true);
-    await expect(page.locator("form .success-state")).toBeVisible({ timeout: 15_000 });
+    const successNotice = page.locator("form .success-state");
+    await expect.poll(async () => new URL(page.url()).pathname === "/app"
+      || await successNotice.isVisible().catch(() => false), { timeout: 15_000 })
+      .toBe(true);
+    const authenticatedRoute = new URL(page.url()).pathname === "/app";
+    if (authenticatedRoute) {
+      const protectedResponse = await page.request.get(`${runtime.baseURL}/api/ai/usage`);
+      expect(protectedResponse.status(), "The app route after signup must have a valid authenticated browser session.").toBe(200);
+      console.info("[W21_AUTH_UI] signup completion reached protected app route; protected_api_status=200");
+    }
     console.info("[W21_AUTH_CONFIRMATION] email delivery is not exercised; confirming fixture through local Admin API.");
     const serviceRoleKey = process.env.ZAVQERA_E2E_RUNTIME_SERVICE_ROLE_KEY;
     expect(serviceRoleKey, "Disposable service-role key is available only to the Node test process.").toBeTruthy();
@@ -103,6 +112,10 @@ async function signUp(page, user) {
     });
     const { error } = await admin.auth.admin.updateUserById(payload.user.id, { email_confirm: true });
     expect(error, "Disposable fixture confirmation through local Admin API should succeed.").toBeNull();
+    if (authenticatedRoute) {
+      await page.context().clearCookies();
+      await page.evaluate(() => { window.localStorage.clear(); window.sessionStorage.clear(); });
+    }
     await signIn(page, user);
   } finally {
     await removeGuard();
