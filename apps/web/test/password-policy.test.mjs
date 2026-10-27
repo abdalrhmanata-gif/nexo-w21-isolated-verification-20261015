@@ -24,8 +24,19 @@ test("password policy sends only a five-character SHA-1 range prefix and rejects
   assert.match(calls[0].url, /^https:\/\/api\.pwnedpasswords\.com\/range\/[0-9A-F]{5}$/);
   assert.equal(calls[0].options.headers["Add-Padding"], "true");
   assert.equal(calls[0].options.headers["User-Agent"], "ZAVQERA/1.0 password-policy");
+  assert.equal(calls[0].options.redirect, "error");
   assert.equal(calls[0].url.includes("5BAA6"), true);
   assert.deepEqual(result, { allowed: true });
+});
+
+test("password policy does not follow a redirect carrying the hash-range prefix", async () => {
+  let requestOptions;
+  await assert.rejects(checkPasswordPolicy(hashForPassword, async (_url, options) => {
+    requestOptions = options;
+    assert.equal(options.redirect, "error");
+    throw new TypeError("fetch failed because redirects are disabled");
+  }), /redirects are disabled/);
+  assert.equal(requestOptions.redirect, "error");
 });
 
 test("password policy rejects a suffix that matches the full SHA-1 password hash", async () => {

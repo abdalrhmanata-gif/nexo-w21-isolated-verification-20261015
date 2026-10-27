@@ -82,8 +82,41 @@ async function signUp(page, user) {
     await waitForReactHandler(page, "form.form-grid", "onSubmit");
     await page.getByLabel("Email", { exact: true }).fill(user.email);
     await page.getByLabel("Password", { exact: true }).fill(user.password);
+    const signupResponsePromise = page.waitForResponse((response) => response.request().method() === "POST"
+      && new URL(response.url()).pathname.endsWith("/auth/v1/signup"), { timeout: 15_000 });
     await page.getByTestId("sign-up-submit").click({ timeout: 10_000 });
-    await expect(page).toHaveURL((url) => url.pathname === "/app", { timeout: 15_000 });
+    const signupResponse = await signupResponsePromise;
+    expect(signupResponse.ok(), `Disposable Auth sign-up failed with HTTP ${signupResponse.status()}.`).toBe(true);
+    const payload = await signupResponse.json();
+    if (payload?.session?.access_token) {
+      await expect(page).toHaveURL((url) => url.pathname === "/app", { timeout: 15_000 });
+      return;
+    }
+    expect(typeof payload?.user?.id === "string" && payload.user.identities?.length > 0,
+      "Disposable Auth must return a newly created fixture identity when confirmation is required.").toBe(true);
+    const successNotice = page.locator("form .success-state");
+    await expect.poll(async () => new URL(page.url()).pathname === "/app"
+      || await successNotice.isVisible().catch(() => false), { timeout: 15_000 })
+      .toBe(true);
+    const authenticatedRoute = new URL(page.url()).pathname === "/app";
+    if (authenticatedRoute) {
+      const protectedResponse = await page.request.get(`${runtime.baseURL}/api/ai/usage`);
+      expect(protectedResponse.status(), "The app route after signup must have a valid authenticated browser session.").toBe(200);
+      console.info("[W21_AUTH_UI] signup completion reached protected app route; protected_api_status=200");
+    }
+    console.info("[W21_AUTH_CONFIRMATION] email delivery is not exercised; confirming fixture through local Admin API.");
+    const serviceRoleKey = process.env.ZAVQERA_E2E_RUNTIME_SERVICE_ROLE_KEY;
+    expect(serviceRoleKey, "Disposable service-role key is available only to the Node test process.").toBeTruthy();
+    const admin = createClient(runtime.supabaseUrl, serviceRoleKey, {
+      auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
+    });
+    const { error } = await admin.auth.admin.updateUserById(payload.user.id, { email_confirm: true });
+    expect(error, "Disposable fixture confirmation through local Admin API should succeed.").toBeNull();
+    if (authenticatedRoute) {
+      await page.context().clearCookies();
+      await page.evaluate(() => { window.localStorage.clear(); window.sessionStorage.clear(); });
+    }
+    await signIn(page, user);
   } finally {
     await removeGuard();
   }
@@ -310,16 +343,22 @@ test("ZAVQERA launch gate: auth, password reset, AI quota, isolation and Mission
       await expect(pageA.getByLabel(/^First steps/)).not.toHaveValue("");
 
       const requestId = `gate-${runtime.runId}-abcdefghijkl`;
+      const sameOriginHeaders = {
+        origin: runtime.baseURL,
+        "sec-fetch-site": "same-origin",
+        "x-request-id": requestId,
+      };
       const first = await pageA.request.post("/api/ai/plan", {
-        headers: { "x-request-id": requestId },
+        headers: sameOriginHeaders,
         data: { goal: "Create one reversible next step for this test." },
         timeout: 20_000,
       });
       const second = await pageA.request.post("/api/ai/plan", {
-        headers: { "x-request-id": requestId },
+        headers: sameOriginHeaders,
         data: { goal: "Create one reversible next step for this test." },
         timeout: 20_000,
       });
+      console.info(`[W21_AI_IDEMPOTENCY] first_status=${first.status()} replay_status=${second.status()}`);
       expect(first.status()).toBe(200);
       expect(second.status()).toBe(409);
       expect(await second.text()).toContain("already handled");

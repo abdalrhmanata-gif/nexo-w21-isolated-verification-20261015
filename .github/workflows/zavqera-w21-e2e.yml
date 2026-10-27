@@ -5,12 +5,21 @@ on:
   push:
     branches:
       - "codex/mission-action-runtime-seam-test-20261014"
+      - "codex/launch-readiness-gates-20261018"
     paths:
       - ".github/workflows/zavqera-w21-e2e.yml"
       - ".github/workflows/zavqera-web-unit.yml"
       - "apps/web/**"
       - "supabase/**"
       - "tool/**"
+      - "tools/**"
+      - "tests/**"
+      - "docs/ZAVQERA_BLOCKER_CLOSURE_REGISTER_2026-10-18.md"
+      - "docs/ZAVQERA_FINAL_LAUNCH_GATE.md"
+      - "docs/ZAVQERA_LAUNCH_RUNBOOK.md"
+      - "docs/ZAVQERA_OWNER_LAUNCH_DECISIONS.md"
+      - "docs/ZAVQERA_W21_RELEASE_READINESS.md"
+      - "docs/ZAVQERA_LAUNCH_GATES_STATUS.md"
   pull_request:
     branches:
       - "zavqera/alternative-web-deployment"
@@ -98,6 +107,16 @@ jobs:
           setv(lines, "auth.email.template.recovery", "subject", '"Reset your ZAVQERA password"')
           setv(lines, "auth.email.template.recovery", "content_path", '"./supabase/templates/recovery.html"')
           p.write_text("\n".join(lines) + "\n")
+          # Verify the exact parsed values Supabase CLI will consume. This is
+          # a local disposable stack; fail before starting it if TOML edits
+          # landed in the wrong section or were overridden.
+          import tomllib
+          config = tomllib.loads(p.read_text())
+          if config.get("auth", {}).get("email", {}).get("enable_confirmations") is not False:
+              raise SystemExit("Disposable Auth must have email confirmations disabled for session-based E2E.")
+          if config.get("auth", {}).get("site_url") != "http://127.0.0.1:3210":
+              raise SystemExit("Disposable Auth site_url is not the expected loopback origin.")
+          print("W21 disposable Auth config verified: confirmations=false; site_url=loopback")
           PY
           mkdir -p "$workdir/supabase/templates"
           cat > "$workdir/supabase/templates/recovery.html" <<'HTML'
@@ -146,6 +165,7 @@ jobs:
           cp "$GITHUB_WORKSPACE/supabase/tests/w78_research_history_event_binding.sql" "$workdir/supabase/tests/w78_research_history_event_binding.sql"
           cp "$GITHUB_WORKSPACE/supabase/tests/w79_trusted_research_completion.sql" "$workdir/supabase/tests/w79_trusted_research_completion.sql"
           cp "$GITHUB_WORKSPACE/supabase/tests/w82_ai_generation_reservation_identity.sql" "$workdir/supabase/tests/w82_ai_generation_reservation_identity.sql"
+          cp "$GITHUB_WORKSPACE/supabase/tests/w84_anonymous_ai_server_rpc_wrappers.sql" "$workdir/supabase/tests/w84_anonymous_ai_server_rpc_wrappers.sql"
           cat > "$workdir/supabase/migrations/20260921180005_e2e_historical_auth_compat.sql" <<'SQL'
           create schema if not exists private;
           create or replace function private.handle_new_user_profile()
@@ -191,6 +211,17 @@ jobs:
         run: |
           set -euo pipefail
           supabase start --ignore-health-check -x "studio,imgproxy,realtime,storage-api,postgres-meta,edge-runtime,logflare,vector,supavisor" --workdir "$ZAVQERA_E2E_SUPABASE_WORKDIR"
+          auth_container="$(docker ps --format '{{.ID}} {{.Image}}' | awk '$2 ~ /supabase\/gotrue/ {print $1}')"
+          if [ "$(printf '%s\n' "$auth_container" | sed '/^$/d' | wc -l)" -ne 1 ]; then
+            echo "Expected exactly one running Supabase GoTrue container; refusing to infer Auth configuration."
+            exit 1
+          fi
+          autoconfirm="$(docker inspect "$auth_container" --format '{{range .Config.Env}}{{println .}}{{end}}' | sed -n 's/^GOTRUE_MAILER_AUTOCONFIRM=//p')"
+          echo "W21 GoTrue mailer autoconfirm configured: ${autoconfirm:-unset}"
+          if [ "$autoconfirm" != "true" ]; then
+            echo "Disposable GoTrue is not configured for immediate confirmation; refusing to run session-dependent E2E."
+            exit 1
+          fi
           admin_key="$(supabase status --workdir "$ZAVQERA_E2E_SUPABASE_WORKDIR" -o env | awk -F= '/^SERVICE_ROLE_KEY=/{print $2}' | tail -n 1)"
           test -n "$admin_key"
           echo "ZAVQERA_E2E_RUNTIME_SERVICE_ROLE_KEY=$admin_key" >> "$GITHUB_ENV"
@@ -198,6 +229,11 @@ jobs:
             cd "$ZAVQERA_E2E_SUPABASE_WORKDIR"
             timeout 30m supabase test db supabase/tests/w30_launch_gate_pgtap.sql
           )
+
+      - name: Run disposable PostgreSQL logical backup/restore smoke
+        run: |
+          set -euo pipefail
+          bash "$GITHUB_WORKSPACE/tool/w21_disposable_restore_smoke.sh"
 
       - name: Run Mission Authority execution security regressions
         run: |
@@ -232,6 +268,7 @@ jobs:
             supabase test db supabase/tests/w29_ai_usage_quota_smoke.sql
             supabase test db supabase/tests/w36_ai_plan_smoke.sql
             supabase test db supabase/tests/w82_ai_generation_reservation_identity.sql
+            supabase test db supabase/tests/w84_anonymous_ai_server_rpc_wrappers.sql
             supabase test db supabase/tests/w44_workspace_invitations.sql
             supabase test db supabase/tests/w45_workspace_member_management.sql
             supabase test db supabase/tests/w46_workspace_activity.sql
@@ -350,9 +387,18 @@ jobs:
             else
               echo "cleanup_proof=missing"
             fi
+            if [ -f "$RUNNER_TEMP/W21_RESTORE_SMOKE_PROOF.txt" ]; then
+              cat "$RUNNER_TEMP/W21_RESTORE_SMOKE_PROOF.txt"
+            else
+              echo "restore_smoke_proof=missing"
+            fi
           } > "$RUNNER_TEMP/W21_EVIDENCE.txt"
           if [ ! -f "$RUNNER_TEMP/W21_CLEANUP_PROOF.txt" ] || ! grep -q '^cleanup_verified=true$' "$RUNNER_TEMP/W21_CLEANUP_PROOF.txt"; then
             echo "Cleanup proof missing or not verified; see W21 evidence artifact." >&2
+            exit 1
+          fi
+          if [ "${{ job.status }}" = "success" ] && { [ ! -f "$RUNNER_TEMP/W21_RESTORE_SMOKE_PROOF.txt" ] || ! grep -q '^restore_smoke=PASS$' "$RUNNER_TEMP/W21_RESTORE_SMOKE_PROOF.txt"; }; then
+            echo "Restore smoke proof missing or not passing; see W21 evidence artifact." >&2
             exit 1
           fi
 

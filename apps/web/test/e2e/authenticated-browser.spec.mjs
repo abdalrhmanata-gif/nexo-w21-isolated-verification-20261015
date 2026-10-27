@@ -23,9 +23,12 @@ function assertRuntime() {
 }
 
 function freshUser(label) {
-  // Generated per run and never logged. They exist only in the disposable stack.
+  // Unique per invocation so Playwright retries cannot hit GoTrue's
+  // anti-enumeration response for an account left by an earlier attempt.
+  // Never logged; accounts exist only in the disposable stack.
+  const attemptId = randomBytes(6).toString("hex");
   return {
-    email: `zavqera-e2e-${runtime.runId}-${label}@example.test`,
+    email: `zavqera-e2e-${runtime.runId}-${label}-${attemptId}@example.test`,
     password: `${randomBytes(18).toString("base64url")}Aa1!`,
   };
 }
@@ -119,10 +122,84 @@ async function submit(page, field, { method, path, expectStatus }) {
 
 async function signUp(page, user) {
   await page.goto("/auth/sign-up");
+  await page.waitForFunction(() => {
+    const form = document.querySelector("form.form-grid");
+    return form && Object.keys(form).some((key) =>
+      key.startsWith("__reactProps$") && typeof form[key]?.onSubmit === "function"
+    );
+  }, { timeout: 15_000 });
   await page.getByLabel("Email", { exact: true }).fill(user.email);
   await page.getByLabel("Password", { exact: true }).fill(user.password);
+  const signupResponsePromise = page.waitForResponse((response) => {
+    if (response.request().method() !== "POST") return false;
+    try {
+      return new URL(response.url()).pathname.endsWith("/auth/v1/signup");
+    } catch {
+      return false;
+    }
+  }, { timeout: 15_000 });
   await formWith(page, page.getByLabel("Email", { exact: true })).locator('button[type="submit"]').click();
-  await expect(page, "Sign-up must return a session; disable email confirmations on the disposable stack.").toHaveURL(/\/app$/);
+  const signupResponse = await signupResponsePromise;
+  let signupPayload;
+  try {
+    signupPayload = await signupResponse.json();
+  } catch {
+    signupPayload = null;
+  }
+  const rawErrorCode = signupPayload?.error_code ?? signupPayload?.code ?? signupPayload?.error?.code;
+  const errorCode = typeof rawErrorCode === "string" && /^[a-zA-Z0-9_-]{1,64}$/.test(rawErrorCode)
+    ? rawErrorCode
+    : "none";
+  const sessionCreated = Boolean(signupPayload?.session?.access_token);
+  const userReturned = Boolean(signupPayload?.user);
+  const userIdReturned = typeof signupPayload?.user?.id === "string" && signupPayload.user.id.length > 0;
+  const identityCount = Array.isArray(signupPayload?.user?.identities) ? signupPayload.user.identities.length : -1;
+  const userConfirmed = Boolean(signupPayload?.user?.confirmed_at);
+  const confirmationSent = Boolean(signupPayload?.user?.confirmation_sent_at);
+  // Never log the fixture email, password, response body, or session tokens.
+  console.info(`[W21_AUTH_SIGNUP] status=${signupResponse.status()} session=${sessionCreated} user=${userReturned} user_id=${userIdReturned} identities=${identityCount} confirmed=${userConfirmed} confirmation_sent=${confirmationSent} error_code=${errorCode}`);
+  expect(signupResponse.ok(), `Local disposable Auth rejected sign-up (HTTP ${signupResponse.status()}, code ${errorCode}).`)
+    .toBe(true);
+  if (sessionCreated) {
+    await expect(page).toHaveURL(/\/app$/);
+    return;
+  }
+  expect(userIdReturned && identityCount > 0, "Disposable Auth must create a real fixture identity when no session is returned.").toBe(true);
+  const successNotice = page.locator("form .success-state");
+  try {
+    await expect.poll(async () => new URL(page.url()).pathname === "/app"
+      || await successNotice.isVisible().catch(() => false), { timeout: 15_000 })
+      .toBe(true);
+  } catch (error) {
+    const uiState = await page.evaluate(() => ({
+      pathname: window.location.pathname,
+      formPresent: Boolean(document.querySelector("form.form-grid")),
+      statusCount: document.querySelectorAll('form [role="status"]').length,
+      alertCount: document.querySelectorAll('form [role="alert"]').length,
+      submitDisabled: Boolean(document.querySelector('[data-testid="sign-up-submit"]:disabled')),
+    }));
+    console.info(`[W21_AUTH_UI] pathname=${uiState.pathname} form=${uiState.formPresent} status=${uiState.statusCount} alert=${uiState.alertCount} submit_disabled=${uiState.submitDisabled}`);
+    throw error;
+  }
+  const authenticatedRoute = new URL(page.url()).pathname === "/app";
+  if (authenticatedRoute) {
+    const protectedResponse = await page.request.get(`${runtime.baseURL}/api/ai/usage`);
+    expect(protectedResponse.status(), "The app route after signup must have a valid authenticated browser session.").toBe(200);
+    console.info("[W21_AUTH_UI] signup completion reached protected app route; protected_api_status=200");
+  }
+  console.info("[W21_AUTH_CONFIRMATION] email delivery is not exercised; confirming fixture through local Admin API.");
+  const serviceRoleKey = process.env.ZAVQERA_E2E_RUNTIME_SERVICE_ROLE_KEY;
+  expect(serviceRoleKey, "Disposable service-role key is available only to the Node test process.").toBeTruthy();
+  const admin = createClient(runtime.supabaseUrl, serviceRoleKey, {
+    auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
+  });
+  const { error } = await admin.auth.admin.updateUserById(signupPayload.user.id, { email_confirm: true });
+  expect(error, "Disposable fixture confirmation through local Admin API should succeed.").toBeNull();
+  if (authenticatedRoute) {
+    await page.context().clearCookies();
+    await page.evaluate(() => { window.localStorage.clear(); window.sessionStorage.clear(); });
+  }
+  await signIn(page, user);
 }
 
 async function signIn(page, user) {
@@ -194,6 +271,10 @@ test("disposable full loop: auth, plan, lifecycle, follow-up, verification, outc
     const statusOf = (title) => page.getByLabel(`Status for ${title}`, { exact: true });
     const actionPath = (title) => `/api/missions/${missionId}/actions/${actionId[title]}`;
     const missionPath = () => `/api/missions/${missionId}`;
+    const sameOriginMutationHeaders = {
+      origin: runtime.baseURL,
+      "sec-fetch-site": "same-origin",
+    };
     const moveMission = async (to) => {
       await page.getByLabel("Mission state", { exact: true }).selectOption(to);
       await submit(page, page.getByLabel("Mission state", { exact: true }), { method: "PATCH", path: missionPath(), expectStatus: 200 });
@@ -229,14 +310,19 @@ test("disposable full loop: auth, plan, lifecycle, follow-up, verification, outc
       await expect(page.getByLabel(/^First steps/)).not.toHaveValue("");
 
       const requestId = `w21-ai-idempotency-${runtime.runId}-abcdef`;
+      const sameOriginHeaders = {
+        origin: runtime.baseURL,
+        "sec-fetch-site": "same-origin",
+        "x-request-id": requestId,
+      };
       const first = await page.request.post("/api/ai/plan", {
-        headers: { "x-request-id": requestId },
+        headers: sameOriginHeaders,
         data: { goal: "Create one reversible next step for the same test mission." },
         timeout: 20_000,
       });
       expect(first.status()).toBe(200);
       const second = await page.request.post("/api/ai/plan", {
-        headers: { "x-request-id": requestId },
+        headers: sameOriginHeaders,
         data: { goal: "Create one reversible next step for the same test mission." },
         timeout: 20_000,
       });
@@ -349,7 +435,10 @@ test("disposable full loop: auth, plan, lifecycle, follow-up, verification, outc
 
     await test.step("a stale mission version is rejected", async () => {
       const before = await readMission(owner.client, missionId);
-      const stale = await page.request.patch(missionPath(), { data: { status: "PAUSED", expectedVersion: 1 } });
+      const stale = await page.request.patch(missionPath(), {
+        headers: sameOriginMutationHeaders,
+        data: { status: "PAUSED", expectedVersion: 1 },
+      });
       expect(stale.status()).toBe(409);
       expect(await readMission(owner.client, missionId)).toEqual(before);
     });
@@ -385,7 +474,10 @@ test("disposable full loop: auth, plan, lifecycle, follow-up, verification, outc
       await moveAction(titles.added, "COMPLETED");
       for (const title of [titles.first, titles.second, titles.added]) await expect(statusOf(title)).toHaveCount(0);
       const completed = (await readActions(owner.client, missionId)).find((action) => action.id === actionId[titles.first]);
-      const reopen = await page.request.patch(actionPath(titles.first), { data: { status: "RUNNING", expectedVersion: completed.version } });
+      const reopen = await page.request.patch(actionPath(titles.first), {
+        headers: sameOriginMutationHeaders,
+        data: { status: "RUNNING", expectedVersion: completed.version },
+      });
       expect(reopen.status(), "a completed action cannot be reopened").toBe(422);
       expect((await readActions(owner.client, missionId)).find((action) => action.id === completed.id)).toEqual(completed);
     });
@@ -393,6 +485,7 @@ test("disposable full loop: auth, plan, lifecycle, follow-up, verification, outc
     let verificationId;
     await test.step("verification is refused before checking, then recorded", async () => {
       const early = await page.request.post(`${missionPath()}/verification`, {
+        headers: sameOriginMutationHeaders,
         data: { status: "VERIFIED", criteria: { summary: "early" }, evidence: { summary: "early" }, confidence: 1 },
       });
       expect(early.status()).toBe(422);
@@ -428,7 +521,10 @@ test("disposable full loop: auth, plan, lifecycle, follow-up, verification, outc
       // Completion must go through a verified outcome. A direct lifecycle move
       // to COMPLETED with pending work and no outcome is a release blocker.
       const verifying = await readMission(owner.client, missionId);
-      const bypass = await page.request.patch(missionPath(), { data: { status: "COMPLETED", expectedVersion: verifying.version } });
+      const bypass = await page.request.patch(missionPath(), {
+        headers: sameOriginMutationHeaders,
+        data: { status: "COMPLETED", expectedVersion: verifying.version },
+      });
       expect(bypass.ok(), "direct VERIFYING -> COMPLETED must be refused without a verified outcome").toBe(false);
       expect(await readMission(owner.client, missionId)).toEqual(verifying);
       await page.getByLabel("Outcome result", { exact: true }).fill("Blocked by late pending work.");
@@ -444,7 +540,10 @@ test("disposable full loop: auth, plan, lifecycle, follow-up, verification, outc
       expect(outcomes[0]).toMatchObject({ status: "COMPLETED", verification_id: verificationId });
       ledger.record("outcome", outcomes[0].id);
       expect((await readMission(owner.client, missionId)).status).toBe("COMPLETED");
-      const lateInsert = await page.request.post(`${missionPath()}/actions`, { data: { title: "Must not reopen completed work" } });
+      const lateInsert = await page.request.post(`${missionPath()}/actions`, {
+        headers: sameOriginMutationHeaders,
+        data: { title: "Must not reopen completed work" },
+      });
       expect(lateInsert.status()).toBe(422);
       expect(await readActions(owner.client, missionId)).toHaveLength(4);
       const cancelled = (await readActions(owner.client, missionId)).filter((action) => action.status === "CANCELLED");
@@ -456,6 +555,7 @@ test("disposable full loop: auth, plan, lifecycle, follow-up, verification, outc
     await test.step("committing the same verified outcome again is idempotent", async () => {
       const before = { mission: await readMission(owner.client, missionId), events: (await readRows(owner.client, "mission_events", missionId, "event_type")).length };
       const repeat = await page.request.post(`${missionPath()}/outcome`, {
+        headers: sameOriginMutationHeaders,
         data: { verificationId, result: { summary: "repeat" }, successScore: 1, status: "COMPLETED" },
       });
       expect(repeat.status()).toBe(200);
@@ -472,11 +572,26 @@ test("disposable full loop: auth, plan, lifecycle, follow-up, verification, outc
       await expect(pageB.getByText("Mission unavailable")).toBeVisible();
       await expect(pageB.getByText(tag)).toHaveCount(0);
       const attempts = [
-        pageB.request.patch(`/api/missions/${missionId}`, { data: { status: "CANCELLED", expectedVersion: before.mission.version } }),
-        pageB.request.post(`/api/missions/${missionId}/actions`, { data: { title: "intruder" } }),
-        pageB.request.patch(`/api/missions/${missionId}/actions/${actionId[titles.first]}`, { data: { status: "RUNNING", expectedVersion: 1 } }),
-        pageB.request.post(`/api/missions/${missionId}/verification`, { data: { status: "VERIFIED", criteria: { s: "x" }, evidence: { s: "x" }, confidence: 1 } }),
-        pageB.request.post(`/api/missions/${missionId}/outcome`, { data: { verificationId, result: { s: "x" }, successScore: 1, status: "COMPLETED" } }),
+        pageB.request.patch(`/api/missions/${missionId}`, {
+          headers: sameOriginMutationHeaders,
+          data: { status: "CANCELLED", expectedVersion: before.mission.version },
+        }),
+        pageB.request.post(`/api/missions/${missionId}/actions`, {
+          headers: sameOriginMutationHeaders,
+          data: { title: "intruder" },
+        }),
+        pageB.request.patch(`/api/missions/${missionId}/actions/${actionId[titles.first]}`, {
+          headers: sameOriginMutationHeaders,
+          data: { status: "RUNNING", expectedVersion: 1 },
+        }),
+        pageB.request.post(`/api/missions/${missionId}/verification`, {
+          headers: sameOriginMutationHeaders,
+          data: { status: "VERIFIED", criteria: { s: "x" }, evidence: { s: "x" }, confidence: 1 },
+        }),
+        pageB.request.post(`/api/missions/${missionId}/outcome`, {
+          headers: sameOriginMutationHeaders,
+          data: { verificationId, result: { s: "x" }, successScore: 1, status: "COMPLETED" },
+        }),
       ];
       for (const response of await Promise.all(attempts)) expect(response.ok(), response.url()).toBe(false);
       const intruder = await ownerSession(userB);

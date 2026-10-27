@@ -2,21 +2,70 @@ name: ZAVQERA Flutter CI
 
 on:
   push:
-    branches: ["**"]
+    branches: ["**", "!codex/launch-readiness-gates-20261018"]
   pull_request:
 
 permissions:
   contents: read
 
 jobs:
+  classify-changes:
+    runs-on: ubuntu-latest
+    outputs:
+      checklist_only: ${{ steps.scope.outputs.checklist_only }}
+      diff_base: ${{ steps.scope.outputs.diff_base }}
+      diff_head: ${{ steps.scope.outputs.diff_head }}
+    steps:
+      - name: Checkout full history for change classification
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Classify changed paths
+        id: scope
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          BEFORE_SHA: ${{ github.event.before }}
+          AFTER_SHA: ${{ github.sha }}
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        run: |
+          set -euo pipefail
+          if [ "$EVENT_NAME" = "pull_request" ]; then
+            base="$PR_BASE_SHA"
+            head="$PR_HEAD_SHA"
+          elif [ "$EVENT_NAME" = "push" ]; then
+            base="$BEFORE_SHA"
+            head="$AFTER_SHA"
+            if [[ "$base" =~ ^0{40}$ ]]; then
+              git fetch --no-tags origin "refs/heads/${DEFAULT_BRANCH}:refs/remotes/origin/${DEFAULT_BRANCH}"
+              base="$(git merge-base "$head" "origin/${DEFAULT_BRANCH}")"
+            fi
+          else
+            # Unknown/manual events must run the full application validation.
+            echo "checklist_only=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          git diff --raw --no-renames -z "$base...$head" > "$RUNNER_TEMP/changed-files.txt"
+          python3 tools/classify_launch_checklist_changes.py "$RUNNER_TEMP/changed-files.txt" >> "$GITHUB_OUTPUT"
+          echo "diff_base=$base" >> "$GITHUB_OUTPUT"
+          echo "diff_head=$head" >> "$GITHUB_OUTPUT"
+
   verify:
+    needs: classify-changes
+    if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Setup Flutter
+        if: needs.classify-changes.result != 'success' || needs.classify-changes.outputs.checklist_only != 'true'
         uses: subosito/flutter-action@v2
         with:
           flutter-version: "3.47.2"
@@ -24,14 +73,17 @@ jobs:
           cache: true
 
       - name: Toolchain versions
+        if: needs.classify-changes.result != 'success' || needs.classify-changes.outputs.checklist_only != 'true'
         run: |
           flutter --version
           dart --version
 
       - name: Verify ZAVQERA MVP
+        if: needs.classify-changes.result != 'success' || needs.classify-changes.outputs.checklist_only != 'true'
         run: ./tool/verify_project.sh
 
       - name: Setup Node for web validation
+        if: needs.classify-changes.result != 'success' || needs.classify-changes.outputs.checklist_only != 'true'
         uses: actions/setup-node@v4
         with:
           node-version: 22
@@ -39,20 +91,39 @@ jobs:
           cache-dependency-path: apps/web/package-lock.json
 
       - name: Install web dependencies
+        if: needs.classify-changes.result != 'success' || needs.classify-changes.outputs.checklist_only != 'true'
         working-directory: apps/web
         run: npm ci
 
       - name: Run controlled-adapter tests
+        if: needs.classify-changes.result != 'success' || needs.classify-changes.outputs.checklist_only != 'true'
         working-directory: apps/web
         run: node --test test/mission-authority-controlled-adapter.test.mjs
 
       - name: Run web tests
+        if: needs.classify-changes.result != 'success' || needs.classify-changes.outputs.checklist_only != 'true'
         working-directory: apps/web
         run: npm test
 
       - name: Typecheck web app
+        if: needs.classify-changes.result != 'success' || needs.classify-changes.outputs.checklist_only != 'true'
         working-directory: apps/web
         run: npm run typecheck
+
+      - name: Run launch checklist validator and regression tests
+        if: always()
+        env:
+          DIFF_BASE: ${{ needs.classify-changes.outputs.diff_base }}
+          DIFF_HEAD: ${{ needs.classify-changes.outputs.diff_head }}
+        run: |
+          set -euo pipefail
+          python3 tools/validate_launch_checklist.py
+          python3 -m unittest tests/test_launch_checklist.py tests/test_launch_checklist_workflow.py -v
+          if [[ -n "$DIFF_BASE" && -n "$DIFF_HEAD" ]]; then
+            git diff --check "$DIFF_BASE...$DIFF_HEAD"
+          else
+            git diff --check
+          fi
 
       - name: Upload diagnostic bundle on failure
         if: failure()

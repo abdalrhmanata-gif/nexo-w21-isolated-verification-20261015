@@ -48,6 +48,23 @@ test("middleware does not bounce signed-in users away from confirmation endpoint
   assert.match(middleware, /startsWith\("\/auth\/"\) && user && !isConfirmationEndpoint/);
 });
 
+test("API requests pass the same-origin guard before reaching their route handlers", async () => {
+  const middleware = await source("middleware.ts");
+  assert.match(middleware, /import \{ isSameOriginRequest \} from "\.\/lib\/same-origin-guard\.mjs"/);
+  assert.match(middleware, /"\/api\/:path\*"/);
+  assert.match(middleware, /requestOrigin: request\.nextUrl\.origin/);
+  assert.match(middleware, /isInternalApiRequest[\s\S]*?return NextResponse\.next\(\{ request \}\)/);
+  assert.match(middleware, /Cross-origin request blocked\./);
+  assert.doesNotMatch(middleware, /x-forwarded-host/);
+});
+
+test("provider diagnostics GET requires explicit same-origin browser provenance", async () => {
+  const middleware = await source("middleware.ts");
+  assert.match(middleware, /requiresBrowserProvenance = pathname\.replace/);
+  assert.match(middleware, /"\/api\/ai\/diagnostics"/);
+  assert.match(middleware, /requireSameOriginSignalForSafeMethods: requiresBrowserProvenance/);
+});
+
 test("confirmation redirect targets cannot leave the application origin", () => {
   assert.equal(safeNextPath("/app/missions/abc"), "/app/missions/abc");
   assert.equal(safeNextPath(DEFAULT_POST_AUTH_PATH), "/app");
