@@ -21,7 +21,14 @@ function parseOrigin(value, { allowPath = false } = {}) {
  * Requests without Origin are accepted only when Fetch Metadata identifies a
  * same-origin request, or for safe methods without cross-origin metadata.
  */
-export function isSameOriginRequest({ method, origin, secFetchSite, requestOrigin, siteUrl }) {
+export function isSameOriginRequest({
+  method,
+  origin,
+  secFetchSite,
+  requestOrigin,
+  siteUrl,
+  requireSameOriginSignalForSafeMethods = false,
+}) {
   const fetchSite = String(secFetchSite || "").trim().toLowerCase();
   const allowedOrigins = new Set([
     parseOrigin(requestOrigin),
@@ -45,7 +52,9 @@ export function isSameOriginRequest({ method, origin, secFetchSite, requestOrigi
   if (fetchSite === "cross-site" || fetchSite === "same-site") return false;
   if (fetchSite === "same-origin") return true;
 
-  if (SAFE_METHODS.has(String(method || "").toUpperCase())) return true;
+  if (SAFE_METHODS.has(String(method || "").toUpperCase())) {
+    return !requireSameOriginSignalForSafeMethods;
+  }
 
   return false;
 }

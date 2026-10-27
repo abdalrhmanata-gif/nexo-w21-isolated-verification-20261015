@@ -27,12 +27,17 @@ export async function middleware(request: NextRequest) {
   if (isApiRequest && isInternalApiRequest) return NextResponse.next();
 
   if (isApiRequest) {
+    // This authenticated GET can make an outbound provider request, so it
+    // requires explicit browser same-origin provenance even though GET is safe
+    // with respect to application state.
+    const requiresBrowserProvenance = pathname.replace(/\/+$/, "") === "/api/ai/diagnostics";
     if (!isInternalApiRequest && !isSameOriginRequest({
       method: request.method,
       origin: request.headers.get("origin"),
       secFetchSite: request.headers.get("sec-fetch-site"),
       requestOrigin: request.nextUrl.origin,
       siteUrl: getRuntimeEnv("NEXT_PUBLIC_SITE_URL"),
+      requireSameOriginSignalForSafeMethods: requiresBrowserProvenance,
     })) {
       return NextResponse.json({ error: "Cross-origin request blocked." }, { status: 403 });
     }

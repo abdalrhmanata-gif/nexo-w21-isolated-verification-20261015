@@ -14,6 +14,19 @@ test("safe methods do not require Origin metadata", () => {
   }
 });
 
+test("sensitive safe methods require explicit same-origin browser provenance when configured", () => {
+  const required = {
+    method: "GET",
+    requestOrigin: "https://app.example.com",
+    requireSameOriginSignalForSafeMethods: true,
+  };
+
+  assert.equal(isSameOriginRequest(required), false);
+  assert.equal(isSameOriginRequest({ ...required, secFetchSite: "same-origin" }), true);
+  assert.equal(isSameOriginRequest({ ...required, origin: "https://app.example.com" }), true);
+  assert.equal(isSameOriginRequest({ ...required, secFetchSite: "cross-site" }), false);
+});
+
 test("blocks cross-site Fetch Metadata on safe verbs that can still cause upstream egress", () => {
   assert.equal(isSameOriginRequest({
     method: "GET",

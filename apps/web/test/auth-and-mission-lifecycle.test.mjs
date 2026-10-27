@@ -58,6 +58,13 @@ test("API requests pass the same-origin guard before reaching their route handle
   assert.doesNotMatch(middleware, /x-forwarded-host/);
 });
 
+test("provider diagnostics GET requires explicit same-origin browser provenance", async () => {
+  const middleware = await source("middleware.ts");
+  assert.match(middleware, /requiresBrowserProvenance = pathname\.replace/);
+  assert.match(middleware, /"\/api\/ai\/diagnostics"/);
+  assert.match(middleware, /requireSameOriginSignalForSafeMethods: requiresBrowserProvenance/);
+});
+
 test("confirmation redirect targets cannot leave the application origin", () => {
   assert.equal(safeNextPath("/app/missions/abc"), "/app/missions/abc");
   assert.equal(safeNextPath(DEFAULT_POST_AUTH_PATH), "/app");
