@@ -4,6 +4,7 @@ export type SameOriginRequestInput = {
   secFetchSite?: string | null;
   requestOrigin?: string | null;
   siteUrl?: string | null;
+  requireSameOriginSignalForSafeMethods?: boolean;
 };
 
 export function isSameOriginRequest(input: SameOriginRequestInput): boolean;
